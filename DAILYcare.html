@@ -1,0 +1,2204 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DAILYcare — Sistema de Gestão</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#1a1a1a;background:#f5f5f0;min-height:100vh}
+.header{background:#fff;border-bottom:1px solid #e5e5e0;padding:0 1.5rem;display:flex;align-items:center;gap:1rem;height:52px;position:sticky;top:0;z-index:100}
+.header .logo{font-weight:600;font-size:15px;letter-spacing:-0.3px}
+.header .logo span{color:#8b6f4e}
+.nav{display:flex;gap:2px;flex:1;overflow-x:auto;padding:0 0.5rem}
+.nav::-webkit-scrollbar{height:0}
+.nb{padding:5px 11px;border:none;background:transparent;border-radius:6px;cursor:pointer;color:#666;font-size:11px;white-space:nowrap;font-family:inherit;transition:all 0.15s}
+.nb:hover{background:#f0f0ec;color:#1a1a1a}
+.nb.active{background:#1a1a1a;color:#fff;font-weight:500}
+.save-indicator{font-size:11px;color:#999;white-space:nowrap}
+.save-indicator.saved{color:#2a7a2a}
+.main{max-width:1100px;margin:0 auto;padding:1.5rem}
+.pg{display:none}.pg.active{display:block}
+.card{background:#fff;border:1px solid #e5e5e0;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:1rem}
+.met{background:#f8f8f5;border-radius:8px;padding:0.75rem;border:1px solid #eeede8}
+.met .lb{font-size:11px;color:#888;margin-bottom:3px}
+.met .vl{font-size:19px;font-weight:600;letter-spacing:-0.5px}
+h2{font-size:15px;font-weight:600;margin-bottom:12px;letter-spacing:-0.2px}
+h3{font-size:13px;font-weight:600;margin-bottom:8px}
+label{font-size:11px;color:#777;display:block;margin-bottom:3px;font-weight:500}
+input,select,textarea{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#1a1a1a;font-size:12px;font-family:inherit;transition:border-color 0.15s;outline:none}
+input:focus,select:focus{border-color:#8b6f4e;box-shadow:0 0 0 3px rgba(139,111,78,0.08)}
+.row{display:grid;gap:8px;margin-bottom:8px}
+.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:1fr 1fr 1fr}.c4{grid-template-columns:1fr 1fr 1fr 1fr}
+.btn{padding:7px 14px;border:1px solid #ddd;border-radius:7px;cursor:pointer;font-size:12px;font-family:inherit;background:#fff;color:#1a1a1a;transition:all 0.15s;font-weight:500}
+.btn:hover{background:#f5f5f0;border-color:#bbb}
+.btn.pri{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.btn.pri:hover{background:#333}
+.btn.suc{color:#1a6b1a;border-color:#4caf50;background:#f0fff0}
+.btn.suc:hover{background:#e0f5e0}
+.btn.dan{color:#c0392b;border-color:#e74c3c;background:#fff5f5}
+.btn.dan:hover{background:#ffeae8}
+.btn.sm{padding:3px 9px;font-size:11px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid #eee;color:#888;font-size:11px;white-space:nowrap;background:#fafaf7}
+td{padding:7px 10px;border-bottom:1px solid #f0f0ec;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafaf7}
+.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap}
+.bg-g{background:#d4edda;color:#155724}.bg-r{background:#f8d7da;color:#721c24}.bg-a{background:#fff3cd;color:#856404}.bg-b{background:#cce5ff;color:#004085}.bg-gray{background:#e9ecef;color:#495057}.bg-br{background:#f3e8da;color:#7a4f28}
+.green{color:#1a6b1a}.red{color:#c0392b}.amber{color:#856404}.blue{color:#004085}.brown{color:#8b6f4e}
+.dd-wrap{position:relative;margin-bottom:8px}
+.dropdown{position:absolute;top:calc(100% + 2px);left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:8px;z-index:500;max-height:200px;overflow-y:auto;box-shadow:0 6px 20px rgba(0,0,0,0.12)}
+.ddi{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f5f5f0;transition:background 0.1s}
+.ddi:last-child{border-bottom:none}
+.ddi:hover{background:#f8f8f5}
+.ddi .sub{font-size:10px;color:#888;margin-top:2px}
+.alert{padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:1rem;border:1px solid}
+.al-suc{background:#d4edda;color:#155724;border-color:#c3e6cb}
+.al-err{background:#f8d7da;color:#721c24;border-color:#f5c6cb}
+.al-info{background:#e8f4f8;color:#0c5460;border-color:#bee5eb}
+.al-warn{background:#fff3cd;color:#856404;border-color:#ffc107}
+.divider{border:none;border-top:1px solid #f0f0ec;margin:0.75rem 0}
+.flex-b{display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;gap:8px;flex-wrap:wrap}
+.vrow{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f0f0ec}
+.vrow:last-child{border-bottom:none}
+.tag{display:inline-block;padding:2px 7px;background:#f0f0ec;border-radius:12px;font-size:10px;color:#666;margin:1px;font-weight:500}
+.tbox{background:#f8f8f5;border-radius:8px;padding:12px 14px;margin-top:10px;border:1px solid #eee}
+.pb{height:5px;background:#e0e0e0;border-radius:3px;margin-top:4px;overflow:hidden}
+.pf{height:100%;background:#2a7a2a;border-radius:3px;transition:width 0.4s}
+.cbanner{background:#fff8e6;border:1px solid #f5c842;border-radius:10px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
+.ss-box{background:#fff8e6;border:1px solid #f5c842;border-radius:10px;padding:1rem}
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:80px;margin-top:10px}
+.bar-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bar-val{font-size:9px;color:#888;white-space:nowrap}
+.bar-fill{width:100%;background:#8b6f4e;border-radius:3px 3px 0 0;opacity:0.8;min-height:4px}
+.bar-lbl{font-size:9px;color:#888}
+@media(max-width:600px){.c3{grid-template-columns:1fr 1fr}.c4{grid-template-columns:1fr 1fr}.nav{padding:0}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">DAILY<span>care</span></div>
+  <nav class="nav" id="nav">
+    <button class="nb active" onclick="nav('dashboard',this)">Dashboard</button>
+    <button class="nb" onclick="nav('consulta_atual',this)">Consulta atual</button>
+    <button class="nb" onclick="nav('consultas',this)">Consultas</button>
+    <button class="nb" onclick="nav('vendas',this)">Vendas produtos</button>
+    <button class="nb" onclick="nav('clientes',this)">Clientes</button>
+    <button class="nb" onclick="nav('packs',this)">Packs</button>
+    <button class="nb" onclick="nav('produtos',this)">Produtos</button>
+    <button class="nb" onclick="nav('entradas',this)">Entradas stock</button>
+    <button class="nb" onclick="nav('consumo',this)">Consumo interno</button>
+    <button class="nb" onclick="nav('consignacao',this)">Consignação</button>
+    <button class="nb" onclick="nav('workshops',this)">Workshops</button>
+    <button class="nb" onclick="nav('formacao',this)">Formação</button>
+    <button class="nb" onclick="nav('gastos',this)">Gastos</button>
+    <button class="nb" onclick="nav('encomendas',this)">Lista encomendas</button>
+    <button class="nb" onclick="nav('relatorio',this)">Relatório</button>
+    <button class="nb" onclick="nav('fornecedores',this)">Fornecedores</button>
+    <button class="nb" onclick="nav('vouchers',this)">Vouchers</button>
+    <button class="nb" onclick="exportarExcel()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel</button>
+  </nav>
+  <div class="save-indicator" id="save-ind">Guardado</div>
+  <button class="btn" onclick="openHelp()" style="white-space:nowrap;background:#f3e8da;border-color:#d4a97a;color:#7a4f28;font-weight:600;font-size:11px;padding:5px 10px">💬 Pedir ajuda</button>
+  <button class="btn" onclick="openSettings()" style="white-space:nowrap;font-size:11px;padding:5px 10px" title="Definições">⚙</button>
+</div>
+
+<!-- Modal definições / reordenar separadores -->
+<div id="settings-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:flex-start;justify-content:center;padding-top:60px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:1.5rem;max-width:520px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2);margin-bottom:2rem">
+    <div style="font-weight:700;font-size:16px;margin-bottom:4px">Definições</div>
+    <p style="color:#888;font-size:12px;margin-bottom:1rem">Arrasta os separadores para mudar a ordem. Desmarca para esconder.</p>
+    <div id="tabs-sortable" style="display:flex;flex-direction:column;gap:6px;margin-bottom:1.25rem"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn pri" onclick="applySettings()">Aplicar</button>
+      <button class="btn dan" onclick="if(confirm('Apagar TODOS os dados e recomeçar do zero?')){localStorage.removeItem(\'dailycare_data_v1\');location.reload()}" style="margin-left:auto">Apagar todos os dados</button>
+      <button class="btn" onclick="closeSettings()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal ajuda -->
+<div id="help-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:1.5rem;max-width:480px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-weight:700;font-size:16px;margin-bottom:8px">Precisas de ajuda?</div>
+    <p style="color:#666;font-size:13px;margin-bottom:1rem">Podes pedir-me para adicionar funcionalidades, corrigir algo, ou mudar como o sistema funciona. Basta copiares o texto abaixo e colares numa conversa comigo no claude.ai.</p>
+    <div style="background:#f8f8f5;border:1px solid #e5e5e0;border-radius:8px;padding:1rem;font-size:12px;color:#444;margin-bottom:1rem">
+      Estou a usar o sistema DAILYcare que criaste para mim. Preciso de ajuda com o seguinte:<br><br>
+      <span style="color:#8b6f4e">[descreve aqui o que queres mudar ou adicionar]</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn pri" onclick="copiarAjuda()" id="copy-btn">Copiar mensagem</button>
+      <a href="https://claude.ai" target="_blank" class="btn" style="text-decoration:none">Abrir claude.ai ↗</a>
+      <button class="btn" onclick="closeHelp()" style="margin-left:auto">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal ficha de cliente -->
+<div id="ficha-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow-y:auto">
+  <div style="background:#fff;border-radius:14px;padding:1.5rem;max-width:860px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.2);margin-bottom:2rem">
+    <div id="ficha-content"></div>
+  </div>
+</div>
+
+<!-- Modal confirmação apagar -->
+<div id="del-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;padding:1.5rem;max-width:380px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,0.2)">
+    <div style="font-weight:700;font-size:15px;margin-bottom:8px;color:#c0392b">Apagar registo</div>
+    <p id="del-msg" style="color:#666;font-size:13px;margin-bottom:1.25rem"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeDelModal()">Cancelar</button>
+      <button class="btn dan" id="del-confirm-btn">Apagar</button>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+</div>
+
+<script>
+// ─── DADOS PADRÃO ────────────────────────────────────────────────────────────
+const DEFAULT = {
+  clientes:[
+    {id:'cl1',nome:'Conceição Mota',telefone:'',notas:''},
+    {id:'cl2',nome:'Paula Alves Almeida',telefone:'',notas:''},
+    {id:'cl3',nome:'Ana Isabel Ribeiro',telefone:'',notas:''},
+    {id:'cl4',nome:'António Gonçalves',telefone:'',notas:''},
+    {id:'cl5',nome:'Tiago Sousa',telefone:'',notas:''},
+    {id:'cl6',nome:'Juliana Leal',telefone:'',notas:''},
+  ],
+  produtos:[
+    {id:'p1',nome:'TimeWise Sérum Renovador C+E',marca:'Mary Kay',cat:'Sérum',custo:34.25,pvp:68.5,stock:1,stockMin:1,consig:false},
+    {id:'p2',nome:'TimeWise Tónico Renovador',marca:'Mary Kay',cat:'Limpeza',custo:0,pvp:24.5,stock:1,stockMin:1,consig:false},
+    {id:'p3',nome:'TimeWise Creme de Olhos',marca:'Mary Kay',cat:'Hidratante',custo:6.84,pvp:45,stock:1,stockMin:1,consig:false},
+    {id:'p4',nome:'TimeWise Hidratante Antioxidante',marca:'Mary Kay',cat:'Hidratante',custo:7.14,pvp:47,stock:1,stockMin:1,consig:false},
+    {id:'p5',nome:'TimeWise Leite de Limpeza 4em1',marca:'Mary Kay',cat:'Limpeza',custo:5.32,pvp:35,stock:1,stockMin:1,consig:false},
+    {id:'p6',nome:'TimeWise Base 3D Luminosa',marca:'Mary Kay',cat:'Maquilhagem',custo:3.95,pvp:26,stock:1,stockMin:1,consig:false},
+    {id:'p7',nome:'PHOTOAGE Water SPF50',marca:'Farmácia Fonte da Moura',cat:'SPF',custo:22,pvp:27.5,stock:3,stockMin:2,consig:true},
+    {id:'p8',nome:'ACNIBEN Spray',marca:'Farmácia Fonte da Moura',cat:'Sérum',custo:21.8,pvp:24.85,stock:2,stockMin:1,consig:true},
+    {id:'p9',nome:'VINOPERFECT Noite',marca:'Farmácia Fonte da Moura',cat:'Sérum',custo:33,pvp:35.9,stock:2,stockMin:1,consig:true},
+    {id:'p10',nome:'COMPOSE Mousse',marca:'Farmácia Fonte da Moura',cat:'Limpeza',custo:12.72,pvp:15.9,stock:2,stockMin:1,consig:true},
+    {id:'p11',nome:'COMPOSE Hidracare',marca:'Farmácia Fonte da Moura',cat:'Hidratante',custo:23.92,pvp:29.9,stock:2,stockMin:1,consig:true},
+    {id:'p12',nome:'Dermagius Exocare PDRN Sérum',marca:'Farmácia Fonte da Moura',cat:'Sérum',custo:38.49,pvp:50,stock:1,stockMin:1,consig:true},
+  ],
+  consultas:[
+    {id:'c1',clienteId:'cl1',data:'2025-09-30',tipo:'Consulta individual',valor:30,faturado:false,estado:'Pago',notas:'',vendas:[],totalProd:0,lucroProd:0},
+    {id:'c2',clienteId:'cl2',data:'2025-11-15',tipo:'Consulta individual',valor:30,faturado:false,estado:'Pago',notas:'',vendas:[],totalProd:0,lucroProd:0},
+    {id:'c3',clienteId:'cl3',data:'2025-11-15',tipo:'Pack',valor:0,faturado:false,estado:'Pago',notas:'Sessão 1 de 5',vendas:[{prodId:'p7',nome:'PHOTOAGE Water SPF50',pvp:27.5,custo:22,qty:1,marca:'Farmácia Fonte da Moura',faturado:false}],totalProd:27.5,lucroProd:5.5},
+    {id:'c4',clienteId:'cl4',data:'2025-11-18',tipo:'Primeira consulta',valor:40,faturado:true,estado:'Pago',notas:'',vendas:[
+      {prodId:'p10',nome:'COMPOSE Mousse',pvp:15.9,custo:12.72,qty:1,marca:'Farmácia Fonte da Moura',faturado:false},
+      {prodId:'p7',nome:'PHOTOAGE Water SPF50',pvp:27.5,custo:22,qty:1,marca:'Farmácia Fonte da Moura',faturado:false},
+      {prodId:'p11',nome:'COMPOSE Hidracare',pvp:29.9,custo:23.92,qty:1,marca:'Farmácia Fonte da Moura',faturado:false},
+      {prodId:'p12',nome:'Dermagius Exocare PDRN Sérum',pvp:50,custo:38.49,qty:1,marca:'Farmácia Fonte da Moura',faturado:false}
+    ],totalProd:123.3,lucroProd:27.47},
+    {id:'c5',clienteId:'cl5',data:'2025-12-23',tipo:'Consulta individual',valor:30,faturado:false,estado:'Pago',notas:'',vendas:[],totalProd:0,lucroProd:0},
+    {id:'c6',clienteId:'cl6',data:'2026-02-10',tipo:'Consulta individual',valor:20,faturado:false,estado:'Pago',notas:'',vendas:[],totalProd:0,lucroProd:0},
+  ],
+  packs:[
+    {id:'pk1',clienteId:'cl3',tipo:'Pack 5',incluidas:5,usadas:2,valor:100,faturado:false,data:'2025-11-15',estado:'Ativo'},
+    {id:'pk2',clienteId:'cl2',tipo:'Pack 5',incluidas:5,usadas:2,valor:95,faturado:false,data:'2025-12-13',estado:'Ativo'},
+  ],
+  entradas:[],
+  consumo:[],
+  workshops:[
+    {id:'w1',nome:'Skincare sem Ruído',data:'2025-12-03',tipo:'Workshop',preco:20,faturado:false,participantes:[
+      {nome:'Paula Silva',valor:20,estado:'Pago'},{nome:'Carolina',valor:20,estado:'Pago'},{nome:'Adriana Silva',valor:20,estado:'Pago'},{nome:'Daniela Neto',valor:20,estado:'Pago'},{nome:'Paula Neto',valor:20,estado:'Pago'},{nome:'Rita Moreira',valor:20,estado:'Pago'},
+    ]},
+  ],
+  formacoes:[],
+  gastos:[
+    {id:'g1',data:'2025-11-01',desc:'Encomenda Mary Kay',valor:87.5,cat:'Produtos'},
+    {id:'g2',data:'2025-11-18',desc:'Material escritório',valor:12,cat:'Material'},
+  ],
+  consignacoesPagas:[],
+  fornecedores:[
+    {id:'f1',nome:'Mary Kay',tipo:'Distribuidor',contacto:'',email:'',notas:'Encomenda direta. Margem ~50%.'},
+    {id:'f2',nome:'Farmácia Fonte da Moura',tipo:'Consignação',contacto:'',email:'',notas:'Produtos em consignação. Pagamento semanal.'},
+    {id:'f3',nome:'Dermagius',tipo:'Distribuidor',contacto:'',email:'',notas:''},
+  ],
+  ids:{cl:7,c:7,pk:3,w:2,g:3,p:13,e:1,ci:1,f:4,fo:1,v:1},
+  vouchers:[],
+};
+
+// ─── STORAGE ─────────────────────────────────────────────────────────────────
+const KEY = 'dailycare_data_v1';
+let DB = {};
+
+// ─── SUPABASE ─────────────────────────────────────────────────────────────────
+const SB_URL  = 'https://zwdnnawqcbulcfveiqmx.supabase.co';
+const SB_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3ZG5uYXdxY2J1bGNmdmVpcW14Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTQwMTAsImV4cCI6MjA4OTE5MDAxMH0.jXeTvdQPMSeK8CZTKvp2tF93HxyXlqaGCybGZbZYnTs';
+const SB_HDR  = {'Content-Type':'application/json','apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
+
+let sbOnline = false; // torna-se true depois do primeiro sync bem-sucedido
+let saveTimer = null; // debounce para não fazer demasiados pedidos
+
+function showSyncStatus(msg, ok){
+  const el = document.getElementById('save-ind');
+  if(!el) return;
+  el.textContent = msg;
+  el.className = 'save-indicator' + (ok ? ' saved' : '');
+  if(ok) setTimeout(()=>{ el.textContent='Guardado ✓'; el.className='save-indicator saved'; }, 1800);
+}
+
+// guardar local imediatamente + cloud com debounce 1.5s
+function save(){
+  // 1. localStorage sempre (fallback offline)
+  try{ localStorage.setItem(KEY, JSON.stringify(DB)); }catch(e){}
+  showSyncStatus('A guardar…', false);
+  // 2. Supabase com debounce
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveToCloud, 1500);
+}
+
+async function saveToCloud(){
+  try{
+    const body = JSON.stringify({id:'main', data:DB, updated_at: new Date().toISOString()});
+    const r = await fetch(SB_URL+'/rest/v1/dailycare_data?id=eq.main', {
+      method:'PATCH', headers:{...SB_HDR,'Prefer':'return=minimal'}, body
+    });
+    if(r.ok){
+      sbOnline = true;
+      showSyncStatus('Guardado ✓ (nuvem)', true);
+      syncConsignacaoPublica(); // actualiza tabela pública da farmácia
+    } else {
+      showSyncStatus('Guardado local (sem internet)', false);
+    }
+  }catch(e){
+    showSyncStatus('Guardado local (offline)', false);
+  }
+}
+
+// tabela separada acessível à farmácia
+async function syncConsignacaoPublica(){
+  try{
+    const items = DB.consultas.flatMap(c=>
+      c.vendas.filter(v=>v.marca==='Farmácia Fonte da Moura'||v.consig).map(v=>{
+        const prod=DB.produtos.find(p=>p.id===v.prodId);
+        const pagas=DB.consignacoesPagas||[];
+        const idx=DB.consultas.flatMap(cc=>cc.vendas.filter(vv=>vv.marca==='Farmácia Fonte da Moura'||vv.consig)).indexOf(v);
+        return {
+          data:c.data, cnp:prod?.cnp||'', produto:v.nome, cliente:cNome(c.clienteId),
+          qty:v.qty||1, pvp:v.pvp, custo_base:v.custoOriginal||v.custo,
+          desconto_pct:v.descExtra||0, custo_efetivo:v.custo,
+          lucro_dailycare:+(v.pvp-v.custo).toFixed(2),
+          estado:pagas.includes(idx)?'Pago':'Por pagar'
+        };
+      })
+    );
+    const body = JSON.stringify({id:1, data:items, updated_at:new Date().toISOString()});
+    // upsert
+    await fetch(SB_URL+'/rest/v1/consignacao_publica?id=eq.1', {
+      method:'PATCH', headers:{...SB_HDR,'Prefer':'return=minimal'}, body
+    });
+  }catch(e){}
+}
+
+async function loadFromCloud(){
+  try{
+    const r = await fetch(SB_URL+'/rest/v1/dailycare_data?id=eq.main&select=data,updated_at', {
+      headers: SB_HDR
+    });
+    if(!r.ok) return null;
+    const rows = await r.json();
+    if(rows.length && rows[0].data && Object.keys(rows[0].data).length > 0){
+      sbOnline = true;
+      return rows[0].data;
+    }
+    return null;
+  }catch(e){ return null; }
+}
+
+function migrarCampos(){
+  if(!DB.consignacoesPagas) DB.consignacoesPagas = [];
+  if(!DB.entradas) DB.entradas = [];
+  if(!DB.consumo) DB.consumo = [];
+  if(!DB.fornecedores) DB.fornecedores = JSON.parse(JSON.stringify(DEFAULT.fornecedores));
+  if(!DB.formacoes) DB.formacoes = [];
+  if(!DB.vouchers) DB.vouchers = [];
+  if(!DB.ids) DB.ids = {};
+  if(!DB.ids.v) DB.ids.v = 1;
+  if(!DB.ids.e) DB.ids.e = 1;
+  if(!DB.ids.ci) DB.ids.ci = 1;
+  if(!DB.ids.f) DB.ids.f = 4;
+  if(!DB.ids.fo) DB.ids.fo = 1;
+}
+
+async function load(){
+  showSyncStatus('A carregar…', false);
+
+  // 1. tentar cloud primeiro
+  const cloudData = await loadFromCloud();
+
+  if(cloudData){
+    // cloud tem dados — usar cloud
+    DB = cloudData;
+    migrarCampos();
+    // verificar se local tem dados mais recentes para migrar
+    const local = localStorage.getItem(KEY);
+    if(local){
+      try{
+        const localDB = JSON.parse(local);
+        // se local tem mais consultas do que a cloud, oferecer migração
+        if(localDB.consultas && localDB.consultas.length > (DB.consultas||[]).length){
+          if(confirm(`Encontrei dados no teu browser (${localDB.consultas.length} consultas) que parecem mais recentes do que a nuvem (${DB.consultas.length} consultas).\n\nQueres usar os dados do browser e sincronizar para a nuvem?`)){
+            DB = localDB;
+            migrarCampos();
+            await saveToCloud();
+          }
+        }
+      }catch(e){}
+    }
+    showSyncStatus('Carregado da nuvem ✓', true);
+  } else {
+    // sem cloud — tentar localStorage
+    const local = localStorage.getItem(KEY);
+    if(local){
+      try{
+        DB = JSON.parse(local);
+        migrarCampos();
+        // tentar migrar para cloud
+        showSyncStatus('A sincronizar com a nuvem…', false);
+        await saveToCloud();
+      }catch(e){
+        DB = JSON.parse(JSON.stringify(DEFAULT));
+      }
+    } else {
+      DB = JSON.parse(JSON.stringify(DEFAULT));
+      await saveToCloud();
+    }
+    if(!sbOnline) showSyncStatus('Offline — dados locais', false);
+  }
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+const fmt = n => (Math.round(n*100)/100).toFixed(2)+'€';
+const cNome = id => { const c=DB.clientes.find(x=>x.id===id); return c?c.nome:'—'; };
+const today = () => new Date().toISOString().split('T')[0];
+
+let cvs = [];
+let fP='', fM='';
+
+function nav(page, btn){
+  document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
+  document.getElementById('pg-'+page).classList.add('active');
+  if(btn) btn.classList.add('active');
+  const renders = {
+    dashboard:renderDash, consulta_atual:renderConsultaAtual,
+    consultas:renderConsultas, vendas:renderVendas,
+    clientes:renderClientes, packs:renderPacks,
+    produtos:renderProdutos, entradas:renderEntradas,
+    consumo:renderConsumo, consignacao:renderConsign,
+    workshops:renderWorkshops, formacao:renderFormacao,
+    gastos:renderGastos, encomendas:renderEncomendas,
+    relatorio:renderRelatorio, fornecedores:renderFornecedores,
+    vouchers:renderVouchers
+  };
+  renders[page]?.();
+}
+
+// ─── DASHBOARD ───────────────────────────────────────────────────────────────
+function renderDash(){
+  const cs = DB.consultas;
+  const tServ = cs.reduce((s,c)=>s+c.valor,0);
+  const tProd = cs.reduce((s,c)=>s+c.totalProd,0);
+  const tLucro = cs.reduce((s,c)=>s+c.lucroProd,0);
+  const tPacks = DB.packs.reduce((s,p)=>s+p.valor,0);
+  const tWork = DB.workshops.reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+  const tGasto = DB.gastos.reduce((s,g)=>s+g.valor,0);
+  const tFatServ = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
+  const tFatPacks = DB.packs.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
+  const tFatWork = DB.workshops.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+  const totalFaturado = tFatServ+tFatPacks+tFatWork;
+  const totalNaoFat = (tServ+tPacks+tWork)-totalFaturado;
+  const ticket = cs.length ? (tServ+tProd)/cs.length : 0;
+  const stockB = DB.produtos.filter(p=>p.stock<=p.stockMin);
+  const baseS = totalFaturado*0.7, baseP = tLucro*0.15, ss = (baseS+baseP)*0.214;
+  const meses = {};
+  cs.forEach(c=>{const m=c.data.substring(0,7);if(!meses[m])meses[m]=0;meses[m]+=c.valor+c.totalProd;});
+  const mk = Object.keys(meses).sort();
+  const maxM = Math.max(...Object.values(meses),1);
+  const vendas = cs.flatMap(c=>c.vendas);
+  const pp = {};
+  vendas.forEach(v=>{if(!pp[v.nome])pp[v.nome]={nome:v.nome,qty:0,lucro:0};pp[v.nome].qty+=v.qty;pp[v.nome].lucro+=(v.pvp-v.custo)*v.qty;});
+  const topV = Object.values(pp).sort((a,b)=>b.qty-a.qty)[0];
+  const topL = Object.values(pp).sort((a,b)=>b.lucro-a.lucro)[0];
+  const packsAtivos = DB.packs.filter(p=>p.estado==='Ativo').length;
+
+  document.getElementById('pg-dashboard').innerHTML=`
+    <div class="metrics">
+      <div class="met"><div class="lb">Receita serviços</div><div class="vl">${fmt(tServ)}</div></div>
+      <div class="met"><div class="lb">Receita produtos</div><div class="vl">${fmt(tProd)}</div></div>
+      <div class="met"><div class="lb">Lucro produtos</div><div class="vl green">${fmt(tLucro)}</div></div>
+      <div class="met"><div class="lb">Packs vendidos</div><div class="vl">${fmt(tPacks)}</div></div>
+      <div class="met"><div class="lb">Workshops/Form.</div><div class="vl">${fmt(tWork)}</div></div>
+      <div class="met"><div class="lb">Total gastos</div><div class="vl red">${fmt(tGasto)}</div></div>
+      <div class="met"><div class="lb">Ticket médio</div><div class="vl">${fmt(ticket)}</div></div>
+      <div class="met"><div class="lb">Packs ativos</div><div class="vl">${packsAtivos}</div></div>
+    </div>
+    ${stockB.length?`<div class="alert al-err">⚠ Stock baixo: ${stockB.map(p=>`<strong>${p.nome}</strong> (${p.stock} unid.)`).join(', ')}</div>`:''}
+    <div class="ss-box" style="margin-bottom:1rem">
+      <h3 style="margin-bottom:10px">Segurança Social — estimativa</h3>
+      <div class="metrics" style="margin-bottom:10px">
+        <div class="met"><div class="lb">Faturado total</div><div class="vl blue">${fmt(totalFaturado)}</div></div>
+        <div class="met"><div class="lb">Não faturado</div><div class="vl">${fmt(totalNaoFat)}</div></div>
+        <div class="met"><div class="lb">SS a reservar</div><div class="vl amber">${fmt(ss)}</div></div>
+      </div>
+      <table>
+        <tr><td style="color:#888">Base serviços faturados (70% × ${fmt(totalFaturado)})</td><td style="text-align:right">${fmt(baseS)}</td></tr>
+        <tr><td style="color:#888">Base lucro produtos (15% × ${fmt(tLucro)})</td><td style="text-align:right">${fmt(baseP)}</td></tr>
+        <tr style="border-top:1px solid #f0e8d0"><td><strong>Contribuição SS (21,4%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
+      </table>
+      <div style="font-size:11px;color:#999;margin-top:6px">A SS é calculada apenas sobre receitas faturadas. Ativa o campo "Faturado" ao registar consultas, packs e workshops.</div>
+    </div>
+    <div class="card">
+      <h3>Receita por mês</h3>
+      <div class="bar-chart">
+        ${mk.length ? mk.map(m=>`<div class="bar-col">
+          <div class="bar-val">${fmt(meses[m])}</div>
+          <div class="bar-fill" style="height:${Math.round((meses[m]/maxM)*52+8)}px"></div>
+          <div class="bar-lbl">${m.substring(5)}/${m.substring(2,4)}</div>
+        </div>`).join('') : '<div style="color:#999;font-size:12px;align-self:center">Sem dados</div>'}
+      </div>
+    </div>
+    <div class="row c2">
+      <div class="card"><h3>Produto mais vendido</h3>${topV?`<div style="font-weight:600;margin-bottom:4px">${topV.nome}</div><span class="tag">${topV.qty} unidades</span>`:'<span style="color:#999">Sem dados</span>'}</div>
+      <div class="card"><h3>Produto mais lucrativo</h3>${topL?`<div style="font-weight:600;margin-bottom:4px">${topL.nome}</div><span class="tag">${fmt(topL.lucro)} margem total</span>`:'<span style="color:#999">Sem dados</span>'}</div>
+    </div>`;
+}
+
+// ─── CONSULTA ATUAL ──────────────────────────────────────────────────────────
+function renderConsultaAtual(){
+  document.getElementById('pg-consulta_atual').innerHTML=`
+    <div class="card">
+      <h2>Consulta atual</h2>
+      <div class="row c2">
+        <div><label>Cliente</label>
+          <div class="dd-wrap">
+            <input id="cc-cli" placeholder="Pesquisar ou criar cliente..." oninput="ddCli(this.value)" autocomplete="off"/>
+            <input type="hidden" id="cc-cli-id"/>
+            <div class="dropdown" id="dd-cli" style="display:none"></div>
+          </div>
+        </div>
+        <div><label>Data</label><input id="cc-data" type="date" value="${today()}"/></div>
+      </div>
+      <div class="row c3">
+        <div><label>Tipo de consulta</label>
+          <select id="cc-tipo" onchange="checkPkOuVoucher()">
+            <option>Primeira consulta</option>
+            <option>Acompanhamento</option>
+            <option>Pack</option>
+            <option>Voucher</option>
+            <option>Familiar</option>
+            <option>Parceria</option>
+          </select>
+        </div>
+        <div><label>Valor serviço (€)</label><input id="cc-val" type="number" placeholder="0.00" oninput="reRenderVendas()"/></div>
+        <div><label>Estado</label>
+          <select id="cc-est"><option>Pago</option><option>Por pagar</option></select>
+        </div>
+      </div>
+      <div class="row c2">
+        <div>
+          <label>Faturado? (aplica-se ao serviço e aos produtos)</label>
+          <select id="cc-fat">
+            <option value="false">Não faturado</option>
+            <option value="true">Faturado</option>
+          </select>
+          <div style="font-size:10px;color:#888;margin-top:3px">Os produtos assumem automaticamente o mesmo estado de faturação do serviço.</div>
+        </div>
+        <div><label>Notas</label><input id="cc-notas" placeholder="Opcional"/></div>
+      </div>
+      <div id="pk-info" style="display:none"></div>
+    </div>
+    <div class="card">
+      <h2>Produtos desta consulta</h2>
+      <div class="dd-wrap">
+        <input id="ps-inp" placeholder="Pesquisar produto (ex: SVR, TimeWise, Hydracare...)" oninput="ddProd(this.value)" autocomplete="off"/>
+        <div class="dropdown" id="dd-prod" style="display:none"></div>
+      </div>
+      <div id="v-items"><p style="color:#999;padding:4px 0;font-size:12px">Sem produtos adicionados.</p></div>
+      <div id="v-total" style="display:none" class="tbox">
+        <div class="row c4" style="margin-bottom:0">
+          <div><div class="lb">Total produtos (PVP)</div><div style="font-weight:600" id="vt-p">0€</div></div>
+          <div><div class="lb">Desconto fornecedor</div><div style="font-weight:600;color:#c0392b" id="vt-d">0€</div></div>
+          <div><div class="lb">Lucro líquido produtos</div><div style="font-weight:600;color:#1a6b1a" id="vt-l">0€</div></div>
+          <div><div class="lb">Total a pagar (cliente)</div><div style="font-weight:600;font-size:15px" id="vt-t">0€</div></div>
+        </div>
+      </div>
+    </div>
+    <div id="ca-alert" style="display:none"></div>
+    <button class="btn pri" onclick="gravarConsulta()" style="width:100%;padding:11px;font-size:14px;font-weight:600">Guardar consulta e atualizar stock</button>`;
+  cvs = [];
+}
+
+function ddCli(v){
+  const dd = document.getElementById('dd-cli');
+  if(!v||v.length<1){dd.style.display='none';return;}
+  const m = DB.clientes.filter(c=>c.nome.toLowerCase().includes(v.toLowerCase()));
+  dd.innerHTML = m.map(c=>`<div class="ddi" onclick="selCli('${c.id}','${c.nome.replace(/'/g,"\\'")}')"><strong>${c.nome}</strong></div>`).join('')
+    +`<div class="ddi" onclick="novoCliente()" style="color:#8b6f4e;font-weight:600">+ Criar cliente "${v}"</div>`;
+  dd.style.display='block';
+}
+function selCli(id,nome){
+  document.getElementById('cc-cli').value=nome;
+  document.getElementById('cc-cli-id').value=id;
+  document.getElementById('dd-cli').style.display='none';
+  checkPk();
+}
+function novoCliente(){
+  const nome = document.getElementById('cc-cli').value.trim();
+  if(!nome) return;
+  const id = 'cl'+DB.ids.cl++;
+  DB.clientes.push({id,nome,telefone:'',notas:''});
+  save();
+  document.getElementById('cc-cli-id').value=id;
+  document.getElementById('dd-cli').style.display='none';
+}
+function checkPkOuVoucher(){
+  const tipo = document.getElementById('cc-tipo').value;
+  const cId  = document.getElementById('cc-cli-id').value;
+  const el   = document.getElementById('pk-info');
+
+  if(tipo === 'Pack' && cId){
+    const pk = DB.packs.find(p=>p.clienteId===cId && p.estado==='Ativo');
+    if(pk){
+      el.className='alert al-info'; el.style.display='block';
+      el.innerHTML=`Pack ativo: <strong>${pk.tipo}</strong> — ${pk.usadas}/${pk.incluidas} sessões usadas. <strong>${pk.incluidas-pk.usadas} restantes.</strong>`;
+      document.getElementById('cc-val').value=0;
+    } else {
+      el.className='alert al-err'; el.style.display='block';
+      el.textContent='Sem pack ativo para esta cliente. Cria um pack em "Packs".';
+    }
+    return;
+  }
+
+  if(tipo === 'Voucher'){
+    // mostrar dropdown de vouchers disponíveis
+    const disponiveis = (DB.vouchers||[]).filter(v=>v.estado==='Disponível');
+    if(disponiveis.length){
+      el.className='alert al-info'; el.style.display='block';
+      el.innerHTML=`<strong>Seleciona o voucher a usar:</strong><br><div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+        ${disponiveis.map(v=>`<button class="btn sm" onclick="selecionarVoucher('${v.id}')" style="background:#fff8e6;border-color:#f5c842">
+          ${v.codigo} — ${v.beneficiario||'Sem nome'} — ${fmt(v.valor)} <span style="color:#888;font-size:10px">(pago por ${v.pagador||'?'})</span>
+        </button>`).join('')}
+      </div>`;
+      document.getElementById('cc-val').value=0;
+    } else {
+      el.className='alert al-err'; el.style.display='block';
+      el.innerHTML='Sem vouchers disponíveis. <a href="#" onclick="nav(\'vouchers\',null);return false" style="color:#8b6f4e">Criar voucher →</a>';
+    }
+    return;
+  }
+
+  el.style.display='none';
+}
+// alias para compatibilidade com selCli que chama checkPk
+function checkPk(){ checkPkOuVoucher(); }
+
+function selecionarVoucher(vid){
+  const v = (DB.vouchers||[]).find(x=>x.id===vid);
+  if(!v) return;
+  document.getElementById('cc-val').value = v.valor;
+  const el = document.getElementById('pk-info');
+  el.className='alert al-suc'; el.style.display='block';
+  el.innerHTML=`✓ Voucher <strong>${v.codigo}</strong> selecionado — ${fmt(v.valor)} — beneficiário: <strong>${v.beneficiario||'—'}</strong> — pago por: ${v.pagador||'—'}
+    <input type="hidden" id="voucher-selecionado" value="${vid}"/>`;
+}
+function ddProd(v){
+  const dd = document.getElementById('dd-prod');
+  if(!v||v.length<2){dd.style.display='none';return;}
+  const m = DB.produtos.filter(p=>p.nome.toLowerCase().includes(v.toLowerCase())||p.marca.toLowerCase().includes(v.toLowerCase()));
+  if(!m.length){dd.style.display='none';return;}
+  dd.innerHTML = m.map(p=>`<div class="ddi" onclick="addV('${p.id}')">
+    <div style="font-weight:600">${p.nome}</div>
+    <div class="sub">${p.marca} &nbsp;·&nbsp; PVP: ${fmt(p.pvp)} &nbsp;·&nbsp; Custo: ${fmt(p.custo)} &nbsp;·&nbsp; Margem: ${fmt(p.pvp-p.custo)} &nbsp;·&nbsp; Stock: <span class="${p.stock<=0?'red':p.stock<=p.stockMin?'amber':'green'}" style="font-weight:600">${p.stock}</span></div>
+  </div>`).join('');
+  dd.style.display='block';
+}
+function addV(pid){
+  const p = DB.produtos.find(x=>x.id===pid);
+  if(!p) return;
+  const ex = cvs.find(v=>v.prodId===pid);
+  if(ex){ ex.qty++; }
+  else {
+    // margemPct = margem habitual em %
+    const margemPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
+    cvs.push({prodId:pid, nome:p.nome, pvp:p.pvp, custoOriginal:p.custo, custo:p.custo, qty:1, marca:p.marca, consig:p.consig||false, margemBase:margemPct, descExtra:0});
+  }
+  document.getElementById('ps-inp').value='';
+  document.getElementById('dd-prod').style.display='none';
+  renderVendasTabela();
+}
+function remV(pid){ cvs=cvs.filter(v=>v.prodId!==pid); renderVendasTabela(); }
+
+// lê os inputs actuais do DOM e actualiza o array cvs — chamado antes de qualquer recalculo
+function syncInputs(){
+  cvs.forEach(v=>{
+    const pvpEl  = document.getElementById('vi-pvp-'+v.prodId);
+    const qtyEl  = document.getElementById('vi-qty-'+v.prodId);
+    const descEl = document.getElementById('vi-desc-'+v.prodId);
+    if(pvpEl)  v.pvp        = parseFloat(pvpEl.value)||v.pvp;
+    if(qtyEl)  v.qty        = parseInt(qtyEl.value)||1;
+    if(descEl){ v.descExtra = parseFloat(descEl.value)||0; }
+    // custo efectivo = custoOriginal × (1 - descExtra/100)
+    v.custo = Math.max(0, v.custoOriginal * (1 - v.descExtra/100));
+  });
+}
+
+function calcTotais(){
+  const tp  = cvs.reduce((s,v)=>s+v.pvp*v.qty, 0);
+  const tDesc = cvs.reduce((s,v)=>s+(v.custoOriginal-v.custo)*v.qty, 0); // poupança total
+  const tl  = cvs.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty, 0);
+  const sv  = parseFloat(document.getElementById('cc-val')?.value)||0;
+  return {tp, tDesc, tl, sv, total: tp+sv};
+}
+
+function renderVendasTabela(){
+  const el = document.getElementById('v-items');
+  const tv = document.getElementById('v-total');
+  if(!el) return;
+  if(!cvs.length){
+    el.innerHTML='<p style="color:#999;padding:4px 0;font-size:12px">Sem produtos adicionados.</p>';
+    if(tv) tv.style.display='none';
+    return;
+  }
+
+  el.innerHTML = cvs.map(v=>{
+    const custoEfetivo = Math.max(0, v.custoOriginal*(1-v.descExtra/100));
+    const lucroUnit = (v.pvp - custoEfetivo)*v.qty;
+    const margemTot = v.pvp>0 ? Math.round((v.pvp-custoEfetivo)/v.pvp*100) : 0;
+    const poupanca  = (v.custoOriginal - custoEfetivo)*v.qty;
+    return `<div class="vrow" style="align-items:flex-start;padding:10px 0">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;margin-bottom:4px">${v.nome} ${v.consig||v.marca.includes('Farmácia')?'<span class="badge bg-a">consig.</span>':''}</div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">${v.marca} &nbsp;·&nbsp; custo base: ${fmt(v.custoOriginal)} &nbsp;·&nbsp; margem base: ${v.margemBase}%</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:10px;color:#888">PVP (€)</span>
+            <input id="vi-pvp-${v.prodId}" type="number" value="${v.pvp}" min="0" step="0.01"
+              oninput="syncInputs();atualizarTotais()"
+              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px"/>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:10px;color:#888">Qty</span>
+            <input id="vi-qty-${v.prodId}" type="number" value="${v.qty}" min="1"
+              oninput="syncInputs();atualizarTotais()"
+              style="width:55px;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px"/>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:10px;color:#888">Desc. forn. extra (%)</span>
+            <input id="vi-desc-${v.prodId}" type="number" value="${v.descExtra||0}" min="0" max="100" step="0.5"
+              oninput="syncInputs();atualizarTotais()"
+              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px"/>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
+            <span style="font-size:10px;color:#888">Custo efectivo</span>
+            <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
+            <span style="font-size:10px;color:#888">Lucro (${margemTot}%)</span>
+            <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vi-lucro-${v.prodId}">${fmt(lucroUnit)}</span>
+          </div>
+          ${poupanca>0?`<div style="font-size:10px;color:#856404;background:#fff3cd;border-radius:6px;padding:4px 8px;border:1px solid #ffc107">Poupa ${fmt(poupanca)}</div>`:''}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:12px;padding-top:4px">
+        <span style="font-weight:700;font-size:14px" id="vi-total-${v.prodId}">${fmt(v.pvp*v.qty)}</span>
+        <button class="btn dan sm" onclick="syncInputs();remV('${v.prodId}')">× remover</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  if(tv){ tv.style.display='block'; atualizarTotais(); }
+}
+
+// actualiza só os totais sem re-renderizar os inputs (evita perder foco)
+function atualizarTotais(){
+  syncInputs();
+  // actualizar custo/lucro por linha sem reescrever o input
+  cvs.forEach(v=>{
+    const ce = Math.max(0, v.custoOriginal*(1-v.descExtra/100));
+    const lu = (v.pvp-ce)*v.qty;
+    const mt = v.pvp>0?Math.round((v.pvp-ce)/v.pvp*100):0;
+    const el_c = document.getElementById('vi-custo-'+v.prodId);
+    const el_l = document.getElementById('vi-lucro-'+v.prodId);
+    const el_t = document.getElementById('vi-total-'+v.prodId);
+    if(el_c) el_c.textContent=fmt(ce);
+    if(el_l){ el_l.textContent=fmt(lu); el_l.parentElement.querySelector('span:first-child').textContent=`Lucro (${mt}%)`; }
+    if(el_t) el_t.textContent=fmt(v.pvp*v.qty);
+  });
+  const {tp,tDesc,tl,sv,total} = calcTotais();
+  const vtp=document.getElementById('vt-p'), vtd=document.getElementById('vt-d'), vtl=document.getElementById('vt-l'), vtt=document.getElementById('vt-t');
+  if(vtp) vtp.textContent=fmt(tp);
+  if(vtd) vtd.textContent=tDesc>0?'-'+fmt(tDesc):fmt(0);
+  if(vtl) vtl.textContent=fmt(tl);
+  if(vtt) vtt.textContent=fmt(total);
+}
+
+// alias para o oninput do valor do serviço
+function reRenderVendas(){ atualizarTotais(); }
+function gravarConsulta(){
+  syncInputs(); // garante que todos os valores editados ficam no array
+  const cliNome = document.getElementById('cc-cli').value.trim();
+  const data = document.getElementById('cc-data').value;
+  const al = document.getElementById('ca-alert');
+  if(!cliNome||!data){
+    al.className='alert al-err';al.style.display='block';
+    al.textContent='Preenche o nome da cliente e a data.'; return;
+  }
+  let cId = document.getElementById('cc-cli-id').value;
+  if(!cId){const id='cl'+DB.ids.cl++;DB.clientes.push({id,nome:cliNome,telefone:'',notas:''});cId=id;}
+  const tipo = document.getElementById('cc-tipo').value;
+  const valor = parseFloat(document.getElementById('cc-val').value)||0;
+  const estado = document.getElementById('cc-est').value;
+  const faturado = document.getElementById('cc-fat').value==='true';
+  const notas = document.getElementById('cc-notas').value;
+  const vendasComFat = cvs.map(v=>({...v, faturado}));
+  const tp = cvs.reduce((s,v)=>s+v.pvp*v.qty,0);
+  const tl = cvs.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty,0);
+  const id = 'c'+DB.ids.c++;
+  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,estado,notas,vendas:vendasComFat,totalProd:tp,lucroProd:tl});
+  cvs.forEach(v=>{const p=DB.produtos.find(x=>x.id===v.prodId);if(p)p.stock-=v.qty;});
+  if(tipo==='Pack'){
+    const pk = DB.packs.find(p=>p.clienteId===cId&&p.estado==='Ativo');
+    if(pk){pk.usadas++;if(pk.usadas>=pk.incluidas)pk.estado='Concluído';}
+  }
+  if(tipo==='Voucher'){
+    const vEl = document.getElementById('voucher-selecionado');
+    if(vEl){
+      const v = (DB.vouchers||[]).find(x=>x.id===vEl.value);
+      if(v){ v.estado='Utilizado'; v.dataUso=data; v.usadoPor=cliNome; }
+    }
+  }
+  save();
+  al.className='alert al-suc';al.style.display='block';
+  al.innerHTML=`✓ Consulta de <strong>${cliNome}</strong> gravada! ${faturado?'<span class="badge bg-b">Faturado</span>':''} Stock atualizado.`;
+  document.getElementById('cc-cli').value='';document.getElementById('cc-cli-id').value='';
+  document.getElementById('cc-val').value='';document.getElementById('cc-notas').value='';
+  cvs=[];renderVendasTabela();
+  setTimeout(()=>{al.style.display='none'},5000);
+}
+
+// ─── CONSULTAS (histórico) ───────────────────────────────────────────────────
+let editingConsId = null;
+
+function renderConsultas(){
+  const sorted=[...DB.consultas].sort((a,b)=>b.data.localeCompare(a.data));
+  document.getElementById('pg-consultas').innerHTML=`
+    <h2>Histórico de consultas</h2>
+    ${sorted.map(c=>{
+      if(editingConsId===c.id) return `<div class="card" style="border-color:#d4a97a">
+        <h3 style="margin-bottom:10px">Editar consulta — ${cNome(c.clienteId)}</h3>
+        <div class="row c3">
+          <div><label>Data</label><input id="ec-data" type="date" value="${c.data}"/></div>
+          <div><label>Tipo</label><select id="ec-tipo"><option ${c.tipo==='Primeira consulta'?'selected':''}>Primeira consulta</option><option ${c.tipo==='Acompanhamento'?'selected':''}>Acompanhamento</option><option ${c.tipo==='Pack'?'selected':''}>Pack</option><option ${c.tipo==='Familiar'?'selected':''}>Familiar</option><option ${c.tipo==='Parceria'?'selected':''}>Parceria</option></select></div>
+          <div><label>Valor serviço (€)</label><input id="ec-val" type="number" value="${c.valor}"/></div>
+        </div>
+        <div class="row c3">
+          <div><label>Estado</label><select id="ec-est"><option ${c.estado==='Pago'?'selected':''}>Pago</option><option ${c.estado==='Por pagar'?'selected':''}>Por pagar</option></select></div>
+          <div><label>Faturado?</label><select id="ec-fat"><option value="false" ${!c.faturado?'selected':''}>Não faturado</option><option value="true" ${c.faturado?'selected':''}>Faturado</option></select></div>
+          <div><label>Notas</label><input id="ec-notas" value="${c.notas||''}"/></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn pri" onclick="saveEditCons('${c.id}')">Guardar alterações</button>
+          <button class="btn" onclick="cancelEditCons()">Cancelar</button>
+        </div>
+      </div>`;
+      return `<div class="card">
+        <div class="flex-b" style="margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            <strong>${cNome(c.clienteId)}</strong>
+            <span class="badge bg-gray">${c.tipo}</span>
+            <span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado}</span>
+            ${c.faturado?'<span class="badge bg-b">Faturado</span>':'<span class="badge bg-gray">Não faturado</span>'}
+          </div>
+          <div style="color:#999;font-size:11px">${c.data}</div>
+        </div>
+        <div class="row c3" style="margin-bottom:0">
+          <div><div class="lb">Serviço</div><strong>${fmt(c.valor)}</strong></div>
+          <div><div class="lb">Produtos</div><strong>${fmt(c.totalProd)}</strong></div>
+          <div><div class="lb">Lucro prod.</div><strong class="green">${fmt(c.lucroProd)}</strong></div>
+        </div>
+        ${c.vendas.length?`<div class="divider"></div><div style="font-size:11px;color:#888">${c.vendas.map(v=>v.nome+' ×'+v.qty+' — '+fmt(v.pvp*v.qty)).join(' &nbsp;|&nbsp; ')}</div>`:``}
+        ${c.notas?`<div style="font-size:11px;color:#999;margin-top:4px">Notas: ${c.notas}</div>`:''}
+        <div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end">
+          <button class="btn sm" onclick="startEditCons('${c.id}')">Editar</button>
+          <button class="btn dan sm" onclick="delConsulta('${c.id}')">Apagar</button>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+function startEditCons(id){ editingConsId=id; renderConsultas(); }
+function cancelEditCons(){ editingConsId=null; renderConsultas(); }
+function saveEditCons(id){
+  const c=DB.consultas.find(x=>x.id===id); if(!c) return;
+  c.data=document.getElementById('ec-data').value;
+  c.tipo=document.getElementById('ec-tipo').value;
+  c.valor=parseFloat(document.getElementById('ec-val').value)||0;
+  c.estado=document.getElementById('ec-est').value;
+  c.faturado=document.getElementById('ec-fat').value==='true';
+  c.notas=document.getElementById('ec-notas').value;
+  editingConsId=null; save(); renderConsultas();
+}
+
+// ─── VENDAS PRODUTOS ─────────────────────────────────────────────────────────
+function renderVendas(){
+  const all = DB.consultas.flatMap(c=>c.vendas.map(v=>({...v,data:c.data,cliente:cNome(c.clienteId)})));
+  const sorted = [...all].sort((a,b)=>b.data.localeCompare(a.data));
+  const tPVP = sorted.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
+  const tLucro = sorted.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0);
+  document.getElementById('pg-vendas').innerHTML=`
+    <h2>Vendas de produtos</h2>
+    <div class="metrics" style="margin-bottom:1rem">
+      <div class="met"><div class="lb">Total PVP</div><div class="vl">${fmt(tPVP)}</div></div>
+      <div class="met"><div class="lb">Lucro total</div><div class="vl green">${fmt(tLucro)}</div></div>
+      <div class="met"><div class="lb">Nº vendas</div><div class="vl">${sorted.length}</div></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Data</th><th>Cliente</th><th>Produto</th><th>Marca</th><th>Qty</th><th>PVP</th><th>Custo</th><th>Margem</th></tr></thead>
+        <tbody>${sorted.map(v=>`<tr>
+          <td>${v.data}</td><td>${v.cliente}</td><td>${v.nome}</td>
+          <td><span class="tag">${v.marca.replace('Farmácia Fonte da Moura','FFM')}</span></td>
+          <td>${v.qty||1}</td><td>${fmt(v.pvp*(v.qty||1))}</td>
+          <td class="amber">${fmt(v.custo*(v.qty||1))}</td>
+          <td class="green"><strong>${fmt((v.pvp-v.custo)*(v.qty||1))}</strong></td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ─── CLIENTES ────────────────────────────────────────────────────────────────
+let editingCliId = null;
+
+function renderClientes(){
+  const clis = DB.clientes.map(cl=>{
+    const cs = DB.consultas.filter(c=>c.clienteId===cl.id);
+    const pk = DB.packs.find(p=>p.clienteId===cl.id&&p.estado==='Ativo');
+    const total = cs.reduce((s,c)=>s+c.valor+c.totalProd,0)+(DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0));
+    return{...cl,numCons:cs.length,total,pack:pk};
+  }).sort((a,b)=>b.total-a.total);
+
+  const rowHtml = cl => {
+    if(editingCliId===cl.id) return `<tr style="background:#fffbf5">
+      <td><input id="ecl-n" value="${cl.nome.replace(/"/g,'&quot;')}" style="min-width:160px"/></td>
+      <td><input id="ecl-t" value="${cl.telefone||''}" style="width:120px"/></td>
+      <td colspan="2"><input id="ecl-no" value="${cl.notas||''}" style="min-width:160px"/></td>
+      <td></td>
+      <td style="white-space:nowrap">
+        <button class="btn pri sm" onclick="saveEditCli('${cl.id}')">Guardar</button>
+        <button class="btn sm" onclick="cancelEditCli()" style="margin-top:2px">Cancelar</button>
+      </td>
+    </tr>`;
+    return `<tr>
+      <td><div style="font-weight:600">${cl.nome}</div>${cl.notas?`<div style="font-size:10px;color:#999">${cl.notas}</div>`:''}</td>
+      <td style="color:#888;font-size:12px">${cl.telefone||'—'}</td>
+      <td>${cl.numCons}</td>
+      <td><strong>${fmt(cl.total)}</strong></td>
+      <td>${cl.pack?`<span class="badge bg-g">${cl.pack.tipo} — ${cl.pack.incluidas-cl.pack.usadas} rest.</span>`:'—'}</td>
+      <td style="white-space:nowrap;display:flex;flex-direction:column;gap:3px">
+        <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28;font-weight:600" onclick="abrirFicha('${cl.id}')">Ver ficha</button>
+        <button class="btn sm" onclick="startEditCli('${cl.id}')">Editar</button>
+        <button class="btn dan sm" onclick="delCliente('${cl.id}')">Apagar</button>
+      </td>
+    </tr>`;
+  };
+
+  document.getElementById('pg-clientes').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Clientes</h2><button class="btn" onclick="showAddCli()">+ Novo cliente</button></div>
+    <div id="add-cli-f" style="display:none" class="card">
+      <h3>Novo cliente</h3>
+      <div class="row c3">
+        <div><label>Nome</label><input id="ncl-n"/></div>
+        <div><label>Telefone</label><input id="ncl-t"/></div>
+        <div><label>Notas</label><input id="ncl-no"/></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addCli()">Guardar</button><button class="btn" onclick="showAddCli()">Cancelar</button></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Cliente</th><th>Telefone</th><th>Consultas</th><th>Valor total</th><th>Pack ativo</th><th>Ações</th></tr></thead>
+        <tbody>${clis.map(cl=>rowHtml(cl)).join('')}</tbody>
+      </table>
+    </div>`;
+}
+function startEditCli(id){ editingCliId=id; renderClientes(); setTimeout(()=>document.getElementById('ecl-n')?.focus(),50); }
+function cancelEditCli(){ editingCliId=null; renderClientes(); }
+function saveEditCli(id){
+  const cl=DB.clientes.find(x=>x.id===id); if(!cl) return;
+  cl.nome=document.getElementById('ecl-n').value.trim()||cl.nome;
+  cl.telefone=document.getElementById('ecl-t').value;
+  cl.notas=document.getElementById('ecl-no').value;
+  editingCliId=null; save(); renderClientes();
+}
+function showAddCli(){const f=document.getElementById('add-cli-f');f.style.display=f.style.display==='none'?'block':'none';}
+function addCli(){
+  const n=document.getElementById('ncl-n').value.trim();if(!n)return;
+  DB.clientes.push({id:'cl'+DB.ids.cl++,nome:n,telefone:document.getElementById('ncl-t').value,notas:document.getElementById('ncl-no').value});
+  save();showAddCli();renderClientes();
+}
+
+function abrirFicha(cliId){
+  const cl = DB.clientes.find(x=>x.id===cliId);
+  if(!cl) return;
+
+  const consultas = DB.consultas.filter(c=>c.clienteId===cliId).sort((a,b)=>b.data.localeCompare(a.data));
+  const packs = DB.packs.filter(p=>p.clienteId===cliId);
+  const vouchers = (DB.vouchers||[]).filter(v=>v.beneficiario===cl.nome||v.usadoPor===cl.nome);
+  const todasVendas = consultas.flatMap(c=>c.vendas.map(v=>({...v,data:c.data,consultaId:c.id})));
+
+  const totalServicos = consultas.reduce((s,c)=>s+c.valor,0);
+  const totalProd     = consultas.reduce((s,c)=>s+c.totalProd,0);
+  const totalLucro    = consultas.reduce((s,c)=>s+c.lucroProd,0);
+  const totalPacks    = packs.reduce((s,p)=>s+p.valor,0);
+  const totalGeral    = totalServicos + totalProd + totalPacks;
+
+  // produtos mais comprados
+  const porProd = {};
+  todasVendas.forEach(v=>{
+    if(!porProd[v.nome]) porProd[v.nome]={nome:v.nome,qty:0,total:0};
+    porProd[v.nome].qty  += v.qty||1;
+    porProd[v.nome].total+= v.pvp*(v.qty||1);
+  });
+  const topProd = Object.values(porProd).sort((a,b)=>b.qty-a.qty);
+
+  const modal = document.getElementById('ficha-modal');
+  document.getElementById('ficha-content').innerHTML=`
+    <!-- cabeçalho -->
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:1.25rem">
+      <div style="width:52px;height:52px;border-radius:50%;background:#f3e8da;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:#8b6f4e;flex-shrink:0">
+        ${cl.nome.charAt(0).toUpperCase()}
+      </div>
+      <div style="flex:1">
+        <div style="font-size:18px;font-weight:700;letter-spacing:-0.3px">${cl.nome}</div>
+        <div style="font-size:12px;color:#888;margin-top:2px">${cl.telefone?'📞 '+cl.telefone:'Sem telefone'}${cl.notas?' &nbsp;·&nbsp; '+cl.notas:''}</div>
+      </div>
+      <button class="btn" onclick="closeFicha()" style="align-self:flex-start">✕ Fechar</button>
+    </div>
+
+    <!-- métricas resumo -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-bottom:1.25rem">
+      <div class="met"><div class="lb">Consultas</div><div class="vl">${consultas.length}</div></div>
+      <div class="met"><div class="lb">Total serviços</div><div class="vl">${fmt(totalServicos)}</div></div>
+      <div class="met"><div class="lb">Total produtos</div><div class="vl">${fmt(totalProd)}</div></div>
+      <div class="met"><div class="lb">Packs</div><div class="vl">${fmt(totalPacks)}</div></div>
+      <div class="met"><div class="lb">Lucro produtos</div><div class="vl green">${fmt(totalLucro)}</div></div>
+      <div class="met" style="border:1px solid #d4a97a;background:#fffbf5"><div class="lb">Valor total</div><div class="vl brown">${fmt(totalGeral)}</div></div>
+    </div>
+
+    <!-- packs activos -->
+    ${packs.filter(p=>p.estado==='Ativo').length ? `
+    <div style="background:#f0fff0;border:1px solid #c3e6cb;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:12px">
+      <strong>Pack ativo:</strong>
+      ${packs.filter(p=>p.estado==='Ativo').map(p=>`${p.tipo} — ${p.usadas}/${p.incluidas} sessões usadas, <strong>${p.incluidas-p.usadas} restantes</strong>`).join(' &nbsp;|&nbsp; ')}
+    </div>` : ''}
+
+    <!-- produtos favoritos -->
+    ${topProd.length ? `
+    <div class="card" style="margin-bottom:1rem">
+      <h3 style="margin-bottom:10px">Produtos comprados</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        ${topProd.map(p=>`<div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:6px 10px;font-size:12px">
+          <div style="font-weight:600">${p.nome}</div>
+          <div style="color:#888;font-size:10px;margin-top:1px">${p.qty}× &nbsp;·&nbsp; ${fmt(p.total)}</div>
+        </div>`).join('')}
+      </div>
+    </div>` : ''}
+
+    <!-- histórico de consultas -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:10px 14px;background:#fafaf7;border-bottom:1px solid #eee;font-weight:600;font-size:13px">Histórico de consultas</div>
+      ${consultas.length ? `<table>
+        <thead><tr><th>Data</th><th>Tipo</th><th>Serviço</th><th>Produtos</th><th>Lucro prod.</th><th>Estado</th><th>Faturado</th><th>Produtos comprados</th></tr></thead>
+        <tbody>${consultas.map(c=>`<tr>
+          <td style="white-space:nowrap">${c.data}</td>
+          <td><span class="badge bg-gray">${c.tipo}</span></td>
+          <td><strong>${fmt(c.valor)}</strong></td>
+          <td>${fmt(c.totalProd)}</td>
+          <td class="green">${fmt(c.lucroProd)}</td>
+          <td><span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado}</span></td>
+          <td>${c.faturado?'<span class="badge bg-b">Sim</span>':'<span class="badge bg-gray">Não</span>'}</td>
+          <td style="font-size:11px;color:#888">${c.vendas.length?c.vendas.map(v=>`${v.nome} ×${v.qty}`).join(', '):'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table>` : '<div style="padding:1.5rem;text-align:center;color:#999;font-size:12px">Sem consultas registadas</div>'}
+    </div>
+
+    <!-- vouchers -->
+    ${vouchers.length ? `
+    <div class="card" style="margin-top:1rem;padding:0;overflow:hidden">
+      <div style="padding:10px 14px;background:#fafaf7;border-bottom:1px solid #eee;font-weight:600;font-size:13px">Vouchers</div>
+      <table>
+        <thead><tr><th>Código</th><th>Valor</th><th>Pagador</th><th>Estado</th><th>Usado em</th></tr></thead>
+        <tbody>${vouchers.map(v=>`<tr>
+          <td><strong style="font-family:monospace;color:#8b6f4e">${v.codigo}</strong></td>
+          <td>${fmt(v.valor)}</td>
+          <td>${v.pagador||'—'}</td>
+          <td><span class="badge ${v.estado==='Disponível'?'bg-g':v.estado==='Utilizado'?'bg-b':'bg-r'}">${v.estado}</span></td>
+          <td style="font-size:11px;color:#888">${v.dataUso||'—'}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>` : ''}
+
+    <div style="margin-top:1rem;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="startEditCli('${cliId}');closeFicha();nav('clientes',document.querySelector('.nb.active'))">Editar dados</button>
+      <button class="btn" onclick="closeFicha()">Fechar</button>
+    </div>`;
+
+  modal.style.display='flex';
+}
+function closeFicha(){ document.getElementById('ficha-modal').style.display='none'; }
+
+// ─── PACKS ───────────────────────────────────────────────────────────────────
+function renderPacks(){
+  document.getElementById('pg-packs').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Packs de consultas</h2><button class="btn" onclick="showAddPk()">+ Novo pack</button></div>
+    <div id="add-pk-f" style="display:none" class="card">
+      <h3>Novo pack</h3>
+      <div class="row c2">
+        <div><label>Cliente</label>
+          <div class="dd-wrap">
+            <input id="pk-cli" placeholder="Pesquisar cliente..." oninput="ddCliPk(this.value)" autocomplete="off"/>
+            <input type="hidden" id="pk-cli-id"/>
+            <div class="dropdown" id="dd-pk" style="display:none"></div>
+          </div>
+        </div>
+        <div><label>Tipo</label><select id="pk-tipo"><option>Pack 3</option><option>Pack 5</option><option>Pack 10</option></select></div>
+      </div>
+      <div class="row c3">
+        <div><label>Valor total (€)</label><input id="pk-val" type="number" placeholder="0"/></div>
+        <div><label>Data</label><input id="pk-data" type="date" value="${today()}"/></div>
+        <div><label>Faturado?</label><select id="pk-fat"><option value="false">Não faturado</option><option value="true">Faturado</option></select></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addPk()">Guardar</button><button class="btn" onclick="showAddPk()">Cancelar</button></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Cliente</th><th>Pack</th><th>Sessões</th><th>Progresso</th><th>Valor</th><th>Data</th><th>Faturado</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${DB.packs.map(pk=>{
+          const pct=Math.round(pk.usadas/pk.incluidas*100);
+          return`<tr>
+            <td><strong>${cNome(pk.clienteId)}</strong></td>
+            <td>${pk.tipo}</td>
+            <td style="font-size:11px">${pk.usadas}/${pk.incluidas}</td>
+            <td style="min-width:80px"><div class="pb"><div class="pf" style="width:${pct}%"></div></div></td>
+            <td>${fmt(pk.valor)}</td>
+            <td>${pk.data}</td>
+            <td>${pk.faturado?'<span class="badge bg-b">Sim</span>':'<span class="badge bg-gray">Não</span>'}</td>
+            <td><span class="badge ${pk.estado==='Ativo'?'bg-g':pk.estado==='Concluído'?'bg-b':'bg-gray'}">${pk.estado}</span></td>
+            <td><button class="btn dan sm" onclick="delPack('${pk.id}')">Apagar</button></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`;
+}
+function showAddPk(){const f=document.getElementById('add-pk-f');f.style.display=f.style.display==='none'?'block':'none';}
+function ddCliPk(v){const dd=document.getElementById('dd-pk');const m=DB.clientes.filter(c=>c.nome.toLowerCase().includes(v.toLowerCase()));dd.innerHTML=m.map(c=>`<div class="ddi" onclick="selCliPk('${c.id}','${c.nome.replace(/'/g,"\\'")}')"><strong>${c.nome}</strong></div>`).join('');dd.style.display=m.length?'block':'none';}
+function selCliPk(id,nome){document.getElementById('pk-cli').value=nome;document.getElementById('pk-cli-id').value=id;document.getElementById('dd-pk').style.display='none';}
+function addPk(){
+  const cId=document.getElementById('pk-cli-id').value;if(!cId)return;
+  const tipo=document.getElementById('pk-tipo').value;
+  const inc=parseInt(tipo.split(' ')[1]);
+  DB.packs.push({id:'pk'+DB.ids.pk++,clienteId:cId,tipo,incluidas:inc,usadas:0,valor:parseFloat(document.getElementById('pk-val').value)||0,faturado:document.getElementById('pk-fat').value==='true',data:document.getElementById('pk-data').value,estado:'Ativo'});
+  save();showAddPk();renderPacks();
+}
+
+// ─── PRODUTOS ────────────────────────────────────────────────────────────────
+let editingProdId = null;
+
+function renderProdutos(){
+  let ps=DB.produtos;
+  if(fP) ps=ps.filter(p=>p.nome.toLowerCase().includes(fP.toLowerCase())||p.cat.toLowerCase().includes(fP.toLowerCase())||((p.cnp||'').includes(fP)));
+  if(fM) ps=ps.filter(p=>p.marca===fM);
+  const cats=['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro'];
+
+  const rowHtml = p => {
+    if(editingProdId===p.id) {
+      return `<tr style="background:#fffbf5">
+        <td><input id="ep-n" value="${p.nome.replace(/"/g,'&quot;')}" style="min-width:160px"/></td>
+        <td><input id="ep-cnp" value="${p.cnp||''}" placeholder="CNP" style="width:90px;font-family:monospace"/></td>
+        <td><select id="ep-m">${marcaOptions(p.marca)}</select></td>
+        <td><select id="ep-cat">${cats.map(c=>`<option ${p.cat===c?'selected':''}>${c}</option>`).join('')}</select></td>
+        <td><input id="ep-custo" type="number" value="${p.custo}" style="width:65px"/></td>
+        <td><input id="ep-pvp" type="number" value="${p.pvp}" style="width:65px"/></td>
+        <td colspan="2" style="color:#888;font-size:11px">auto</td>
+        <td><input id="ep-stock" type="number" value="${p.stock}" style="width:50px"/><br><span style="font-size:10px;color:#888">mín:</span><input id="ep-smin" type="number" value="${p.stockMin}" style="width:45px;display:inline-block"/></td>
+        <td><select id="ep-cons" style="width:70px"><option value="false" ${!p.consig?'selected':''}>Não</option><option value="true" ${p.consig?'selected':''}>Sim</option></select></td>
+        <td style="white-space:nowrap">
+          <button class="btn pri sm" onclick="saveEditP('${p.id}')">Guardar</button>
+          <button class="btn sm" onclick="cancelEditP()" style="margin-top:2px">Cancelar</button>
+        </td>
+      </tr>`;
+    }
+    return `<tr>
+      <td><span style="font-weight:600">${p.nome}</span>${p.consig?'<br><span class="badge bg-a" style="margin-top:2px">consig.</span>':''}</td>
+      <td style="font-family:monospace;font-size:11px;color:#8b6f4e">${p.cnp||'—'}</td>
+      <td><span class="tag">${p.marca.replace('Farmácia Fonte da Moura','FFM')}</span></td>
+      <td><span class="tag">${p.cat}</span></td>
+      <td>${fmt(p.custo)}</td><td>${fmt(p.pvp)}</td>
+      <td><strong>${fmt(p.pvp-p.custo)}</strong></td>
+      <td>${p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100)+'%':'—'}</td>
+      <td><span class="badge ${p.stock<=0?'bg-r':p.stock<=p.stockMin?'bg-a':'bg-g'}">${p.stock}</span></td>
+      <td>—</td>
+      <td style="white-space:nowrap">
+        <button class="btn sm" onclick="startEditP('${p.id}')">Editar</button>
+        <button class="btn dan sm" onclick="delProduto('${p.id}')" style="margin-top:2px">Apagar</button>
+      </td>
+    </tr>`;
+  };
+
+  document.getElementById('pg-produtos').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Produtos</h2><button class="btn" onclick="showAddP()">+ Adicionar produto</button></div>
+    <div id="add-p-f" style="display:none" class="card">
+      <h3>Novo produto</h3>
+      <div class="row c3">
+        <div><label>Nome do produto</label><input id="np-n"/></div>
+        <div><label>Marca / Fornecedor</label><select id="np-m">${marcaOptions()}</select></div>
+        <div><label>CNP <span style="font-weight:400;color:#aaa">(código nacional)</span></label><input id="np-cnp" placeholder="ex: 1234567" style="font-family:monospace"/></div>
+      </div>
+      <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços — interligados</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+          <div><label>Custo (€)</label><input id="np-c" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromCusto('np')"/></div>
+          <div><label>PVP (€)</label><input id="np-p" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromPvp('np')"/></div>
+          <div><label>Margem (€)</label><input id="np-meur" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromMargEur('np')"/></div>
+          <div><label>Margem (%)</label><input id="np-mpct" type="number" placeholder="0" step="0.5" min="0" max="100" oninput="calcProdFromMargPct('np')"/></div>
+        </div>
+        <div id="np-preview" style="font-size:11px;color:#1a6b1a;margin-top:6px;min-height:14px"></div>
+      </div>
+      <div class="row c4">
+        <div><label>Stock inicial</label><input id="np-s" type="number" placeholder="0"/></div>
+        <div><label>Stock mínimo</label><input id="np-sm" type="number" placeholder="1"/></div>
+        <div><label>Categoria</label><select id="np-cat"><option>Limpeza</option><option>Sérum</option><option>Hidratante</option><option>SPF</option><option>Suplemento</option><option>Maquilhagem</option><option>Outro</option></select></div>
+        <div><label>Consignação farmácia</label><select id="np-co"><option value="false">Não</option><option value="true">Sim</option></select></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addP()">Guardar</button><button class="btn" onclick="showAddP()">Cancelar</button></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap">
+        <input placeholder="Filtrar por nome, cat. ou CNP..." oninput="fP=this.value;renderProdutos()" style="max-width:220px" value="${fP}"/>
+        <select onchange="fM=this.value;renderProdutos()" style="max-width:200px">
+          <option value="">Todas as marcas</option>
+          ${getMarcas().map(m=>`<option ${fM===m?'selected':''}>${m}</option>`).join('')}
+        </select>
+      </div>
+      <table>
+        <thead><tr><th>Produto</th><th>CNP</th><th>Marca</th><th>Cat.</th><th>Custo</th><th>PVP</th><th>Margem €</th><th>Margem %</th><th>Stock</th><th>Consig.</th><th>Ações</th></tr></thead>
+        <tbody>${ps.map(p=>rowHtml(p)).join('')}</tbody>
+      </table>
+    </div>`;
+}
+
+function startEditP(id){ editingProdId=id; renderProdutos(); setTimeout(()=>document.getElementById('ep-n')?.focus(),50); }
+function cancelEditP(){ editingProdId=null; renderProdutos(); }
+function saveEditP(id){
+  const p=DB.produtos.find(x=>x.id===id); if(!p) return;
+  p.nome=document.getElementById('ep-n').value.trim()||p.nome;
+  p.cnp=document.getElementById('ep-cnp').value.trim();
+  p.marca=document.getElementById('ep-m').value;
+  p.cat=document.getElementById('ep-cat').value;
+  p.custo=parseFloat(document.getElementById('ep-custo').value)||0;
+  p.pvp=parseFloat(document.getElementById('ep-pvp').value)||0;
+  p.stock=parseInt(document.getElementById('ep-stock').value)||0;
+  p.stockMin=parseInt(document.getElementById('ep-smin').value)||1;
+  p.consig=document.getElementById('ep-cons').value==='true';
+  editingProdId=null; save(); renderProdutos();
+}
+
+function showAddP(){const f=document.getElementById('add-p-f');f.style.display=f.style.display==='none'?'block':'none';}
+function addP(){
+  const n=document.getElementById('np-n').value.trim();if(!n)return;
+  DB.produtos.push({
+    id:'p'+DB.ids.p++, nome:n,
+    cnp:document.getElementById('np-cnp').value.trim(),
+    marca:document.getElementById('np-m').value,
+    cat:document.getElementById('np-cat').value,
+    custo:parseFloat(document.getElementById('np-c').value)||0,
+    pvp:parseFloat(document.getElementById('np-p').value)||0,
+    stock:parseInt(document.getElementById('np-s').value)||0,
+    stockMin:parseInt(document.getElementById('np-sm').value)||1,
+    consig:document.getElementById('np-co').value==='true'
+  });
+  save();showAddP();renderProdutos();
+}
+
+// ─── CÁLCULOS INTERLIGADOS (partilhados: produtos e entradas) ─────────────────
+function _v(id){return parseFloat(document.getElementById(id)?.value)||0;}
+function _s(id,val){const el=document.getElementById(id);if(el&&document.activeElement!==id&&document.activeElement?.id!==id)el.value=val>0?+val.toFixed(4):'';}
+function _prev(pfx){
+  const c=_v(pfx+'-c'),p=_v(pfx+'-p'||pfx+'-pvp');
+  const el=document.getElementById(pfx+'-preview');if(!el)return;
+  const pvp=pfx==='np'?_v('np-p'):_v('ne-pvp');
+  const custo=_v(pfx+'-c');
+  if(custo>0&&pvp>0){const m=pvp-custo,pct=Math.round(m/pvp*100);el.textContent=`Custo ${fmt(custo)} + Margem ${fmt(m)} (${pct}%) = PVP ${fmt(pvp)}`;el.style.color=m>=0?'#1a6b1a':'#c0392b';}
+  else el.textContent='';
+}
+
+function calcProdFromCusto(pfx){
+  const c=_v(pfx+'-c'), p=pfx==='np'?_v('np-p'):_v('ne-pvp');
+  if(c>0&&p>0){_s(pfx==='np'?'np-meur':'ne-meur',p-c);_s(pfx==='np'?'np-mpct':'ne-mpct',Math.round((p-c)/p*100));}
+  else{const pct=_v(pfx==='np'?'np-mpct':'ne-mpct');if(pct>0){const pv=c/(1-pct/100);_s(pfx==='np'?'np-p':'ne-pvp',pv);_s(pfx==='np'?'np-meur':'ne-meur',pv-c);}}
+  _prev(pfx);
+}
+function calcProdFromPvp(pfx){
+  const pvpId=pfx==='np'?'np-p':'ne-pvp';
+  const pv=_v(pvpId), c=_v(pfx+'-c');
+  if(pv>0&&c>0){_s(pfx==='np'?'np-meur':'ne-meur',pv-c);_s(pfx==='np'?'np-mpct':'ne-mpct',Math.round((pv-c)/pv*100));}
+  else if(pv>0){const pct=_v(pfx==='np'?'np-mpct':'ne-mpct');if(pct>0)_s(pfx+'-c',pv*(1-pct/100));}
+  _prev(pfx);
+}
+function calcProdFromMargEur(pfx){
+  const meurId=pfx==='np'?'np-meur':'ne-meur';
+  const pvpId=pfx==='np'?'np-p':'ne-pvp';
+  const m=_v(meurId),c=_v(pfx+'-c'),pv=_v(pvpId);
+  if(m>=0&&c>0){_s(pvpId,c+m);_s(pfx==='np'?'np-mpct':'ne-mpct',Math.round(m/(c+m)*100));}
+  else if(m>=0&&pv>0){_s(pfx+'-c',pv-m);_s(pfx==='np'?'np-mpct':'ne-mpct',Math.round(m/pv*100));}
+  _prev(pfx);
+}
+function calcProdFromMargPct(pfx){
+  const mpctId=pfx==='np'?'np-mpct':'ne-mpct';
+  const pvpId=pfx==='np'?'np-p':'ne-pvp';
+  const pct=_v(mpctId),c=_v(pfx+'-c'),pv=_v(pvpId);
+  if(pct>0&&c>0){const newPv=c/(1-pct/100);_s(pvpId,newPv);_s(pfx==='np'?'np-meur':'ne-meur',newPv-c);}
+  else if(pct>0&&pv>0){const newC=pv*(1-pct/100);_s(pfx+'-c',newC);_s(pfx==='np'?'np-meur':'ne-meur',pv-newC);}
+  _prev(pfx);
+}
+
+// ─── ENTRADAS STOCK ──────────────────────────────────────────────────────────
+function renderEntradas(){
+  document.getElementById('pg-entradas').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Entradas de stock</h2><button class="btn" onclick="showAddE()">+ Registar entrada</button></div>
+    <div id="add-e-f" style="display:none" class="card">
+      <h3>Nova entrada de stock</h3>
+      <div class="row c2">
+        <div><label>Produto</label>
+          <div class="dd-wrap">
+            <input id="ne-p" placeholder="Pesquisar produto..." oninput="ddProdE(this.value)" autocomplete="off"/>
+            <input type="hidden" id="ne-p-id"/>
+            <div class="dropdown" id="dd-ep" style="display:none"></div>
+          </div>
+        </div>
+        <div><label>Quantidade</label><input id="ne-q" type="number" placeholder="0" min="1"/></div>
+      </div>
+      <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços — edita qualquer campo e os outros atualizam automaticamente</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+          <div><label>Custo unitário (€)</label><input id="ne-c" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromCusto('ne')"/></div>
+          <div><label>PVP (€)</label><input id="ne-pvp" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromPvp('ne')"/></div>
+          <div><label>Margem (€)</label><input id="ne-meur" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromMargEur('ne')"/></div>
+          <div><label>Margem (%)</label><input id="ne-mpct" type="number" placeholder="0" step="0.5" min="0" max="100" oninput="calcProdFromMargPct('ne')"/></div>
+        </div>
+        <div id="ne-preview" style="font-size:11px;margin-top:6px;min-height:14px;color:#888"></div>
+        <div style="font-size:10px;color:#bbb;margin-top:3px">Se o PVP ou custo mudaram em relação ao produto, a ficha do produto é atualizada automaticamente ao guardar.</div>
+      </div>
+      <div class="row c2">
+        <div><label>Data</label><input id="ne-d" type="date" value="${today()}"/></div>
+        <div><label>Fornecedor</label><select id="ne-f"><option value="">-- selecionar --</option>${getMarcas().map(m=>`<option>${m}</option>`).join('')}</select></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn pri" onclick="addE()">Guardar e atualizar stock</button>
+        <button class="btn" onclick="showAddE()">Cancelar</button>
+      </div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Data</th><th>Produto</th><th>CNP</th><th>Qty</th><th>Custo unit.</th><th>PVP</th><th>Margem</th><th>Total entrada</th><th>Fornecedor</th></tr></thead>
+        <tbody>${DB.entradas.length
+          ? [...DB.entradas].sort((a,b)=>b.data.localeCompare(a.data)).map(e=>{
+              const prod = DB.produtos.find(x=>x.id===e.prodId);
+              const pvp = e.pvp||prod?.pvp||0;
+              const marg = pvp&&e.custo ? pvp-e.custo : null;
+              const margPct = pvp&&marg!==null ? Math.round(marg/pvp*100) : null;
+              return `<tr>
+                <td>${e.data}</td>
+                <td>${e.prodNome}</td>
+                <td style="font-family:monospace;font-size:11px;color:#8b6f4e">${prod?.cnp||e.cnp||'—'}</td>
+                <td>${e.qty}</td>
+                <td>${fmt(e.custo)}</td>
+                <td>${pvp?fmt(pvp):'—'}</td>
+                <td>${marg!==null?`${fmt(marg)} <span style="color:#888;font-size:10px">(${margPct}%)</span>`:'—'}</td>
+                <td><strong>${fmt(e.qty*e.custo)}</strong></td>
+                <td>${e.fornecedor||'—'}</td>
+              </tr>`;
+            }).join('')
+          : '<tr><td colspan="9" style="text-align:center;padding:2rem;color:#999">Sem entradas registadas</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+}
+function showAddE(){const f=document.getElementById('add-e-f');f.style.display=f.style.display==='none'?'block':'none';}
+function ddProdE(v){
+  const dd=document.getElementById('dd-ep');
+  const m=DB.produtos.filter(p=>p.nome.toLowerCase().includes(v.toLowerCase())||(p.cnp||'').includes(v));
+  dd.innerHTML=m.map(p=>`<div class="ddi" onclick="selProdE('${p.id}','${p.nome.replace(/'/g,"\\'")}')">
+    <strong>${p.nome}</strong>
+    <span style="color:#999;font-size:11px"> — stock: ${p.stock} ${p.cnp?'· CNP: '+p.cnp:''} · custo: ${fmt(p.custo)} · PVP: ${fmt(p.pvp)}</span>
+  </div>`).join('');
+  dd.style.display=m.length?'block':'none';
+}
+function selProdE(id,nome){
+  const p=DB.produtos.find(x=>x.id===id);
+  document.getElementById('ne-p').value=nome;
+  document.getElementById('ne-p-id').value=id;
+  document.getElementById('dd-ep').style.display='none';
+  // pré-preencher preços do produto
+  if(p){
+    document.getElementById('ne-c').value=p.custo||'';
+    document.getElementById('ne-pvp').value=p.pvp||'';
+    if(p.pvp&&p.custo){
+      document.getElementById('ne-meur').value=(p.pvp-p.custo).toFixed(2);
+      document.getElementById('ne-mpct').value=Math.round((p.pvp-p.custo)/p.pvp*100);
+    }
+    calcProdFromPvp('ne');
+  }
+}
+function addE(){
+  const pid=document.getElementById('ne-p-id').value;
+  const qty=parseInt(document.getElementById('ne-q').value)||0;
+  if(!pid){alert('Seleciona um produto da lista.');return;}
+  if(!qty||qty<=0){alert('Indica uma quantidade válida.');return;}
+  if(!DB.ids.e) DB.ids.e=1;
+  const custo=parseFloat(document.getElementById('ne-c').value)||0;
+  const pvp=parseFloat(document.getElementById('ne-pvp').value)||0;
+  const p=DB.produtos.find(x=>x.id===pid);
+  if(p){
+    p.stock+=qty;
+    // atualizar custo e pvp na ficha do produto se tiverem mudado
+    if(custo>0) p.custo=custo;
+    if(pvp>0)   p.pvp=pvp;
+  }
+  DB.entradas.push({
+    id:'e'+DB.ids.e++, prodId:pid,
+    prodNome:document.getElementById('ne-p').value,
+    qty, custo, pvp,
+    data:document.getElementById('ne-d').value,
+    fornecedor:document.getElementById('ne-f').value||''
+  });
+  save();
+  ['ne-p','ne-p-id','ne-q','ne-c','ne-pvp','ne-meur','ne-mpct','ne-preview'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.value!==undefined?el.value='':el.textContent='';
+  });
+  document.getElementById('ne-f').value='';
+  showAddE();
+  renderEntradas();
+}
+
+// ─── CONSUMO INTERNO ─────────────────────────────────────────────────────────
+function renderConsumo(){
+  document.getElementById('pg-consumo').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Consumo interno</h2><button class="btn" onclick="showAddCI()">+ Registar consumo</button></div>
+    <div id="add-ci-f" style="display:none" class="card">
+      <h3>Novo consumo interno</h3>
+      <div class="row c3">
+        <div><label>Produto</label>
+          <div class="dd-wrap">
+            <input id="ci-p" placeholder="Pesquisar produto..." oninput="ddProdCI(this.value)" autocomplete="off"/>
+            <input type="hidden" id="ci-p-id"/>
+            <div class="dropdown" id="dd-ci" style="display:none"></div>
+          </div>
+        </div>
+        <div><label>Quantidade</label><input id="ci-q" type="number" placeholder="0"/></div>
+        <div><label>Data</label><input id="ci-d" type="date" value="${today()}"/></div>
+      </div>
+      <div><label>Motivo</label><input id="ci-m" placeholder="ex: uso próprio, demo em consulta, oferta, amostra"/></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addCI()">Guardar</button><button class="btn" onclick="showAddCI()">Cancelar</button></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Motivo</th></tr></thead>
+        <tbody>${DB.consumo.length?[...DB.consumo].sort((a,b)=>b.data.localeCompare(a.data)).map(c=>`<tr><td>${c.data}</td><td>${c.prodNome}</td><td>${c.qty}</td><td>${c.motivo}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;padding:2rem;color:#999">Sem consumo interno registado</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+}
+function showAddCI(){const f=document.getElementById('add-ci-f');f.style.display=f.style.display==='none'?'block':'none';}
+function ddProdCI(v){const dd=document.getElementById('dd-ci');const m=DB.produtos.filter(p=>p.nome.toLowerCase().includes(v.toLowerCase()));dd.innerHTML=m.map(p=>`<div class="ddi" onclick="selProdCI('${p.id}','${p.nome.replace(/'/g,"\\'")}')"><strong>${p.nome}</strong></div>`).join('');dd.style.display=m.length?'block':'none';}
+function selProdCI(id,nome){document.getElementById('ci-p').value=nome;document.getElementById('ci-p-id').value=id;document.getElementById('dd-ci').style.display='none';}
+function addCI(){
+  const pid=document.getElementById('ci-p-id').value;
+  const qty=parseInt(document.getElementById('ci-q').value)||0;
+  if(!pid||!qty)return;
+  const p=DB.produtos.find(x=>x.id===pid);if(p)p.stock-=qty;
+  DB.consumo.push({id:'ci'+DB.ids.ci++,prodId:pid,prodNome:document.getElementById('ci-p').value,qty,data:document.getElementById('ci-d').value,motivo:document.getElementById('ci-m').value});
+  save();showAddCI();renderConsumo();
+}
+
+// ─── CONSIGNAÇÃO ─────────────────────────────────────────────────────────────
+function renderConsign(){
+  const items = DB.consultas.flatMap(c=>
+    c.vendas.filter(v=>v.marca==='Farmácia Fonte da Moura'||v.consig).map(v=>({...v,data:c.data,cliente:cNome(c.clienteId),consId:c.id}))
+  );
+  const pagas = DB.consignacoesPagas||[];
+  const pendentes = items.filter((_,i)=>!pagas.includes(i));
+  const tCusto = pendentes.reduce((s,v)=>s+v.custo*(v.qty||1),0);
+  const tCustoOrig = pendentes.reduce((s,v)=>s+(v.custoOriginal||v.custo)*(v.qty||1),0);
+  const tLucro = items.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0);
+  const tPoupanca = tCustoOrig - tCusto;
+
+  // enriquecer com CNP da base de produtos
+  const enriched = items.map((v,i)=>{
+    const prod = DB.produtos.find(p=>p.id===v.prodId);
+    return {...v, cnp: prod?.cnp||v.cnp||'', idx:i};
+  });
+
+  document.getElementById('pg-consignacao').innerHTML=`
+    <h2>Consignação — Farmácia Fonte da Moura</h2>
+    <div class="cbanner">
+      <div>
+        <div style="font-weight:600;color:#856404">Total a pagar à farmácia (por liquidar)</div>
+        <div style="font-size:11px;color:#999">Com descontos aplicados. "Marcar pago" remove da lista pendente.</div>
+      </div>
+      <div style="font-size:24px;font-weight:700;color:#856404">${fmt(tCusto)}</div>
+    </div>
+    <div class="metrics">
+      <div class="met"><div class="lb">Total vendido (PVP)</div><div class="vl">${fmt(items.reduce((s,v)=>s+v.pvp*(v.qty||1),0))}</div></div>
+      <div class="met"><div class="lb">A pagar (pendente)</div><div class="vl amber">${fmt(tCusto)}</div></div>
+      <div class="met"><div class="lb">Lucro meu</div><div class="vl green">${fmt(tLucro)}</div></div>
+      ${tPoupanca>0?`<div class="met"><div class="lb">Poupança descontos</div><div class="vl green">${fmt(tPoupanca)}</div></div>`:''}
+      <div class="met"><div class="lb">Unidades</div><div class="vl">${items.reduce((s,v)=>s+(v.qty||1),0)}</div></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
+      <button class="btn" onclick="exportConsignPendente()" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600">
+        ↓ Exportar lista pendente (para farmácia)
+      </button>
+      <button class="btn" onclick="exportConsignCompleto()" style="background:#f0f0ec">
+        ↓ Exportar histórico completo
+      </button>
+    </div>
+
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Data</th><th>CNP</th><th>Produto</th><th>Cliente</th><th>Qty</th><th>PVP unit.</th><th>PVP total</th><th>Custo base</th><th>Desc.%</th><th>A pagar farm.</th><th>Lucro meu</th><th></th></tr></thead>
+        <tbody>
+          ${enriched.length ? enriched.map(v=>{
+            const custoBase=v.custoOriginal||v.custo, descPct=v.descExtra||0, custoEf=v.custo, qty=v.qty||1;
+            const pago = pagas.includes(v.idx);
+            return `<tr id="cr-${v.idx}" style="${pago?'opacity:0.35;text-decoration:line-through':''}">
+              <td style="white-space:nowrap">${v.data}</td>
+              <td style="font-family:monospace;font-size:11px;color:#8b6f4e;white-space:nowrap">${v.cnp||'—'}</td>
+              <td>${v.nome}</td>
+              <td style="font-size:11px;color:#888">${v.cliente}</td>
+              <td>${qty}</td>
+              <td>${fmt(v.pvp)}</td>
+              <td><strong>${fmt(v.pvp*qty)}</strong></td>
+              <td class="amber" style="font-size:11px">${fmt(custoBase*qty)}</td>
+              <td>${descPct>0?`<span class="badge bg-g">-${descPct}%</span>`:'—'}</td>
+              <td class="amber"><strong>${fmt(custoEf*qty)}</strong></td>
+              <td class="green">${fmt((v.pvp-custoEf)*qty)}</td>
+              <td>${pago?'<span class="badge bg-g">Pago</span>':`<button class="btn suc sm" onclick="pagarC(${v.idx},this)">Marcar pago</button>`}</td>
+            </tr>`;
+          }).join('') : '<tr><td colspan="12" style="text-align:center;padding:2rem;color:#999">Sem vendas de consignação registadas</td></tr>'}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function pagarC(i,btn){
+  if(!DB.consignacoesPagas) DB.consignacoesPagas=[];
+  DB.consignacoesPagas.push(i);
+  save(); renderConsign();
+}
+
+function _consignRows(apenasItens){
+  const pagas = DB.consignacoesPagas||[];
+  return DB.consultas.flatMap(c=>
+    c.vendas.filter(v=>v.marca==='Farmácia Fonte da Moura'||v.consig).map((v,li)=>{
+      const globalIdx = DB.consultas.slice(0,DB.consultas.indexOf(c)).reduce((s,cc)=>s+cc.vendas.filter(vv=>vv.marca==='Farmácia Fonte da Moura'||vv.consig).length,0)+li;
+      const prod=DB.produtos.find(p=>p.id===v.prodId);
+      return {...v, data:c.data, cliente:cNome(c.clienteId), cnp:prod?.cnp||'', pago:pagas.includes(globalIdx)};
+    })
+  ).filter(v=>apenasItens?!v.pago:true);
+}
+
+function exportConsignPendente(){
+  const rows = _consignRows(true);
+  _downloadConsignCSV(rows, `consignacao_pendente_${today()}.csv`, 'Por liquidar — DAILYcare');
+}
+function exportConsignCompleto(){
+  const rows = _consignRows(false);
+  _downloadConsignCSV(rows, `consignacao_completo_${today()}.csv`, 'Histórico completo — DAILYcare');
+}
+function _downloadConsignCSV(rows, filename, titulo){
+  const header = ['Data','CNP','Produto','Cliente','Quantidade','PVP unitário','PVP total','Custo base','Desconto %','A pagar farmácia','Lucro DAILYcare','Estado'];
+  const data = rows.map(v=>{
+    const custoBase=v.custoOriginal||v.custo, descPct=v.descExtra||0, custoEf=v.custo, qty=v.qty||1;
+    return [v.data, v.cnp||'', v.nome, v.cliente, qty,
+      v.pvp.toFixed(2), (v.pvp*qty).toFixed(2),
+      (custoBase*qty).toFixed(2), descPct>0?`-${descPct}%`:'0%',
+      (custoEf*qty).toFixed(2), ((v.pvp-custoEf)*qty).toFixed(2),
+      v.pago?'Pago':'Por pagar'];
+  });
+  const total = rows.filter(v=>!v.pago).reduce((s,v)=>s+v.custo*(v.qty||1),0);
+  const csv = [
+    [`DAILYcare — Consignação Farmácia Fonte da Moura`],
+    [titulo],
+    [`Exportado em: ${today()}`],
+    [],
+    header,
+    ...data,
+    [],
+    ['','','','','','','','','TOTAL A PAGAR:',total.toFixed(2),'','']
+  ].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ─── WORKSHOPS ───────────────────────────────────────────────────────────────
+function renderWorkshops(){
+  const ws = DB.workshops.filter(w=>!w.tipo||w.tipo==='Workshop'||w.tipo==='Corporativo');
+  document.getElementById('pg-workshops').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Workshops</h2><button class="btn" onclick="showAddW()">+ Novo workshop</button></div>
+    <div id="add-w-f" style="display:none" class="card">
+      <h3>Novo workshop</h3>
+      <div class="row c4">
+        <div><label>Nome</label><input id="nw-n"/></div>
+        <div><label>Tipo</label><select id="nw-t"><option>Workshop</option><option>Corporativo</option></select></div>
+        <div><label>Data</label><input id="nw-d" type="date" value="${today()}"/></div>
+        <div><label>Preço base/pessoa (€)</label><input id="nw-p" type="number" placeholder="0"/></div>
+      </div>
+      <div class="row c2">
+        <div><label>Faturado?</label><select id="nw-fat"><option value="false">Não faturado</option><option value="true">Faturado</option></select></div>
+        <div><label>Notas</label><input id="nw-no" placeholder="Opcional"/></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addW()">Guardar</button><button class="btn" onclick="showAddW()">Cancelar</button></div>
+    </div>
+    ${ws.map(w=>{
+      const total=w.participantes.reduce((s,p)=>s+(p.valor||w.preco),0);
+      return`<div class="card">
+        <div class="flex-b" style="margin-bottom:10px">
+          <div>
+            <div style="font-weight:600;font-size:14px">${w.nome}</div>
+            <div style="font-size:11px;color:#999;margin-top:2px">${w.data} &nbsp;·&nbsp; ${w.tipo||'Workshop'} &nbsp;·&nbsp; preço base: ${fmt(w.preco)}/pessoa</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:700;font-size:16px">${fmt(total)}</div>
+            <div style="font-size:11px;color:#999">${w.participantes.length} participantes</div>
+            <div style="margin-top:3px">${w.faturado?'<span class="badge bg-b">Faturado</span>':'<span class="badge bg-gray">Não faturado</span>'}</div>
+          </div>
+        </div>
+        <table style="margin-bottom:10px">
+          <thead><tr><th>Nome</th><th>Valor pago</th><th>Estado</th><th></th></tr></thead>
+          <tbody>${w.participantes.map((p,i)=>`<tr>
+            <td>${p.nome}</td>
+            <td><strong>${fmt(p.valor||w.preco)}</strong></td>
+            <td><span class="badge ${p.estado==='Pago'||p.estado==='Pago Dinheiro'?'bg-g':'bg-a'}">${p.estado}</span></td>
+            <td><button class="btn dan sm" onclick="delParticipante('${w.id}',${i})">×</button></td>
+          </tr>`).join('')}</tbody>
+        </table>
+        <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">
+          <div><label style="font-size:10px">Nome</label><input id="wp-${w.id}" placeholder="Nome da participante" style="max-width:180px"/></div>
+          <div><label style="font-size:10px">Valor (€)</label><input id="wv-${w.id}" type="number" placeholder="${w.preco}" style="width:80px"/></div>
+          <div><label style="font-size:10px">Estado</label><select id="ws-${w.id}" style="max-width:140px"><option>Pago</option><option>Pago Dinheiro</option><option>Por pagar</option></select></div>
+          <button class="btn sm" onclick="addPart('${w.id}')">+ Adicionar</button>
+          <button class="btn dan sm" onclick="delWorkshop('${w.id}')" style="margin-left:auto">Apagar evento</button>
+        </div>
+      </div>`;
+    }).join('')}`;
+}
+function showAddW(){const f=document.getElementById('add-w-f');f.style.display=f.style.display==='none'?'block':'none';}
+function addW(){
+  const n=document.getElementById('nw-n').value.trim();if(!n)return;
+  if(!DB.ids.w)DB.ids.w=1;
+  DB.workshops.push({id:'w'+DB.ids.w++,nome:n,tipo:document.getElementById('nw-t').value,data:document.getElementById('nw-d').value,preco:parseFloat(document.getElementById('nw-p').value)||0,faturado:document.getElementById('nw-fat').value==='true',notas:document.getElementById('nw-no').value,participantes:[]});
+  save();showAddW();renderWorkshops();
+}
+function addPart(wid){
+  const n=document.getElementById('wp-'+wid).value.trim();
+  const w=DB.workshops.find(x=>x.id===wid);
+  if(!n||!w)return;
+  const v=parseFloat(document.getElementById('wv-'+wid).value);
+  const s=document.getElementById('ws-'+wid).value;
+  w.participantes.push({nome:n,valor:isNaN(v)?w.preco:v,estado:s});
+  document.getElementById('wp-'+wid).value='';
+  document.getElementById('wv-'+wid).value='';
+  save();renderWorkshops();
+}
+
+// ─── FORMAÇÃO ────────────────────────────────────────────────────────────────
+function renderFormacao(){
+  if(!DB.formacoes) DB.formacoes=[];
+  document.getElementById('pg-formacao').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Formação</h2><button class="btn" onclick="showAddFo()">+ Nova formação</button></div>
+    <div id="add-fo-f" style="display:none" class="card">
+      <h3>Nova formação</h3>
+      <div class="row c3">
+        <div><label>Nome / Entidade</label><input id="nfo-n"/></div>
+        <div><label>Data início</label><input id="nfo-d" type="date" value="${today()}"/></div>
+        <div><label>Horas totais</label><input id="nfo-h" type="number" placeholder="32"/></div>
+      </div>
+      <div class="row c3">
+        <div><label>Valor/hora (€)</label><input id="nfo-vh" type="number" placeholder="15"/></div>
+        <div><label>Valor conteúdo (€)</label><input id="nfo-vc" type="number" placeholder="96" title="Valor pago pela elaboração do conteúdo"/></div>
+        <div><label>Faturado?</label><select id="nfo-fat"><option value="false">Não faturado</option><option value="true">Faturado</option></select></div>
+      </div>
+      <div><label>Notas</label><input id="nfo-no" placeholder="Opcional"/></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addFo()">Guardar</button><button class="btn" onclick="showAddFo()">Cancelar</button></div>
+    </div>
+    ${DB.formacoes.length?`<div class="card" style="padding:0;overflow:hidden"><table>
+      <thead><tr><th>Nome</th><th>Data</th><th>Horas</th><th>€/hora</th><th>Conteúdo</th><th>Total</th><th>Faturado</th><th>Notas</th><th></th></tr></thead>
+      <tbody>${DB.formacoes.map(f=>`<tr>
+        <td><strong>${f.nome}</strong></td>
+        <td>${f.data}</td>
+        <td>${f.horas}h</td>
+        <td>${fmt(f.valorHora)}</td>
+        <td>${fmt(f.valorConteudo)}</td>
+        <td><strong>${fmt(f.horas*f.valorHora+f.valorConteudo)}</strong></td>
+        <td>${f.faturado?'<span class="badge bg-b">Sim</span>':'<span class="badge bg-gray">Não</span>'}</td>
+        <td style="color:#888;font-size:11px">${f.notas||'—'}</td>
+        <td><button class="btn dan sm" onclick="delFormacao('${f.id}')">Apagar</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`:'<div class="card" style="color:#999;text-align:center;padding:2rem">Sem formações registadas</div>'}`;
+}
+function showAddFo(){const f=document.getElementById('add-fo-f');f.style.display=f.style.display==='none'?'block':'none';}
+function addFo(){
+  const n=document.getElementById('nfo-n').value.trim();if(!n)return;
+  if(!DB.ids.fo)DB.ids.fo=1;
+  DB.formacoes.push({id:'fo'+DB.ids.fo++,nome:n,data:document.getElementById('nfo-d').value,horas:parseFloat(document.getElementById('nfo-h').value)||0,valorHora:parseFloat(document.getElementById('nfo-vh').value)||0,valorConteudo:parseFloat(document.getElementById('nfo-vc').value)||0,faturado:document.getElementById('nfo-fat').value==='true',notas:document.getElementById('nfo-no').value});
+  save();showAddFo();renderFormacao();
+}
+function delFormacao(id){
+  const f=DB.formacoes.find(x=>x.id===id);
+  confirmDel(`Apagar formação "${f.nome}"?`,()=>{DB.formacoes=DB.formacoes.filter(x=>x.id!==id);save();renderFormacao();});
+}
+
+// ─── GASTOS ──────────────────────────────────────────────────────────────────
+let editingGastoId = null;
+
+function renderGastos(){
+  const total=DB.gastos.reduce((s,g)=>s+g.valor,0);
+  const porCat={};
+  DB.gastos.forEach(g=>{if(!porCat[g.cat])porCat[g.cat]=0;porCat[g.cat]+=g.valor;});
+  const cats=['Produtos','Material','Marketing','Software','Formação','Deslocação','Outro'];
+
+  const rowHtml = g => {
+    if(editingGastoId===g.id) return `<tr style="background:#fffbf5">
+      <td><input id="eg-dt" type="date" value="${g.data}" style="width:130px"/></td>
+      <td><input id="eg-d" value="${g.desc.replace(/"/g,'&quot;')}" style="min-width:160px"/></td>
+      <td><select id="eg-c">${cats.map(c=>`<option ${g.cat===c?'selected':''}>${c}</option>`).join('')}</select></td>
+      <td><input id="eg-v" type="number" value="${g.valor}" style="width:90px"/></td>
+      <td style="white-space:nowrap">
+        <button class="btn pri sm" onclick="saveEditG('${g.id}')">Guardar</button>
+        <button class="btn sm" onclick="cancelEditG()" style="margin-top:2px">Cancelar</button>
+      </td>
+    </tr>`;
+    return `<tr>
+      <td>${g.data}</td><td>${g.desc}</td>
+      <td><span class="tag">${g.cat}</span></td>
+      <td class="red"><strong>${fmt(g.valor)}</strong></td>
+      <td style="white-space:nowrap">
+        <button class="btn sm" onclick="startEditG('${g.id}')">Editar</button>
+        <button class="btn dan sm" onclick="delGasto('${g.id}')" style="margin-top:2px">Apagar</button>
+      </td>
+    </tr>`;
+  };
+
+  document.getElementById('pg-gastos').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Gastos do negócio</h2><button class="btn" onclick="showAddG()">+ Adicionar gasto</button></div>
+    <div class="metrics" style="margin-bottom:1rem">
+      <div class="met"><div class="lb">Total gastos</div><div class="vl red">${fmt(total)}</div></div>
+      ${Object.entries(porCat).map(([cat,val])=>`<div class="met"><div class="lb">${cat}</div><div class="vl" style="font-size:15px">${fmt(val)}</div></div>`).join('')}
+    </div>
+    <div id="add-g-f" style="display:none" class="card">
+      <h3>Novo gasto</h3>
+      <div class="row c3"><div><label>Descrição</label><input id="ng-d"/></div><div><label>Valor (€)</label><input id="ng-v" type="number" placeholder="0"/></div><div><label>Data</label><input id="ng-dt" type="date" value="${today()}"/></div></div>
+      <div><label>Categoria</label><select id="ng-c"><option>Produtos</option><option>Material</option><option>Marketing</option><option>Software</option><option>Formação</option><option>Deslocação</option><option>Outro</option></select></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addG()">Guardar</button><button class="btn" onclick="showAddG()">Cancelar</button></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead>
+        <tbody>${[...DB.gastos].sort((a,b)=>b.data.localeCompare(a.data)).map(g=>rowHtml(g)).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+function startEditG(id){ editingGastoId=id; renderGastos(); setTimeout(()=>document.getElementById('eg-d')?.focus(),50); }
+function cancelEditG(){ editingGastoId=null; renderGastos(); }
+function saveEditG(id){
+  const g=DB.gastos.find(x=>x.id===id); if(!g) return;
+  g.data=document.getElementById('eg-dt').value;
+  g.desc=document.getElementById('eg-d').value.trim()||g.desc;
+  g.cat=document.getElementById('eg-c').value;
+  g.valor=parseFloat(document.getElementById('eg-v').value)||0;
+  editingGastoId=null; save(); renderGastos();
+}
+function showAddG(){const f=document.getElementById('add-g-f');f.style.display=f.style.display==='none'?'block':'none';}
+function addG(){
+  const d=document.getElementById('ng-d').value.trim();if(!d)return;
+  DB.gastos.push({id:'g'+DB.ids.g++,data:document.getElementById('ng-dt').value,desc:d,valor:parseFloat(document.getElementById('ng-v').value)||0,cat:document.getElementById('ng-c').value});
+  save();showAddG();renderGastos();
+}
+
+// ─── LISTA ENCOMENDAS ────────────────────────────────────────────────────────
+function renderEncomendas(){
+  const baixo=DB.produtos.filter(p=>p.stock<p.stockMin);
+  const esgotado=DB.produtos.filter(p=>p.stock<=0);
+  document.getElementById('pg-encomendas').innerHTML=`
+    <h2>Lista de encomendas automática</h2>
+    <p style="color:#888;font-size:12px;margin-bottom:1rem">Produtos com stock abaixo do mínimo definido.</p>
+    ${esgotado.length?`<div class="alert al-err"><strong>Esgotados:</strong> ${esgotado.map(p=>`<strong>${p.nome}</strong>`).join(', ')}</div>`:''}
+    ${!baixo.length?'<div class="alert al-suc">✓ Todos os produtos têm stock suficiente. Nada a encomendar.</div>':''}
+    ${baixo.length?`<div class="card" style="padding:0;overflow:hidden"><table>
+      <thead><tr><th>Produto</th><th>Marca</th><th>Stock atual</th><th>Stock mínimo</th><th>Qty a encomendar</th></tr></thead>
+      <tbody>${baixo.map(p=>`<tr>
+        <td><strong>${p.nome}</strong></td>
+        <td><span class="tag">${p.marca.replace('Farmácia Fonte da Moura','FFM')}</span></td>
+        <td><span class="badge bg-${p.stock<=0?'r':'a'}">${p.stock}</span></td>
+        <td>${p.stockMin}</td>
+        <td><strong class="green">${Math.max(0,p.stockMin-p.stock+1)}</strong></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`:''}`;
+}
+
+// ─── RELATÓRIO ───────────────────────────────────────────────────────────────
+function renderRelatorio(){
+  const tServ=DB.consultas.reduce((s,c)=>s+c.valor,0);
+  const tProd=DB.consultas.reduce((s,c)=>s+c.totalProd,0);
+  const tLucro=DB.consultas.reduce((s,c)=>s+c.lucroProd,0);
+  const tPacks=DB.packs.reduce((s,p)=>s+p.valor,0);
+  const tWork=DB.workshops.reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+  const tGasto=DB.gastos.reduce((s,g)=>s+g.valor,0);
+  const tFat=DB.consultas.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)+DB.packs.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0)+DB.workshops.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+  const tNFat=(tServ+tPacks+tWork)-tFat;
+  const baseS=tFat*0.7, baseP=tLucro*0.15, ss=(baseS+baseP)*0.214;
+  const custosProd=DB.consultas.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
+  const receitaTotal=tServ+tProd+tPacks+tWork;
+  const lucroReal=receitaTotal-tGasto-custosProd;
+  const topCli=DB.clientes.map(cl=>{
+    const tot=DB.consultas.filter(c=>c.clienteId===cl.id).reduce((s,c)=>s+c.valor+c.totalProd,0)+DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0);
+    return{nome:cl.nome,tot};
+  }).sort((a,b)=>b.tot-a.tot).slice(0,5);
+
+  document.getElementById('pg-relatorio').innerHTML=`
+    <h2>Relatório financeiro</h2>
+    <div class="row c2">
+      <div class="card">
+        <h3>Receitas por categoria</h3>
+        <table>
+          <tr><td>Consultas / serviços</td><td style="text-align:right">${fmt(tServ)}</td></tr>
+          <tr><td>Packs de consultas</td><td style="text-align:right">${fmt(tPacks)}</td></tr>
+          <tr><td>Workshops e formações</td><td style="text-align:right">${fmt(tWork)}</td></tr>
+          <tr><td>Produtos (PVP total)</td><td style="text-align:right">${fmt(tProd)}</td></tr>
+          <tr style="border-top:1px solid #eee"><td><strong>Total receita</strong></td><td style="text-align:right"><strong>${fmt(receitaTotal)}</strong></td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Faturação e base SS</h3>
+        <table>
+          <tr><td>Total faturado</td><td style="text-align:right" class="blue"><strong>${fmt(tFat)}</strong></td></tr>
+          <tr><td>Não faturado</td><td style="text-align:right">${fmt(tNFat)}</td></tr>
+          <tr><td>Base serviços (70% faturado)</td><td style="text-align:right">${fmt(tFat*0.7)}</td></tr>
+          <tr><td>Base produtos (15% lucro)</td><td style="text-align:right">${fmt(baseP)}</td></tr>
+          <tr style="border-top:1px solid #eee"><td><strong>SS estimada (21,4%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
+        </table>
+      </div>
+    </div>
+    <div class="row c2">
+      <div class="card">
+        <h3>Custos e lucro real</h3>
+        <table>
+          <tr><td>Receita total</td><td style="text-align:right">${fmt(receitaTotal)}</td></tr>
+          <tr><td>Custo dos produtos vendidos</td><td style="text-align:right" class="red">− ${fmt(custosProd)}</td></tr>
+          <tr><td>Outros gastos do negócio</td><td style="text-align:right" class="red">− ${fmt(tGasto)}</td></tr>
+          <tr style="border-top:1px solid #eee"><td><strong>Lucro real estimado</strong></td><td style="text-align:right;font-weight:700;font-size:15px" class="green">${fmt(lucroReal)}</td></tr>
+        </table>
+      </div>
+      <div class="card">
+        <h3>Top clientes por valor</h3>
+        <table>
+          ${topCli.map((c,i)=>`<tr><td><span style="color:#ccc;font-size:11px;margin-right:6px">${i+1}</span><strong>${c.nome}</strong></td><td style="text-align:right;font-weight:600">${fmt(c.tot)}</td></tr>`).join('')}
+        </table>
+      </div>
+    </div>`;
+}
+
+// ─── APAGAR ──────────────────────────────────────────────────────────────────
+let delCallback = null;
+function confirmDel(msg, cb){
+  document.getElementById('del-msg').textContent = msg;
+  delCallback = cb;
+  document.getElementById('del-modal').style.display = 'flex';
+}
+function closeDelModal(){ document.getElementById('del-modal').style.display='none'; delCallback=null; }
+document.getElementById('del-confirm-btn').onclick = ()=>{ if(delCallback)delCallback(); closeDelModal(); };
+document.getElementById('del-modal').addEventListener('click', e=>{ if(e.target===e.currentTarget)closeDelModal(); });
+
+function delConsulta(id){ const c=DB.consultas.find(x=>x.id===id); confirmDel(`Apagar consulta de "${cNome(c.clienteId)}" (${c.data})?\nNota: o stock NÃO será reposto.`, ()=>{ DB.consultas=DB.consultas.filter(x=>x.id!==id); save(); renderConsultas(); }); }
+function delCliente(id){ confirmDel(`Apagar cliente "${cNome(id)}"?`, ()=>{ DB.clientes=DB.clientes.filter(x=>x.id!==id); save(); renderClientes(); }); }
+function delPack(id){ const p=DB.packs.find(x=>x.id===id); confirmDel(`Apagar pack "${p.tipo}" de "${cNome(p.clienteId)}"?`, ()=>{ DB.packs=DB.packs.filter(x=>x.id!==id); save(); renderPacks(); }); }
+function delProduto(id){ const p=DB.produtos.find(x=>x.id===id); confirmDel(`Apagar produto "${p.nome}"?`, ()=>{ DB.produtos=DB.produtos.filter(x=>x.id!==id); save(); renderProdutos(); }); }
+function delEntrada(id){ const e=DB.entradas.find(x=>x.id===id); confirmDel(`Apagar esta entrada de stock?\nNota: o stock NÃO será ajustado.`, ()=>{ DB.entradas=DB.entradas.filter(x=>x.id!==id); save(); renderEntradas(); }); }
+function delConsumo(id){ confirmDel(`Apagar este consumo interno?\nNota: o stock NÃO será ajustado.`, ()=>{ DB.consumo=DB.consumo.filter(x=>x.id!==id); save(); renderConsumo(); }); }
+function delWorkshop(id){ const w=DB.workshops.find(x=>x.id===id); confirmDel(`Apagar workshop "${w.nome}" e todos os participantes?`, ()=>{ DB.workshops=DB.workshops.filter(x=>x.id!==id); save(); renderWorkshops(); }); }
+function delParticipante(wid,idx){ confirmDel('Apagar este participante?', ()=>{ const w=DB.workshops.find(x=>x.id===wid); if(w)w.participantes.splice(idx,1); save(); renderWorkshops(); }); }
+function delGasto(id){ const g=DB.gastos.find(x=>x.id===id); confirmDel(`Apagar gasto "${g.desc}" (${fmt(g.valor)})?`, ()=>{ DB.gastos=DB.gastos.filter(x=>x.id!==id); save(); renderGastos(); }); }
+
+// ─── AJUDA ───────────────────────────────────────────────────────────────────
+function openHelp(){ document.getElementById('help-modal').style.display='flex'; }
+function closeHelp(){ document.getElementById('help-modal').style.display='none'; }
+function copiarAjuda(){
+  const txt='Estou a usar o sistema DAILYcare que criaste para mim. Preciso de ajuda com o seguinte:\n\n[descreve aqui o que queres mudar ou adicionar]';
+  navigator.clipboard.writeText(txt).then(()=>{ const b=document.getElementById('copy-btn'); b.textContent='Copiado ✓'; setTimeout(()=>b.textContent='Copiar mensagem',2500); });
+}
+document.getElementById('help-modal').addEventListener('click', e=>{ if(e.target===e.currentTarget)closeHelp(); });
+
+// ─── FORNECEDORES ────────────────────────────────────────────────────────────
+let editingFornId = null;
+
+function renderFornecedores(){
+  if(!DB.fornecedores) DB.fornecedores=[];
+  const tipos=['Distribuidor','Consignação','Grossista','Outro'];
+
+  const rowHtml = f => {
+    if(editingFornId===f.id) return `<tr style="background:#fffbf5">
+      <td><input id="ef-n" value="${f.nome.replace(/"/g,'&quot;')}" style="min-width:140px"/></td>
+      <td><select id="ef-t">${tipos.map(t=>`<option ${f.tipo===t?'selected':''}>${t}</option>`).join('')}</select></td>
+      <td><input id="ef-c" value="${f.contacto||''}" style="width:120px"/></td>
+      <td><input id="ef-e" value="${f.email||''}" style="width:160px"/></td>
+      <td><input id="ef-no" value="${f.notas||''}" style="min-width:140px"/></td>
+      <td style="white-space:nowrap">
+        <button class="btn pri sm" onclick="saveEditF('${f.id}')">Guardar</button>
+        <button class="btn sm" onclick="cancelEditF()" style="margin-top:2px">Cancelar</button>
+      </td>
+    </tr>`;
+    return `<tr>
+      <td><strong>${f.nome}</strong></td>
+      <td><span class="badge ${f.tipo==='Consignação'?'bg-a':f.tipo==='Distribuidor'?'bg-b':'bg-gray'}">${f.tipo}</span></td>
+      <td style="color:#666">${f.contacto||'—'}</td>
+      <td style="color:#666">${f.email||'—'}</td>
+      <td style="color:#888;font-size:11px">${f.notas||'—'}</td>
+      <td style="white-space:nowrap">
+        <button class="btn sm" onclick="startEditF('${f.id}')">Editar</button>
+        <button class="btn dan sm" onclick="delForn('${f.id}')" style="margin-top:2px">Apagar</button>
+      </td>
+    </tr>`;
+  };
+
+  document.getElementById('pg-fornecedores').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Fornecedores</h2><button class="btn" onclick="showAddF()">+ Novo fornecedor</button></div>
+    <p style="color:#888;font-size:12px;margin-bottom:1rem">Os nomes aqui registados aparecem nas listas de marcas dos produtos e entradas de stock.</p>
+    <div id="add-f-form" style="display:none" class="card">
+      <h3>Novo fornecedor</h3>
+      <div class="row c3">
+        <div><label>Nome</label><input id="nf-n"/></div>
+        <div><label>Tipo</label><select id="nf-t"><option>Distribuidor</option><option>Consignação</option><option>Grossista</option><option>Outro</option></select></div>
+        <div><label>Contacto</label><input id="nf-c" placeholder="Nome da pessoa"/></div>
+      </div>
+      <div class="row c2">
+        <div><label>Email</label><input id="nf-e" type="email" placeholder="email@exemplo.com"/></div>
+        <div><label>Notas</label><input id="nf-no" placeholder="Condições, prazos, etc."/></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addForn()">Guardar</button><button class="btn" onclick="showAddF()">Cancelar</button></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Nome</th><th>Tipo</th><th>Contacto</th><th>Email</th><th>Notas</th><th>Ações</th></tr></thead>
+        <tbody>${DB.fornecedores.map(f=>rowHtml(f)).join('')}</tbody>
+      </table>
+    </div>`;
+}
+function showAddF(){const f=document.getElementById('add-f-form');f.style.display=f.style.display==='none'?'block':'none';}
+function addForn(){
+  const n=document.getElementById('nf-n').value.trim();if(!n)return;
+  if(!DB.ids.f)DB.ids.f=1;
+  DB.fornecedores.push({id:'f'+DB.ids.f++,nome:n,tipo:document.getElementById('nf-t').value,contacto:document.getElementById('nf-c').value,email:document.getElementById('nf-e').value,notas:document.getElementById('nf-no').value});
+  save();showAddF();renderFornecedores();
+}
+function startEditF(id){editingFornId=id;renderFornecedores();setTimeout(()=>document.getElementById('ef-n')?.focus(),50);}
+function cancelEditF(){editingFornId=null;renderFornecedores();}
+function saveEditF(id){
+  const f=DB.fornecedores.find(x=>x.id===id);if(!f)return;
+  f.nome=document.getElementById('ef-n').value.trim()||f.nome;
+  f.tipo=document.getElementById('ef-t').value;
+  f.contacto=document.getElementById('ef-c').value;
+  f.email=document.getElementById('ef-e').value;
+  f.notas=document.getElementById('ef-no').value;
+  editingFornId=null;save();renderFornecedores();
+}
+function delForn(id){
+  const f=DB.fornecedores.find(x=>x.id===id);
+  confirmDel(`Apagar fornecedor "${f.nome}"?`,()=>{DB.fornecedores=DB.fornecedores.filter(x=>x.id!==id);save();renderFornecedores();});
+}
+
+// helper: lista de marcas dinâmica (fornecedores + fixas)
+function getMarcas(){
+  const base=['Mary Kay','Farmácia Fonte da Moura','Dermagius'];
+  const forn=(DB.fornecedores||[]).map(f=>f.nome);
+  return [...new Set([...base,...forn])].sort();
+}
+function marcaOptions(sel=''){return getMarcas().map(m=>`<option ${m===sel?'selected':''}>${m}</option>`).join('');}
+
+// ─── EXPORTAR EXCEL (CSV) ────────────────────────────────────────────────────
+function exportarExcel(){
+  const sheets = {
+    'Consultas': [
+      ['ID','Cliente','Data','Tipo','Valor Serviço','Total Produtos','Lucro Produtos','Estado','Faturado','Notas'],
+      ...DB.consultas.map(c=>[c.id,cNome(c.clienteId),c.data,c.tipo,c.valor,c.totalProd,c.lucroProd,c.estado,c.faturado?'Sim':'Não',c.notas||''])
+    ],
+    'Vendas_Produtos': [
+      ['Data','Cliente','Produto','Marca','Qty','PVP','Custo','Margem','Consignação'],
+      ...DB.consultas.flatMap(c=>c.vendas.map(v=>[c.data,cNome(c.clienteId),v.nome,v.marca,v.qty,v.pvp,v.custo,(v.pvp-v.custo)*v.qty,(v.marca==='Farmácia Fonte da Moura'||v.consig)?'Sim':'Não']))
+    ],
+    'Produtos': [
+      ['Nome','Marca','Categoria','Custo','PVP','Margem','Stock','Stock Mínimo','Consignação'],
+      ...DB.produtos.map(p=>[p.nome,p.marca,p.cat,p.custo,p.pvp,p.pvp-p.custo,p.stock,p.stockMin,p.consig?'Sim':'Não'])
+    ],
+    'Clientes': [
+      ['Nome','Telefone','Notas','Nº Consultas','Valor Total'],
+      ...DB.clientes.map(cl=>{
+        const cs=DB.consultas.filter(c=>c.clienteId===cl.id);
+        const tot=cs.reduce((s,c)=>s+c.valor+c.totalProd,0)+DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0);
+        return[cl.nome,cl.telefone||'',cl.notas||'',cs.length,tot];
+      })
+    ],
+    'Packs': [
+      ['Cliente','Tipo','Incluídas','Usadas','Restantes','Valor','Data','Faturado','Estado'],
+      ...DB.packs.map(pk=>[cNome(pk.clienteId),pk.tipo,pk.incluidas,pk.usadas,pk.incluidas-pk.usadas,pk.valor,pk.data,pk.faturado?'Sim':'Não',pk.estado])
+    ],
+    'Gastos': [
+      ['Data','Descrição','Categoria','Valor'],
+      ...DB.gastos.map(g=>[g.data,g.desc,g.cat,g.valor])
+    ],
+    'Entradas_Stock': [
+      ['Data','Produto','Quantidade','Custo Unitário','Total','Fornecedor'],
+      ...DB.entradas.map(e=>[e.data,e.prodNome,e.qty,e.custo,e.qty*e.custo,e.fornecedor||''])
+    ],
+    'Fornecedores': [
+      ['Nome','Tipo','Contacto','Email','Notas'],
+      ...DB.fornecedores.map(f=>[f.nome,f.tipo,f.contacto||'',f.email||'',f.notas||''])
+    ],
+  };
+
+  // criar ZIP com múltiplos CSV simulando sheets
+  // Como não temos ZIP nativo, vamos criar um único CSV com separadores entre sheets
+  let csv = '';
+  for(const [nome,rows] of Object.entries(sheets)){
+    csv += `\n=== ${nome} ===\n`;
+    csv += rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    csv += '\n';
+  }
+
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url;
+  a.download=`DAILYcare_export_${today()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── DEFINIÇÕES / REORDENAR SEPARADORES ─────────────────────────────────────
+// ─── VOUCHERS ────────────────────────────────────────────────────────────────
+function gerarCodigo(){
+  return 'VCH-' + Math.random().toString(36).substring(2,6).toUpperCase() + '-' + Date.now().toString(36).slice(-3).toUpperCase();
+}
+
+function renderVouchers(){
+  if(!DB.vouchers) DB.vouchers=[];
+  const disponiveis = DB.vouchers.filter(v=>v.estado==='Disponível');
+  const utilizados  = DB.vouchers.filter(v=>v.estado==='Utilizado');
+  const expirados   = DB.vouchers.filter(v=>v.estado==='Expirado');
+
+  document.getElementById('pg-vouchers').innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Vouchers oferta</h2><button class="btn" onclick="showAddV()">+ Criar voucher</button></div>
+    <p style="color:#888;font-size:12px;margin-bottom:1rem">Alguém oferece uma consulta a outra pessoa. O pagador paga, o beneficiário usa. Na consulta, seleciona tipo "Voucher" e escolhe o voucher da lista.</p>
+
+    <div id="add-v-f" style="display:none" class="card" style="border-color:#f5c842">
+      <h3>Novo voucher</h3>
+      <div class="row c3">
+        <div><label>Quem paga (oferece)</label><input id="nv-pag" placeholder="Nome de quem paga"/></div>
+        <div><label>Beneficiário (quem recebe)</label><input id="nv-ben" placeholder="Nome de quem vai usar"/></div>
+        <div><label>Valor (€)</label><input id="nv-val" type="number" placeholder="ex: 40"/></div>
+      </div>
+      <div class="row c3">
+        <div><label>Data de emissão</label><input id="nv-data" type="date" value="${today()}"/></div>
+        <div><label>Validade</label><input id="nv-valid" type="date" value="${new Date(Date.now()+180*86400000).toISOString().split('T')[0]}"/></div>
+        <div><label>Código (gerado automaticamente)</label><input id="nv-cod" placeholder="deixa em branco para gerar"/></div>
+      </div>
+      <div><label>Notas</label><input id="nv-notas" placeholder="Opcional — ex: oferta de aniversário"/></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addVoucher()">Criar voucher</button><button class="btn" onclick="showAddV()">Cancelar</button></div>
+    </div>
+
+    <div class="metrics">
+      <div class="met"><div class="lb">Disponíveis</div><div class="vl green">${disponiveis.length}</div></div>
+      <div class="met"><div class="lb">Utilizados</div><div class="vl">${utilizados.length}</div></div>
+      <div class="met"><div class="lb">Valor em circulação</div><div class="vl">${fmt(disponiveis.reduce((s,v)=>s+v.valor,0))}</div></div>
+      <div class="met"><div class="lb">Valor utilizado</div><div class="vl">${fmt(utilizados.reduce((s,v)=>s+v.valor,0))}</div></div>
+    </div>
+
+    ${DB.vouchers.length ? `<div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr><th>Código</th><th>Pagador</th><th>Beneficiário</th><th>Valor</th><th>Emitido</th><th>Validade</th><th>Estado</th><th>Usado por / data</th><th></th></tr></thead>
+        <tbody>${DB.vouchers.map(v=>`<tr>
+          <td><strong style="font-family:monospace;color:#8b6f4e">${v.codigo}</strong></td>
+          <td>${v.pagador||'—'}</td>
+          <td>${v.beneficiario||'—'}</td>
+          <td><strong>${fmt(v.valor)}</strong></td>
+          <td style="font-size:11px;color:#888">${v.dataEmissao}</td>
+          <td style="font-size:11px;color:#888">${v.validade}</td>
+          <td><span class="badge ${v.estado==='Disponível'?'bg-g':v.estado==='Utilizado'?'bg-b':'bg-r'}">${v.estado}</span></td>
+          <td style="font-size:11px;color:#888">${v.usadoPor?v.usadoPor+' ('+v.dataUso+')':'—'}</td>
+          <td style="white-space:nowrap">
+            ${v.estado==='Disponível'?`<button class="btn dan sm" onclick="delVoucher('${v.id}')">Apagar</button>`:''}
+            ${v.estado==='Disponível'?`<button class="btn sm" onclick="expirarVoucher('${v.id}')" style="margin-top:2px">Expirar</button>`:''}
+          </td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>` : '<div class="card" style="color:#999;text-align:center;padding:2rem">Sem vouchers criados</div>'}`;
+}
+
+function showAddV(){ const f=document.getElementById('add-v-f'); f.style.display=f.style.display==='none'?'block':'none'; }
+
+function addVoucher(){
+  const pag=document.getElementById('nv-pag').value.trim();
+  const ben=document.getElementById('nv-ben').value.trim();
+  const val=parseFloat(document.getElementById('nv-val').value)||0;
+  if(!pag||!val){ alert('Preenche pelo menos o nome de quem paga e o valor.'); return; }
+  if(!DB.ids.v) DB.ids.v=1;
+  const cod=document.getElementById('nv-cod').value.trim()||gerarCodigo();
+  DB.vouchers.push({
+    id:'v'+DB.ids.v++, codigo:cod, pagador:pag, beneficiario:ben, valor:val,
+    dataEmissao:document.getElementById('nv-data').value,
+    validade:document.getElementById('nv-valid').value,
+    notas:document.getElementById('nv-notas').value,
+    estado:'Disponível', usadoPor:null, dataUso:null
+  });
+  save(); showAddV(); renderVouchers();
+}
+
+function delVoucher(id){
+  const v=DB.vouchers.find(x=>x.id===id);
+  confirmDel(`Apagar voucher "${v.codigo}" (${v.beneficiario||'sem beneficiário'})?`, ()=>{
+    DB.vouchers=DB.vouchers.filter(x=>x.id!==id); save(); renderVouchers();
+  });
+}
+function expirarVoucher(id){
+  const v=DB.vouchers.find(x=>x.id===id);
+  if(v){ v.estado='Expirado'; save(); renderVouchers(); }
+}
+
+const ALL_TABS = [
+  {id:'dashboard',label:'Dashboard'},
+  {id:'consulta_atual',label:'Consulta atual'},
+  {id:'consultas',label:'Consultas'},
+  {id:'vendas',label:'Vendas produtos'},
+  {id:'clientes',label:'Clientes'},
+  {id:'packs',label:'Packs'},
+  {id:'produtos',label:'Produtos'},
+  {id:'entradas',label:'Entradas stock'},
+  {id:'consumo',label:'Consumo interno'},
+  {id:'consignacao',label:'Consignação'},
+  {id:'workshops',label:'Workshops'},
+  {id:'formacao',label:'Formação'},
+  {id:'gastos',label:'Gastos'},
+  {id:'encomendas',label:'Lista encomendas'},
+  {id:'relatorio',label:'Relatório'},
+  {id:'fornecedores',label:'Fornecedores'},
+  {id:'vouchers',label:'Vouchers'},
+];
+
+let tabOrder = ALL_TABS.map(t=>t.id);
+let tabHidden = new Set();
+let dragSrc = null;
+
+function loadTabSettings(){
+  try{
+    const s = localStorage.getItem('dailycare_tabs');
+    if(s){ const p=JSON.parse(s); tabOrder=p.order||tabOrder; tabHidden=new Set(p.hidden||[]); }
+  }catch(e){}
+  applyTabOrder();
+}
+function saveTabSettings(){
+  localStorage.setItem('dailycare_tabs', JSON.stringify({order:tabOrder,hidden:[...tabHidden]}));
+}
+function applyTabOrder(){
+  const nav = document.getElementById('nav');
+  // rebuild nav buttons in order
+  const btns = tabOrder.map(id=>{
+    const t = ALL_TABS.find(x=>x.id===id);
+    if(!t||tabHidden.has(id)) return '';
+    return `<button class="nb" onclick="nav('${id}',this)">${t.label}</button>`;
+  }).join('');
+  nav.innerHTML = btns + `<button class="nb" onclick="exportarExcel()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel</button>`;
+  // activate dashboard
+  const first = nav.querySelector('.nb');
+  if(first){ first.classList.add('active'); }
+}
+function openSettings(){
+  const el = document.getElementById('tabs-sortable');
+  el.innerHTML = tabOrder.map((id,i)=>{
+    const t=ALL_TABS.find(x=>x.id===id);if(!t)return'';
+    const hidden=tabHidden.has(id);
+    return `<div draggable="true" data-id="${id}" ondragstart="dragSrc=this;this.style.opacity='0.4'" ondragend="this.style.opacity='1'" ondragover="event.preventDefault()" ondrop="dropTab(event,this)"
+      style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:${hidden?'#fafaf7':'#fff'};border:1px solid #e5e5e0;border-radius:8px;cursor:grab;user-select:none">
+      <span style="color:#ccc;font-size:16px">⠿</span>
+      <span style="flex:1;font-size:13px;${hidden?'color:#aaa':''}">${t.label}</span>
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:#888;cursor:pointer">
+        <input type="checkbox" ${hidden?'':'checked'} onchange="toggleTabHide('${id}',this.checked)" style="width:auto;cursor:pointer"/> visível
+      </label>
+    </div>`;
+  }).join('');
+  document.getElementById('settings-modal').style.display='flex';
+}
+function closeSettings(){ document.getElementById('settings-modal').style.display='none'; }
+function dropTab(e,target){
+  e.preventDefault();
+  if(!dragSrc||dragSrc===target)return;
+  const srcId=dragSrc.dataset.id, tgtId=target.dataset.id;
+  const si=tabOrder.indexOf(srcId), ti=tabOrder.indexOf(tgtId);
+  if(si<0||ti<0)return;
+  tabOrder.splice(si,1); tabOrder.splice(ti,0,srcId);
+  openSettings();
+}
+function toggleTabHide(id, visible){ if(visible) tabHidden.delete(id); else tabHidden.add(id); }
+function applySettings(){ saveTabSettings(); applyTabOrder(); closeSettings(); }
+document.getElementById('settings-modal').addEventListener('click',e=>{ if(e.target===e.currentTarget)closeSettings(); });
+
+// ─── ARRANQUE ────────────────────────────────────────────────────────────────
+(async ()=>{
+  // mostrar ecrã de carregamento
+  document.querySelector('.main').innerHTML = `
+    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:1rem">
+      <div style="font-size:22px;font-weight:600;color:#8b6f4e">DAILY<span style="color:#1a1a1a">care</span></div>
+      <div style="font-size:13px;color:#888">A carregar dados da nuvem…</div>
+      <div style="width:200px;height:3px;background:#eee;border-radius:2px;overflow:hidden">
+        <div style="width:60%;height:100%;background:#8b6f4e;border-radius:2px;animation:prog 1.2s ease-in-out infinite alternate"></div>
+      </div>
+    </div>
+    <style>@keyframes prog{from{transform:translateX(-20%)}to{transform:translateX(120%)}}</style>`;
+
+  await load();
+
+  // restaurar páginas
+  document.querySelector('.main').innerHTML = `
+    <div id="pg-dashboard" class="pg active"></div>
+    <div id="pg-consulta_atual" class="pg"></div>
+    <div id="pg-consultas" class="pg"></div>
+    <div id="pg-vendas" class="pg"></div>
+    <div id="pg-clientes" class="pg"></div>
+    <div id="pg-packs" class="pg"></div>
+    <div id="pg-produtos" class="pg"></div>
+    <div id="pg-entradas" class="pg"></div>
+    <div id="pg-consumo" class="pg"></div>
+    <div id="pg-consignacao" class="pg"></div>
+    <div id="pg-workshops" class="pg"></div>
+    <div id="pg-formacao" class="pg"></div>
+    <div id="pg-gastos" class="pg"></div>
+    <div id="pg-encomendas" class="pg"></div>
+    <div id="pg-relatorio" class="pg"></div>
+    <div id="pg-fornecedores" class="pg"></div>
+    <div id="pg-vouchers" class="pg"></div>`;
+
+  loadTabSettings();
+  renderDash();
+})();
+</script>
+</body>
+</html>
