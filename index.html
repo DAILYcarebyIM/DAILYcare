@@ -157,6 +157,23 @@ tr:hover td{background:#fafaf7}
 </div>
 
 <div class="main">
+  <div id="pg-dashboard" class="pg active"></div>
+  <div id="pg-consulta_atual" class="pg"></div>
+  <div id="pg-consultas" class="pg"></div>
+  <div id="pg-vendas" class="pg"></div>
+  <div id="pg-clientes" class="pg"></div>
+  <div id="pg-packs" class="pg"></div>
+  <div id="pg-produtos" class="pg"></div>
+  <div id="pg-entradas" class="pg"></div>
+  <div id="pg-consumo" class="pg"></div>
+  <div id="pg-consignacao" class="pg"></div>
+  <div id="pg-workshops" class="pg"></div>
+  <div id="pg-formacao" class="pg"></div>
+  <div id="pg-gastos" class="pg"></div>
+  <div id="pg-encomendas" class="pg"></div>
+  <div id="pg-relatorio" class="pg"></div>
+  <div id="pg-fornecedores" class="pg"></div>
+  <div id="pg-vouchers" class="pg"></div>
 </div>
 
 <script>
@@ -2418,43 +2435,28 @@ function applySettings(){ saveTabSettings(); applyTabOrder(); closeSettings(); }
 document.getElementById('settings-modal').addEventListener('click',e=>{ if(e.target===e.currentTarget)closeSettings(); });
 
 // ─── ARRANQUE ────────────────────────────────────────────────────────────────
-(async ()=>{
-  // mostrar ecrã de carregamento
-  document.querySelector('.main').innerHTML = `
-    <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:1rem">
-      <div style="font-size:22px;font-weight:600;color:#8b6f4e">DAILY<span style="color:#1a1a1a">care</span></div>
-      <div style="font-size:13px;color:#888">A carregar dados da nuvem…</div>
-      <div style="width:200px;height:3px;background:#eee;border-radius:2px;overflow:hidden">
-        <div style="width:60%;height:100%;background:#8b6f4e;border-radius:2px;animation:prog 1.2s ease-in-out infinite alternate"></div>
-      </div>
+// mostrar loading no dashboard enquanto carrega
+document.getElementById('pg-dashboard').innerHTML = `
+  <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:1rem">
+    <div style="font-size:22px;font-weight:600;color:#8b6f4e">DAILY<span style="color:#1a1a1a">care</span></div>
+    <div style="font-size:13px;color:#888">A carregar dados…</div>
+    <div style="width:200px;height:3px;background:#eee;border-radius:2px;overflow:hidden">
+      <div style="width:60%;height:100%;background:#8b6f4e;border-radius:2px;animation:prog 1.2s ease-in-out infinite alternate"></div>
     </div>
-    <style>@keyframes prog{from{transform:translateX(-20%)}to{transform:translateX(120%)}}</style>`;
+  </div>
+  <style>@keyframes prog{from{transform:translateX(-20%)}to{transform:translateX(120%)}}</style>`;
 
-  await load();
+loadTabSettings();
 
-  // restaurar páginas
-  document.querySelector('.main').innerHTML = `
-    <div id="pg-dashboard" class="pg active"></div>
-    <div id="pg-consulta_atual" class="pg"></div>
-    <div id="pg-consultas" class="pg"></div>
-    <div id="pg-vendas" class="pg"></div>
-    <div id="pg-clientes" class="pg"></div>
-    <div id="pg-packs" class="pg"></div>
-    <div id="pg-produtos" class="pg"></div>
-    <div id="pg-entradas" class="pg"></div>
-    <div id="pg-consumo" class="pg"></div>
-    <div id="pg-consignacao" class="pg"></div>
-    <div id="pg-workshops" class="pg"></div>
-    <div id="pg-formacao" class="pg"></div>
-    <div id="pg-gastos" class="pg"></div>
-    <div id="pg-encomendas" class="pg"></div>
-    <div id="pg-relatorio" class="pg"></div>
-    <div id="pg-fornecedores" class="pg"></div>
-    <div id="pg-vouchers" class="pg"></div>`;
-
-  loadTabSettings();
+load().then(()=>{
   renderDash();
-})();
+}).catch(e=>{
+  console.error('Erro no arranque:', e);
+  // fallback — usar dados que tivermos
+  if(!DB.clientes) DB = JSON.parse(JSON.stringify(DEFAULT));
+  migrarCampos();
+  renderDash();
+});
 </script>
 </body>
 </html>
