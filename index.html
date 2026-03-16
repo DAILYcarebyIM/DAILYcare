@@ -53,6 +53,7 @@ tr:hover td{background:#fafaf7}
 .ddi{padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid #f5f5f0;transition:background 0.1s}
 .ddi:last-child{border-bottom:none}
 .ddi:hover{background:#f8f8f5}
+.ddi.kbfocus{background:#f3e8da;outline:none}
 .ddi .sub{font-size:10px;color:#888;margin-top:2px}
 .alert{padding:10px 14px;border-radius:8px;font-size:12px;margin-bottom:1rem;border:1px solid}
 .al-suc{background:#d4edda;color:#155724;border-color:#c3e6cb}
@@ -408,6 +409,47 @@ const fmt = n => (Math.round(n*100)/100).toFixed(2)+'€';
 const cNome = id => { const c=DB.clientes.find(x=>x.id===id); return c?c.nome:'—'; };
 const today = () => new Date().toISOString().split('T')[0];
 
+// ─── NAVEGAÇÃO POR TECLADO NOS DROPDOWNS ─────────────────────────────────────
+// Funciona em todos os .dropdown automaticamente — setas + Enter + Escape
+document.addEventListener('keydown', e=>{
+  // encontrar dropdown aberto que seja filho do mesmo .dd-wrap do input focado
+  const inp = document.activeElement;
+  if(!inp || !['INPUT'].includes(inp.tagName)) return;
+
+  const wrap = inp.closest('.dd-wrap');
+  if(!wrap) return;
+  const dd = wrap.querySelector('.dropdown');
+  if(!dd || dd.style.display==='none') return;
+
+  const items = [...dd.querySelectorAll('.ddi')];
+  if(!items.length) return;
+
+  const cur = dd.querySelector('.ddi.kbfocus');
+  const idx = cur ? items.indexOf(cur) : -1;
+
+  if(e.key==='ArrowDown'){
+    e.preventDefault();
+    if(cur) cur.classList.remove('kbfocus');
+    const next = items[Math.min(idx+1, items.length-1)];
+    next.classList.add('kbfocus');
+    next.scrollIntoView({block:'nearest'});
+  } else if(e.key==='ArrowUp'){
+    e.preventDefault();
+    if(cur) cur.classList.remove('kbfocus');
+    const prev = items[Math.max(idx-1, 0)];
+    prev.classList.add('kbfocus');
+    prev.scrollIntoView({block:'nearest'});
+  } else if(e.key==='Enter'){
+    if(cur){
+      e.preventDefault();
+      cur.click();
+    }
+  } else if(e.key==='Escape'){
+    dd.style.display='none';
+    items.forEach(i=>i.classList.remove('kbfocus'));
+  }
+});
+
 let cvs = [];
 let fP='', fM='';
 
@@ -613,14 +655,7 @@ function renderConsultaAtual(){
   cvs = [];
 }
 
-function ddCli(v){
-  const dd = document.getElementById('dd-cli');
-  if(!v||v.length<1){dd.style.display='none';return;}
-  const m = DB.clientes.filter(c=>c.nome.toLowerCase().includes(v.toLowerCase()));
-  dd.innerHTML = m.map(c=>`<div class="ddi" onclick="selCli('${c.id}','${c.nome.replace(/'/g,"\\'")}')"><strong>${c.nome}</strong></div>`).join('')
-    +`<div class="ddi" onclick="novoCliente()" style="color:#8b6f4e;font-weight:600">+ Criar cliente "${v}"</div>`;
-  dd.style.display='block';
-}
+function ddCli(v){ ddCliGenerico(v,'dd-cli','cc-cli','cc-cli-id','checkPkOuVoucher()'); }
 function selCli(id,nome){
   document.getElementById('cc-cli').value=nome;
   document.getElementById('cc-cli-id').value=id;
@@ -635,6 +670,76 @@ function novoCliente(){
   save();
   document.getElementById('cc-cli-id').value=id;
   document.getElementById('dd-cli').style.display='none';
+}
+
+// ─── helper genérico para criar cliente inline em qualquer dropdown ────────
+function criarClienteInline(nomeInputId, idInputId, ddId, afterCreate){
+  const nome = document.getElementById(nomeInputId)?.value.trim();
+  if(!nome) return;
+
+  // fechar dropdown e mostrar mini-form inline
+  const dd = document.getElementById(ddId);
+  if(dd) dd.style.display='none';
+
+  // procurar ou criar contentor para o mini-form
+  const wrapId = ddId+'-criar';
+  let wrap = document.getElementById(wrapId);
+  if(!wrap){
+    wrap = document.createElement('div');
+    wrap.id = wrapId;
+    dd?.parentElement?.appendChild(wrap);
+  }
+  wrap.innerHTML = `
+    <div style="background:#fffbf5;border:1px solid #d4a97a;border-radius:8px;padding:10px 12px;margin-top:4px">
+      <div style="font-size:11px;font-weight:600;color:#8b6f4e;margin-bottom:8px">Criar novo cliente</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label>Nome</label><input id="${wrapId}-n" value="${nome.replace(/"/g,'&quot;')}"/></div>
+        <div><label>Telefone</label><input id="${wrapId}-t" placeholder="opcional"/></div>
+      </div>
+      <div style="margin-bottom:8px"><label>Notas</label><input id="${wrapId}-no" placeholder="opcional"/></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" onclick="confirmarCriarCliente('${nomeInputId}','${idInputId}','${wrapId}',${afterCreate?`'${afterCreate}'`:'null'})"
+          style="background:#8b6f4e;border-color:#8b6f4e">Criar e selecionar</button>
+        <button class="btn" onclick="document.getElementById('${wrapId}').innerHTML=''">Cancelar</button>
+      </div>
+    </div>`;
+  wrap.style.display='block';
+  setTimeout(()=>document.getElementById(wrapId+'-n')?.focus(),50);
+}
+
+function confirmarCriarCliente(nomeInputId, idInputId, wrapId, afterCreateName){
+  const nome = document.getElementById(wrapId+'-n')?.value.trim();
+  if(!nome){ alert('O nome é obrigatório.'); return; }
+  const id = 'cl'+DB.ids.cl++;
+  DB.clientes.push({
+    id, nome,
+    telefone: document.getElementById(wrapId+'-t')?.value||'',
+    notas:    document.getElementById(wrapId+'-no')?.value||''
+  });
+  save();
+  // preencher o campo de input e id
+  const nEl = document.getElementById(nomeInputId);
+  const iEl = document.getElementById(idInputId);
+  if(nEl) nEl.value = nome;
+  if(iEl) iEl.value = id;
+  document.getElementById(wrapId).innerHTML='';
+  // callback opcional
+  if(afterCreateName && window[afterCreateName]) window[afterCreateName](id, nome);
+}
+
+function ddCliGenerico(v, ddId, nomeInputId, idInputId, afterSelect){
+  const dd = document.getElementById(ddId);
+  if(!v||v.length<1){dd.style.display='none';return;}
+  const m = DB.clientes.filter(c=>c.nome.toLowerCase().includes(v.toLowerCase()));
+  const escapedV = v.replace(/"/g,'&quot;');
+  dd.innerHTML = m.map(c=>`<div class="ddi" onclick="(function(){
+    document.getElementById('${nomeInputId}').value='${c.nome.replace(/'/g,"\\'")}';
+    document.getElementById('${idInputId}').value='${c.id}';
+    document.getElementById('${ddId}').style.display='none';
+    ${afterSelect||''}
+  })()"><strong>${c.nome}</strong><span style="color:#999;font-size:11px"> ${c.telefone?'· '+c.telefone:''}</span></div>`).join('')
+  + `<div class="ddi" onclick="criarClienteInline('${nomeInputId}','${idInputId}','${ddId}')" style="color:#8b6f4e;font-weight:600;border-top:1px solid #eee">+ Criar cliente "<strong>${escapedV}</strong>"</div>`;
+  dd.style.display='block';
 }
 function checkPkOuVoucher(){
   const tipo = document.getElementById('cc-tipo').value;
@@ -1033,12 +1138,7 @@ function showVendaRapida(){
   if(open){ vrs=[]; renderVRTabela(); }
 }
 
-function ddCliVR(v){
-  const dd=document.getElementById('dd-vr-cli');
-  const m=DB.clientes.filter(c=>c.nome.toLowerCase().includes(v.toLowerCase()));
-  dd.innerHTML=m.map(c=>`<div class="ddi" onclick="selCliVR('${c.id}','${c.nome.replace(/'/g,"\\'")}')"><strong>${c.nome}</strong></div>`).join('');
-  dd.style.display=m.length?'block':'none';
-}
+function ddCliVR(v){ ddCliGenerico(v,'dd-vr-cli','vr-cli','vr-cli-id'); }
 function selCliVR(id,nome){
   document.getElementById('vr-cli').value=nome;
   document.getElementById('vr-cli-id').value=id;
@@ -1148,21 +1248,67 @@ function renderVendas(){
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th>Produto</th><th>Qty</th><th>PVP</th><th>Custo ef.</th><th>Lucro</th><th>Desc.%</th></tr></thead>
-        <tbody>${sorted.length ? sorted.map(v=>`<tr>
-          <td>${v.data}</td>
-          <td>${v.cliente}</td>
-          <td><span class="badge ${v.tipo==='Venda direta'?'bg-b':'bg-gray'}" style="font-size:10px">${v.tipo||'Consulta'}</span></td>
-          <td><strong>${v.nome}</strong>${v.consig?'<br><span class="badge bg-a" style="font-size:9px">consig.</span>':''}</td>
-          <td>${v.qty||1}</td>
-          <td>${fmt(v.pvp*(v.qty||1))}</td>
-          <td class="amber">${fmt(v.custo*(v.qty||1))}</td>
-          <td class="green"><strong>${fmt((v.pvp-v.custo)*(v.qty||1))}</strong></td>
-          <td>${v.descExtra>0?`<span class="badge bg-g">-${v.descExtra}%</span>`:'—'}</td>
-        </tr>`).join('') : '<tr><td colspan="9" style="text-align:center;padding:2rem;color:#999">Sem vendas registadas</td></tr>'}
+        <thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th>Produtos</th><th>PVP total</th><th>Lucro total</th><th>Estado</th><th></th></tr></thead>
+        <tbody>${(() => {
+          // agrupar por consulta (id)
+          const consultas = DB.consultas
+            .filter(c=>c.vendas&&c.vendas.length>0)
+            .sort((a,b)=>b.data.localeCompare(a.data));
+          if(!consultas.length) return '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem vendas registadas</td></tr>';
+          return consultas.map(c=>{
+            const tp = c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
+            const tl = c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0);
+            const nomes = c.vendas.map(v=>`${v.nome}${v.qty>1?' ×'+v.qty:''}`).join(', ');
+            return `<tr>
+              <td>${c.data}</td>
+              <td>${cNome(c.clienteId)}</td>
+              <td><span class="badge ${c.tipo==='Venda direta'?'bg-b':'bg-gray'}" style="font-size:10px">${c.tipo||'Consulta'}</span></td>
+              <td style="font-size:11px;color:#888;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nomes}">${nomes}</td>
+              <td><strong>${fmt(tp)}</strong></td>
+              <td class="green"><strong>${fmt(tl)}</strong></td>
+              <td><span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado||'—'}</span></td>
+              <td>
+                <button class="btn sm" onclick="toggleVendaDetalhe('${c.id}',this)" style="font-size:10px">▼ Detalhes</button>
+              </td>
+            </tr>
+            <tr id="vd-${c.id}" style="display:none;background:#fafaf7">
+              <td colspan="8" style="padding:0">
+                <table style="margin:0;background:#fafaf7">
+                  <thead><tr style="background:#f0f0ec"><th style="padding:6px 12px">Produto</th><th>Qty</th><th>PVP unit.</th><th>PVP total</th><th>Custo ef.</th><th>Lucro</th><th>Desc.%</th><th>Consig.</th></tr></thead>
+                  <tbody>${c.vendas.map(v=>`<tr style="background:#fafaf7">
+                    <td style="padding:6px 12px"><strong>${v.nome}</strong></td>
+                    <td>${v.qty||1}</td>
+                    <td>${fmt(v.pvp)}</td>
+                    <td>${fmt(v.pvp*(v.qty||1))}</td>
+                    <td class="amber">${fmt(v.custo*(v.qty||1))}</td>
+                    <td class="green"><strong>${fmt((v.pvp-v.custo)*(v.qty||1))}</strong></td>
+                    <td>${v.descExtra>0?`<span class="badge bg-g">-${v.descExtra}%</span>`:'—'}</td>
+                    <td>${v.consig?'<span class="badge bg-a">Sim</span>':'—'}</td>
+                  </tr>`).join('')}
+                  <tr style="background:#f0f0ec;font-weight:600">
+                    <td style="padding:6px 12px">Total</td><td></td><td></td>
+                    <td>${fmt(tp)}</td>
+                    <td class="amber">${fmt(c.vendas.reduce((s,v)=>s+v.custo*(v.qty||1),0))}</td>
+                    <td class="green">${fmt(tl)}</td>
+                    <td></td><td></td>
+                  </tr>
+                  </tbody>
+                </table>
+              </td>
+            </tr>`;
+          }).join('');
+        })()}
         </tbody>
       </table>
     </div>`;
+}
+
+function toggleVendaDetalhe(cId, btn){
+  const row = document.getElementById('vd-'+cId);
+  if(!row) return;
+  const open = row.style.display==='none';
+  row.style.display = open ? 'table-row' : 'none';
+  btn.textContent = open ? '▲ Fechar' : '▼ Detalhes';
 }
 
 // ─── CLIENTES ────────────────────────────────────────────────────────────────
@@ -1474,7 +1620,7 @@ function renderPacks(){
     </div>`;
 }
 function showAddPk(){const f=document.getElementById('add-pk-f');f.style.display=f.style.display==='none'?'block':'none';}
-function ddCliPk(v){const dd=document.getElementById('dd-pk');const m=DB.clientes.filter(c=>c.nome.toLowerCase().includes(v.toLowerCase()));dd.innerHTML=m.map(c=>`<div class="ddi" onclick="selCliPk('${c.id}','${c.nome.replace(/'/g,"\\'")}')"><strong>${c.nome}</strong></div>`).join('');dd.style.display=m.length?'block':'none';}
+function ddCliPk(v){ ddCliGenerico(v,'dd-pk','pk-cli','pk-cli-id'); }
 function selCliPk(id,nome){document.getElementById('pk-cli').value=nome;document.getElementById('pk-cli-id').value=id;document.getElementById('dd-pk').style.display='none';}
 function addPk(){
   const cId=document.getElementById('pk-cli-id').value;if(!cId)return;
@@ -1633,7 +1779,7 @@ function saveEditP(id){
   p.custo=parseFloat(document.getElementById('ep-custo').value)||0;
   p.pvp=parseFloat(document.getElementById('ep-pvp').value)||0;
   p.stock=parseInt(document.getElementById('ep-stock').value)||0;
-  p.stockMin=parseInt(document.getElementById('ep-smin').value)||1;
+  p.stockMin=parseInt(document.getElementById('ep-smin').value)||0;
   p.consig=document.getElementById('ep-cons').value==='true';
   editingProdId=null; save(); renderProdutos();
 }
@@ -1675,7 +1821,7 @@ function addP(){
     custo:parseFloat(document.getElementById('np-c').value)||0,
     pvp:parseFloat(document.getElementById('np-pvp').value)||0,
     stock:parseInt(document.getElementById('np-s').value)||0,
-    stockMin:parseInt(document.getElementById('np-sm').value)||1,
+    stockMin:parseInt(document.getElementById('np-sm').value)||0,
     consig:document.getElementById('np-co').value==='true'
   });
   save();showAddP();renderProdutos();
@@ -1910,8 +2056,9 @@ function mostrarCriarProdInline(){
         <div><label>Margem (%)</label><input id="nep-mpct" type="number" placeholder="0" step="0.5" oninput="calcProdFromMargPct('nep')"/></div>
       </div>
       <div id="nep-preview" style="font-size:11px;color:#888;margin-bottom:8px;min-height:12px"></div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
         <div><label>Categoria</label><input id="nep-cat" placeholder="ex: Sérum, SPF..." list="nep-cats-list"/><datalist id="nep-cats-list">${[...new Set(['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro',...DB.produtos.map(p=>p.cat).filter(Boolean)])].sort().map(c=>`<option value="${c}">`).join('')}</datalist></div>
+        <div><label>Stock mínimo</label><input id="nep-smin" type="number" placeholder="1" value="1" min="0"/></div>
         <div><label>Consignação farmácia</label><select id="nep-co"><option value="false">Não</option><option value="true">Sim</option></select></div>
       </div>
       <div style="display:flex;gap:8px">
@@ -1943,7 +2090,7 @@ function criarProdutoInline(){
     fornecedor:getFornVal('nep'),
     cat:document.getElementById('nep-cat').value,
     custo, pvp,
-    stock:0, stockMin:1,
+    stock:0, stockMin:parseInt(document.getElementById('nep-smin')?.value)||0,
     consig:document.getElementById('nep-co').value==='true'
   };
   DB.produtos.push(novoProd);
