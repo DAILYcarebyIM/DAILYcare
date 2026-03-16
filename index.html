@@ -431,49 +431,81 @@ function nav(page, btn){
 }
 
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
+let dashMes = ''; // '' = todos os meses
+
 function renderDash(){
-  const cs = DB.consultas;
-  const tServ = cs.reduce((s,c)=>s+c.valor,0);
-  const tProd = cs.reduce((s,c)=>s+c.totalProd,0);
+  // obter todos os meses disponíveis
+  const todosMeses = [...new Set([
+    ...DB.consultas.map(c=>c.data.substring(0,7)),
+    ...DB.packs.map(p=>p.data?.substring(0,7)).filter(Boolean),
+    ...DB.workshops.map(w=>w.data?.substring(0,7)).filter(Boolean),
+    ...(DB.formacoes||[]).map(f=>f.data?.substring(0,7)).filter(Boolean)
+  ])].sort().reverse();
+
+  // filtrar por mês selecionado
+  const cs   = dashMes ? DB.consultas.filter(c=>c.data.startsWith(dashMes)) : DB.consultas;
+  const packs= dashMes ? DB.packs.filter(p=>p.data?.startsWith(dashMes))    : DB.packs;
+  const works= dashMes ? DB.workshops.filter(w=>w.data?.startsWith(dashMes)): DB.workshops;
+  const fos  = dashMes ? (DB.formacoes||[]).filter(f=>f.data?.startsWith(dashMes)) : (DB.formacoes||[]);
+  const gastos= dashMes ? DB.gastos.filter(g=>g.data?.startsWith(dashMes))  : DB.gastos;
+
+  const tServ  = cs.reduce((s,c)=>s+c.valor,0);
+  const tProd  = cs.reduce((s,c)=>s+c.totalProd,0);
   const tLucro = cs.reduce((s,c)=>s+c.lucroProd,0);
-  const tPacks = DB.packs.reduce((s,p)=>s+p.valor,0);
-  const tWork = DB.workshops.reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
-  const tGasto = DB.gastos.reduce((s,g)=>s+g.valor,0);
-  const tFatServ = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
-  const tFatPacks = DB.packs.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
-  const tFatWork = DB.workshops.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
-  const totalFaturado = tFatServ+tFatPacks+tFatWork;
-  const totalNaoFat = (tServ+tPacks+tWork)-totalFaturado;
-  const ticket = cs.length ? (tServ+tProd)/cs.length : 0;
-  const stockB = DB.produtos.filter(p=>p.ativo!==false && p.stock<=(p.stockMin||1));
-  const baseS = totalFaturado*0.7, baseP = tLucro*0.15, ss = (baseS+baseP)*0.214;
-  const meses = {};
-  cs.forEach(c=>{const m=c.data.substring(0,7);if(!meses[m])meses[m]=0;meses[m]+=c.valor+c.totalProd;});
-  const mk = Object.keys(meses).sort();
-  const maxM = Math.max(...Object.values(meses),1);
+  const tPacks = packs.reduce((s,p)=>s+p.valor,0);
+  const tWork  = works.reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+  const tFo    = fos.reduce((s,f)=>s+calcFoTotal(f),0);
+  const tGasto = gastos.reduce((s,g)=>s+g.valor,0);
+  const tFatServ  = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
+  const tFatPacks = packs.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
+  const tFatWork  = works.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+  const tFatFo    = fos.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
+  const totalFaturado = tFatServ+tFatPacks+tFatWork+tFatFo;
+  const totalNaoFat   = (tServ+tPacks+tWork+tFo)-totalFaturado;
+  const ticket  = cs.length ? (tServ+tProd)/cs.length : 0;
+  const stockB  = DB.produtos.filter(p=>p.ativo!==false && p.stock<=(p.stockMin||1));
+  const baseS   = totalFaturado*0.7, baseP = tLucro*0.15, ss = (baseS+baseP)*0.214;
+
+  // gráfico — sempre todos os meses
+  const meses = {}; DB.consultas.forEach(c=>{const m=c.data.substring(0,7);if(!meses[m])meses[m]=0;meses[m]+=c.valor+c.totalProd;});
+  const mk = Object.keys(meses).sort(); const maxM = Math.max(...Object.values(meses),1);
+
   const vendas = cs.flatMap(c=>c.vendas);
-  const pp = {};
-  vendas.forEach(v=>{if(!pp[v.nome])pp[v.nome]={nome:v.nome,qty:0,lucro:0};pp[v.nome].qty+=v.qty;pp[v.nome].lucro+=(v.pvp-v.custo)*v.qty;});
+  const pp = {}; vendas.forEach(v=>{if(!pp[v.nome])pp[v.nome]={nome:v.nome,qty:0,lucro:0};pp[v.nome].qty+=v.qty||1;pp[v.nome].lucro+=(v.pvp-v.custo)*(v.qty||1);});
   const topV = Object.values(pp).sort((a,b)=>b.qty-a.qty)[0];
   const topL = Object.values(pp).sort((a,b)=>b.lucro-a.lucro)[0];
   const packsAtivos = DB.packs.filter(p=>p.estado==='Ativo').length;
 
+  const mesLabel = dashMes ? new Date(dashMes+'-01').toLocaleDateString('pt-PT',{month:'long',year:'numeric'}) : 'Todos os períodos';
+
   document.getElementById('pg-dashboard').innerHTML=`
+    <!-- filtro de mês -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
+      <h2 style="margin:0">Dashboard</h2>
+      <select onchange="dashMes=this.value;renderDash()" style="font-weight:600;color:#8b6f4e;border-color:#d4a97a;background:#fffbf5">
+        <option value="">Todos os períodos</option>
+        ${todosMeses.map(m=>`<option value="${m}" ${dashMes===m?'selected':''}>${new Date(m+'-01').toLocaleDateString('pt-PT',{month:'long',year:'numeric'})}</option>`).join('')}
+      </select>
+      ${dashMes?`<span style="font-size:12px;color:#8b6f4e;font-weight:600">A mostrar: ${mesLabel}</span><button class="btn sm" onclick="dashMes='';renderDash()">× Limpar filtro</button>`:''}
+    </div>
+
     <div class="metrics">
       <div class="met"><div class="lb">Receita serviços</div><div class="vl">${fmt(tServ)}</div></div>
       <div class="met"><div class="lb">Receita produtos</div><div class="vl">${fmt(tProd)}</div></div>
       <div class="met"><div class="lb">Lucro produtos</div><div class="vl green">${fmt(tLucro)}</div></div>
-      <div class="met"><div class="lb">Packs vendidos</div><div class="vl">${fmt(tPacks)}</div></div>
-      <div class="met"><div class="lb">Workshops/Form.</div><div class="vl">${fmt(tWork)}</div></div>
-      <div class="met"><div class="lb">Total gastos</div><div class="vl red">${fmt(tGasto)}</div></div>
+      <div class="met"><div class="lb">Packs</div><div class="vl">${fmt(tPacks)}</div></div>
+      <div class="met"><div class="lb">Workshops</div><div class="vl">${fmt(tWork)}</div></div>
+      <div class="met"><div class="lb">Formação</div><div class="vl blue">${fmt(tFo)}</div></div>
+      <div class="met"><div class="lb">Gastos</div><div class="vl red">${fmt(tGasto)}</div></div>
       <div class="met"><div class="lb">Ticket médio</div><div class="vl">${fmt(ticket)}</div></div>
-      <div class="met"><div class="lb">Packs ativos</div><div class="vl">${packsAtivos}</div></div>
     </div>
-    ${stockB.length?`<div class="alert al-err">⚠ Stock baixo: ${stockB.map(p=>`<strong>${p.nome}</strong> (${p.stock} unid.)`).join(', ')}</div>`:''}
+
+    ${stockB.length&&!dashMes?`<div class="alert al-err">⚠ Stock baixo: ${stockB.map(p=>`<strong>${p.nome}</strong> (${p.stock})`).join(', ')}</div>`:''}
+
     <div class="ss-box" style="margin-bottom:1rem">
-      <h3 style="margin-bottom:10px">Segurança Social — estimativa</h3>
+      <h3 style="margin-bottom:10px">Segurança Social — estimativa ${dashMes?'('+mesLabel+')':''}</h3>
       <div class="metrics" style="margin-bottom:10px">
-        <div class="met"><div class="lb">Faturado total</div><div class="vl blue">${fmt(totalFaturado)}</div></div>
+        <div class="met"><div class="lb">Faturado</div><div class="vl blue">${fmt(totalFaturado)}</div></div>
         <div class="met"><div class="lb">Não faturado</div><div class="vl">${fmt(totalNaoFat)}</div></div>
         <div class="met"><div class="lb">SS a reservar</div><div class="vl amber">${fmt(ss)}</div></div>
       </div>
@@ -482,24 +514,30 @@ function renderDash(){
         <tr><td style="color:#888">Base lucro produtos (15% × ${fmt(tLucro)})</td><td style="text-align:right">${fmt(baseP)}</td></tr>
         <tr style="border-top:1px solid #f0e8d0"><td><strong>Contribuição SS (21,4%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
       </table>
-      <div style="font-size:11px;color:#999;margin-top:6px">A SS é calculada apenas sobre receitas faturadas. Ativa o campo "Faturado" ao registar consultas, packs e workshops.</div>
     </div>
-    <div class="card">
-      <h3>Receita por mês</h3>
+
+    ${!dashMes?`<div class="card">
+      <h3>Receita por mês (consultas + produtos)</h3>
       <div class="bar-chart">
-        ${mk.length ? mk.map(m=>`<div class="bar-col">
+        ${mk.length ? mk.map(m=>`<div class="bar-col" onclick="dashMes='${m}';renderDash()" style="cursor:pointer">
           <div class="bar-val">${fmt(meses[m])}</div>
-          <div class="bar-fill" style="height:${Math.round((meses[m]/maxM)*52+8)}px"></div>
+          <div class="bar-fill" style="height:${Math.round((meses[m]/maxM)*52+8)}px;background:${dashMes===m?'#8b6f4e':'#d4a97a'}"></div>
           <div class="bar-lbl">${m.substring(5)}/${m.substring(2,4)}</div>
         </div>`).join('') : '<div style="color:#999;font-size:12px;align-self:center">Sem dados</div>'}
       </div>
-    </div>
-    <div class="row c2">
-      <div class="card"><h3>Produto mais vendido</h3>${topV?`<div style="font-weight:600;margin-bottom:4px">${topV.nome}</div><span class="tag">${topV.qty} unidades</span>`:'<span style="color:#999">Sem dados</span>'}</div>
-      <div class="card"><h3>Produto mais lucrativo</h3>${topL?`<div style="font-weight:600;margin-bottom:4px">${topL.nome}</div><span class="tag">${fmt(topL.lucro)} margem total</span>`:'<span style="color:#999">Sem dados</span>'}</div>
-    </div>`;
-}
+      <div style="font-size:11px;color:#999;margin-top:4px">Clica numa barra para filtrar por esse mês</div>
+    </div>`:''}
 
+    <div class="row c2">
+      <div class="card"><h3>Produto mais vendido ${dashMes?'('+mesLabel+')':''}</h3>${topV?`<div style="font-weight:600;margin-bottom:4px">${topV.nome}</div><span class="tag">${topV.qty} unidades</span>`:'<span style="color:#999">Sem dados</span>'}</div>
+      <div class="card"><h3>Produto mais lucrativo ${dashMes?'('+mesLabel+')':''}</h3>${topL?`<div style="font-weight:600;margin-bottom:4px">${topL.nome}</div><span class="tag">${fmt(topL.lucro)} margem total</span>`:'<span style="color:#999">Sem dados</span>'}</div>
+    </div>
+    ${dashMes?`<div class="card"><h3>Consultas em ${mesLabel}</h3>
+      ${cs.length?`<table><thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th>Serviço</th><th>Produtos</th><th>Estado</th></tr></thead><tbody>
+        ${cs.map(c=>`<tr><td>${c.data}</td><td>${cNome(c.clienteId)}</td><td>${c.tipo}</td><td>${fmt(c.valor)}</td><td>${fmt(c.totalProd)}</td><td><span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado}</span></td></tr>`).join('')}
+      </tbody></table>`:'<div style="color:#999;text-align:center;padding:1rem">Sem consultas neste mês</div>'}
+    </div>`:''}`;
+}
 // ─── CONSULTA ATUAL ──────────────────────────────────────────────────────────
 function renderConsultaAtual(){
   document.getElementById('pg-consulta_atual').innerHTML=`
@@ -1227,53 +1265,64 @@ let editingProdId = null;
 
 function renderProdutos(){
   let ps=DB.produtos;
-  const mostrarInativos = document.getElementById('show-inativos')?.checked || false;
-  if(!mostrarInativos) ps=ps.filter(p=>p.ativo!==false);
+  // inativos SEMPRE visíveis — não filtrar por defeito
   if(fP) ps=ps.filter(p=>p.nome.toLowerCase().includes(fP.toLowerCase())||p.cat.toLowerCase().includes(fP.toLowerCase())||((p.cnp||'').includes(fP)));
   if(fM) ps=ps.filter(p=>p.marca===fM);
   const cats=['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro'];
-  // categorias dinâmicas = fixas + as que já existem nos produtos
   const todasCats = [...new Set([...cats, ...DB.produtos.map(p=>p.cat).filter(Boolean)])].sort();
 
   const rowHtml = p => {
-    const ativo = p.ativo !== false; // default true se não definido
+    const ativo = p.ativo !== false;
     if(editingProdId===p.id) {
-      return `<tr style="background:#fffbf5">
-        <td><input id="ep-n" value="${p.nome.replace(/"/g,'&quot;')}" style="min-width:160px"/>
-          <div style="margin-top:4px"><label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer">
-            <input type="checkbox" id="ep-ativo" ${ativo?'checked':''} style="width:auto"/> Produto ativo
-          </label></div>
-        </td>
-        <td><input id="ep-cnp" value="${p.cnp||''}" placeholder="CNP" style="width:90px;font-family:monospace"/></td>
-        <td><input id="ep-m" value="${(p.marca||'').replace(/"/g,'&quot;')}" placeholder="Marca" list="ep-marcas-list" style="min-width:100px"/><datalist id="ep-marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></td>
-        <td>
-          <select id="ep-forn" onchange="toggleOutroForn('ep')" style="min-width:120px">
-            <option value="">--</option>${fornOptions(p.fornecedor||'')}
-          </select>
-          <input id="ep-forn-outro" placeholder="Outro fornecedor" style="display:${p.fornecedor&&!getFornecedores().includes(p.fornecedor)?'block':'none'};margin-top:3px" value="${p.fornecedor&&!getFornecedores().includes(p.fornecedor)?p.fornecedor:''}"/>
-        </td>
-        <td><input id="ep-cat" value="${p.cat||''}" list="ep-cats-list" style="min-width:100px"/><datalist id="ep-cats-list">${todasCats.map(c=>`<option value="${c}">`).join('')}</datalist></td>
-        <td><input id="ep-custo" type="number" value="${p.custo}" style="width:65px"/></td>
-        <td><input id="ep-pvp" type="number" value="${p.pvp}" style="width:65px"/></td>
-        <td colspan="2" style="color:#888;font-size:11px">auto</td>
-        <td>
-          <div style="display:flex;align-items:center;gap:4px">
-            <input id="ep-stock" type="number" value="${p.stock}" style="width:50px"/>
-            <span style="font-size:10px;color:#888">/ mín</span>
-            <input id="ep-smin" type="number" value="${p.stockMin||1}" style="width:45px"/>
+      const margE = p.pvp&&p.custo ? (p.pvp-p.custo).toFixed(2) : '';
+      const margP = p.pvp&&p.custo ? Math.round((p.pvp-p.custo)/p.pvp*100) : '';
+      return `<tr style="background:#fffbf5;vertical-align:top">
+        <td colspan="12" style="padding:12px">
+          <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:10px">A editar: ${p.nome}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:8px">
+            <div><label>Nome</label><input id="ep-n" value="${p.nome.replace(/"/g,'&quot;')}"/></div>
+            <div><label>CNP</label><input id="ep-cnp" value="${p.cnp||''}" placeholder="Código nacional" style="font-family:monospace"/></div>
+            <div><label>Marca</label><input id="ep-m" value="${(p.marca||'').replace(/"/g,'&quot;')}" placeholder="ex: SVR, ISDIN" list="ep-marcas-list"/><datalist id="ep-marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></div>
+            <div><label>Fornecedor</label>
+              <select id="ep-forn" onchange="toggleOutroForn('ep')">
+                <option value="">--</option>${fornOptions(p.fornecedor||'')}
+              </select>
+              <input id="ep-forn-outro" placeholder="Outro fornecedor" style="display:${p.fornecedor&&!getFornecedores().includes(p.fornecedor)?'block':'none'};margin-top:3px" value="${p.fornecedor&&!getFornecedores().includes(p.fornecedor)?p.fornecedor:''}"/>
+            </div>
+            <div><label>Categoria</label><input id="ep-cat" value="${p.cat||''}" list="ep-cats-list"/><datalist id="ep-cats-list">${todasCats.map(c=>`<option value="${c}">`).join('')}</datalist></div>
           </div>
-        </td>
-        <td><select id="ep-cons" style="width:70px"><option value="false" ${!p.consig?'selected':''}>Não</option><option value="true" ${p.consig?'selected':''}>Sim</option></select></td>
-        <td style="white-space:nowrap">
-          <button class="btn pri sm" onclick="saveEditP('${p.id}')">Guardar</button>
-          <button class="btn sm" onclick="cancelEditP()" style="margin-top:2px">Cancelar</button>
+          <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px">
+            <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços — edita qualquer campo</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+              <div><label>Custo (€)</label><input id="ep-custo" type="number" value="${p.custo}" step="0.01" oninput="calcProdFromCusto('ep')"/></div>
+              <div><label>PVP (€)</label><input id="ep-pvp" type="number" value="${p.pvp}" step="0.01" oninput="calcProdFromPvp('ep')"/></div>
+              <div><label>Margem (€)</label><input id="ep-meur" type="number" value="${margE}" step="0.01" oninput="calcProdFromMargEur('ep')"/></div>
+              <div><label>Margem (%)</label><input id="ep-mpct" type="number" value="${margP}" step="0.5" oninput="calcProdFromMargPct('ep')"/></div>
+            </div>
+            <div id="ep-preview" style="font-size:11px;margin-top:6px;min-height:14px;color:#888"></div>
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px">
+            <div><label>Stock atual</label><input id="ep-stock" type="number" value="${p.stock}"/></div>
+            <div><label>Stock mínimo</label><input id="ep-smin" type="number" value="${p.stockMin||1}"/></div>
+            <div><label>Consignação</label><select id="ep-cons"><option value="false" ${!p.consig?'selected':''}>Não</option><option value="true" ${p.consig?'selected':''}>Sim</option></select></div>
+            <div><label>Estado</label>
+              <select id="ep-ativo">
+                <option value="true" ${ativo?'selected':''}>Ativo</option>
+                <option value="false" ${!ativo?'selected':''}>Inativo</option>
+              </select>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn pri" onclick="saveEditP('${p.id}')">Guardar alterações</button>
+            <button class="btn" onclick="cancelEditP()">Cancelar</button>
+          </div>
         </td>
       </tr>`;
     }
-    return `<tr style="${ativo?'':'opacity:0.45'}">
+    return `<tr style="${ativo?'':'opacity:0.5;background:#fafaf7'}">
       <td>
-        <div style="display:flex;align-items:center;gap:6px">
-          <span style="font-weight:600">${p.nome}</span>
+        <div style="font-weight:600">${p.nome}</div>
+        <div style="margin-top:2px;display:flex;gap:4px;flex-wrap:wrap">
           ${p.consig?'<span class="badge bg-a">consig.</span>':''}
           ${!ativo?'<span class="badge bg-gray">inativo</span>':''}
         </div>
@@ -1282,17 +1331,13 @@ function renderProdutos(){
       <td><span class="tag">${p.marca||'—'}</span></td>
       <td><span class="tag" style="color:#7a4f28;background:#f3e8da">${p.fornecedor||'—'}</span></td>
       <td><span class="tag">${p.cat||'—'}</span></td>
-      <td>${fmt(p.custo)}</td><td>${fmt(p.pvp)}</td>
+      <td>${fmt(p.custo)}</td>
+      <td>${fmt(p.pvp)}</td>
       <td><strong>${fmt(p.pvp-p.custo)}</strong></td>
       <td>${p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100)+'%':'—'}</td>
       <td>
-        <span class="badge ${p.stock<=0?'bg-r':p.stock<=p.stockMin?'bg-a':'bg-g'}">${p.stock}</span>
-        <span style="font-size:10px;color:#999;margin-left:2px">mín: ${p.stockMin||1}</span>
-      </td>
-      <td>
-        <button class="btn sm" onclick="toggleAtivoProd('${p.id}')" style="${ativo?'background:#fef9f0;border-color:#f0c040;color:#856404':'background:#f0fff0;border-color:#81c784;color:#2e7d32'}">
-          ${ativo?'Desativar':'Ativar'}
-        </button>
+        <span class="badge ${p.stock<=0?'bg-r':p.stock<=(p.stockMin||1)?'bg-a':'bg-g'}">${p.stock}</span>
+        <span style="font-size:10px;color:#999;display:block;margin-top:1px">mín: ${p.stockMin||1}</span>
       </td>
       <td style="white-space:nowrap">
         <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28" onclick="abrirHistoricoProd('${p.id}')">Histórico</button>
@@ -1303,12 +1348,12 @@ function renderProdutos(){
   };
 
   document.getElementById('pg-produtos').innerHTML=`
-    <div class="flex-b"><h2 style="margin:0">Produtos</h2><button class="btn" onclick="showAddP()">+ Adicionar produto</button></div>
+    <div class="flex-b"><h2 style="margin:0">Produtos <span style="font-size:12px;color:#888;font-weight:400">(${DB.produtos.filter(p=>p.ativo!==false).length} ativos, ${DB.produtos.filter(p=>p.ativo===false).length} inativos)</span></h2><button class="btn" onclick="showAddP()">+ Adicionar produto</button></div>
     <div id="add-p-f" style="display:none" class="card">
       <h3>Novo produto</h3>
       <div class="row c4">
         <div><label>Nome do produto</label><input id="np-n"/></div>
-        <div><label>Marca <span style="font-weight:400;color:#aaa">(ex: SVR, ISDIN, CeraVe)</span></label><input id="np-m" placeholder="Escreve a marca" list="marcas-list"/><datalist id="marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></div>
+        <div><label>Marca <span style="font-weight:400;color:#aaa">(ex: SVR, ISDIN)</span></label><input id="np-m" placeholder="Escreve a marca" list="marcas-list"/><datalist id="marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></div>
         <div><label>Fornecedor <span style="font-weight:400;color:#aaa">(onde compras)</span></label>
           <select id="np-forn" onchange="toggleOutroForn('np')">
             <option value="">-- selecionar --</option>
@@ -1316,7 +1361,7 @@ function renderProdutos(){
           </select>
           <input id="np-forn-outro" placeholder="Nome do fornecedor" style="display:none;margin-top:4px"/>
         </div>
-        <div><label>CNP <span style="font-weight:400;color:#aaa">(código nacional)</span></label><input id="np-cnp" placeholder="ex: 1234567" style="font-family:monospace"/></div>
+        <div><label>CNP</label><input id="np-cnp" placeholder="ex: 1234567" style="font-family:monospace"/></div>
       </div>
       <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px">
         <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços — interligados</div>
@@ -1331,7 +1376,7 @@ function renderProdutos(){
       <div class="row c4">
         <div><label>Stock inicial</label><input id="np-s" type="number" placeholder="0"/></div>
         <div><label>Stock mínimo</label><input id="np-sm" type="number" placeholder="1"/></div>
-        <div><label>Categoria</label><input id="np-cat" placeholder="ex: Sérum, SPF, Hidratante..." list="np-cats-list"/><datalist id="np-cats-list">${[...new Set(['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro',...DB.produtos.map(p=>p.cat).filter(Boolean)])].sort().map(c=>`<option value="${c}">`).join('')}</datalist></div>
+        <div><label>Categoria</label><input id="np-cat" placeholder="ex: Sérum, SPF..." list="np-cats-list"/><datalist id="np-cats-list">${todasCats.map(c=>`<option value="${c}">`).join('')}</datalist></div>
         <div><label>Consignação farmácia</label><select id="np-co"><option value="false">Não</option><option value="true">Sim</option></select></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addP()">Guardar</button><button class="btn" onclick="showAddP()">Cancelar</button></div>
@@ -1343,12 +1388,9 @@ function renderProdutos(){
           <option value="">Todas as marcas</option>
           ${getMarcas().map(m=>`<option ${fM===m?'selected':''}>${m}</option>`).join('')}
         </select>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#666;cursor:pointer;white-space:nowrap">
-          <input type="checkbox" id="show-inativos" onchange="renderProdutos()" style="width:auto"/> Mostrar inativos
-        </label>
       </div>
       <table>
-        <thead><tr><th>Produto</th><th>CNP</th><th>Marca</th><th>Fornecedor</th><th>Cat.</th><th>Custo</th><th>PVP</th><th>Margem €</th><th>Margem %</th><th>Stock / Mín.</th><th>Ativo</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Produto</th><th>CNP</th><th>Marca</th><th>Fornecedor</th><th>Cat.</th><th>Custo</th><th>PVP</th><th>Margem €</th><th>Margem %</th><th>Stock</th><th>Ações</th></tr></thead>
         <tbody>${ps.map(p=>rowHtml(p)).join('')}</tbody>
       </table>
     </div>`;
@@ -1359,7 +1401,7 @@ function cancelEditP(){ editingProdId=null; renderProdutos(); }
 function saveEditP(id){
   const p=DB.produtos.find(x=>x.id===id); if(!p) return;
   p.nome=document.getElementById('ep-n').value.trim()||p.nome;
-  p.ativo=document.getElementById('ep-ativo')?.checked !== false;
+  p.ativo=document.getElementById('ep-ativo')?.value!=='false';
   p.cnp=document.getElementById('ep-cnp').value.trim();
   p.marca=document.getElementById('ep-m').value.trim();
   p.fornecedor=getFornVal('ep');
@@ -1373,7 +1415,7 @@ function saveEditP(id){
 }
 function toggleAtivoProd(id){
   const p=DB.produtos.find(x=>x.id===id); if(!p) return;
-  p.ativo = p.ativo === false ? true : false; // toggle
+  p.ativo = p.ativo===false;
   save(); renderProdutos();
 }
 
@@ -1511,9 +1553,46 @@ function renderEntradas(){
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Data</th><th>Produto</th><th>CNP</th><th>Qty</th><th>Custo unit.</th><th>PVP</th><th>Margem</th><th>Total</th><th>Fornecedor</th><th>Consig.</th><th></th></tr></thead>
+        <thead><tr><th>Data</th><th>Produto</th><th>CNP</th><th>Qty</th><th>Custo unit.</th><th>PVP</th><th>Margem</th><th>Total</th><th>Fornecedor</th><th>Consig.</th><th>Ações</th></tr></thead>
         <tbody>${DB.entradas.length
           ? [...DB.entradas].sort((a,b)=>b.data.localeCompare(a.data)).map(e=>{
+              if(editingEntradaId===e.id){
+                return `<tr style="background:#fffbf5;vertical-align:top">
+                  <td colspan="11" style="padding:12px">
+                    <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:10px">A editar entrada: ${e.prodNome}</div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:8px">
+                      <div><label>Data</label><input id="ee-data" type="date" value="${e.data}"/></div>
+                      <div><label>Quantidade</label><input id="ee-qty" type="number" value="${e.qty}" min="1"/></div>
+                      <div><label>Fornecedor</label>
+                        <select id="ee-forn" onchange="toggleOutroForn('ee')">
+                          <option value="">--</option>${fornOptions(e.fornecedor||'')}
+                        </select>
+                        <input id="ee-forn-outro" placeholder="Outro" style="display:${e.fornecedor&&!getFornecedores().includes(e.fornecedor)?'block':'none'};margin-top:3px" value="${e.fornecedor&&!getFornecedores().includes(e.fornecedor)?e.fornecedor:''}"/>
+                      </div>
+                      <div><label>Consignação</label>
+                        <select id="ee-consig">
+                          <option value="false" ${!e.consig?'selected':''}>Não</option>
+                          <option value="true" ${e.consig?'selected':''}>Sim</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px">
+                      <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços</div>
+                      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+                        <div><label>Custo (€)</label><input id="ee-c" type="number" value="${e.custo}" step="0.01" oninput="calcProdFromCusto('ee')"/></div>
+                        <div><label>PVP (€)</label><input id="ee-pvp" type="number" value="${e.pvp||''}" step="0.01" oninput="calcProdFromPvp('ee')"/></div>
+                        <div><label>Margem (€)</label><input id="ee-meur" type="number" value="${e.pvp&&e.custo?(e.pvp-e.custo).toFixed(2):''}" step="0.01" oninput="calcProdFromMargEur('ee')"/></div>
+                        <div><label>Margem (%)</label><input id="ee-mpct" type="number" value="${e.pvp&&e.custo?Math.round((e.pvp-e.custo)/e.pvp*100):''}" step="0.5" oninput="calcProdFromMargPct('ee')"/></div>
+                      </div>
+                      <div id="ee-preview" style="font-size:11px;margin-top:6px;min-height:12px;color:#888"></div>
+                    </div>
+                    <div style="display:flex;gap:8px">
+                      <button class="btn pri" onclick="saveEditE('${e.id}')">Guardar</button>
+                      <button class="btn" onclick="cancelEditE()">Cancelar</button>
+                    </div>
+                  </td>
+                </tr>`;
+              }
               const prod=DB.produtos.find(x=>x.id===e.prodId);
               const pvp=e.pvp||prod?.pvp||0;
               const marg=pvp&&e.custo?pvp-e.custo:null;
@@ -1529,13 +1608,33 @@ function renderEntradas(){
                 <td><strong>${fmt(e.qty*e.custo)}</strong></td>
                 <td>${e.fornecedor||'—'}</td>
                 <td>${e.consig?'<span class="badge bg-a">Sim</span>':'<span class="badge bg-gray">Não</span>'}</td>
-                <td><button class="btn sm" onclick="abrirHistoricoProd('${e.prodId}')" style="font-size:10px">Histórico</button></td>
+                <td style="white-space:nowrap">
+                  <button class="btn sm" onclick="startEditE('${e.id}')">Editar</button>
+                  <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28;margin-top:2px" onclick="abrirHistoricoProd('${e.prodId}')">Histórico</button>
+                  <button class="btn dan sm" onclick="delEntrada('${e.id}')" style="margin-top:2px">Apagar</button>
+                </td>
               </tr>`;
             }).join('')
           : '<tr><td colspan="11" style="text-align:center;padding:2rem;color:#999">Sem entradas registadas</td></tr>'}
         </tbody>
       </table>
     </div>`;
+}
+let editingEntradaId = null;
+function startEditE(id){ editingEntradaId=id; renderEntradas(); setTimeout(()=>document.getElementById('ee-data')?.focus(),50); }
+function cancelEditE(){ editingEntradaId=null; renderEntradas(); }
+function saveEditE(id){
+  const e=DB.entradas.find(x=>x.id===id); if(!e) return;
+  e.data=document.getElementById('ee-data').value;
+  e.qty=parseInt(document.getElementById('ee-qty').value)||e.qty;
+  e.custo=parseFloat(document.getElementById('ee-c').value)||0;
+  e.pvp=parseFloat(document.getElementById('ee-pvp').value)||0;
+  e.fornecedor=getFornVal('ee');
+  e.consig=document.getElementById('ee-consig').value==='true';
+  // actualizar produto com novos preços
+  const p=DB.produtos.find(x=>x.id===e.prodId);
+  if(p){ if(e.custo>0)p.custo=e.custo; if(e.pvp>0)p.pvp=e.pvp; }
+  editingEntradaId=null; save(); renderEntradas();
 }
 function showAddE(){const f=document.getElementById('add-e-f');f.style.display=f.style.display==='none'?'block':'none';}
 function ddProdE(v){
@@ -1927,46 +2026,228 @@ function addPart(wid){
 }
 
 // ─── FORMAÇÃO ────────────────────────────────────────────────────────────────
+function calcFoTotal(f){
+  const ts=f.taxaSinc??15, tc=f.taxaCont??3, ta=f.taxaAsinc??1.4;
+  return (f.hSinc||0)*ts + (f.hSinc||0)*tc + (f.hAsinc||0)*ta;
+}
+
 function renderFormacao(){
   if(!DB.formacoes) DB.formacoes=[];
+  const TAXA_SINC  = DB.taxasFormacao?.sinc  ?? 15;
+  const TAXA_CONT  = DB.taxasFormacao?.cont   ?? 3;
+  const TAXA_ASINC = DB.taxasFormacao?.asinc  ?? 1.4;
+  const totalFaturado = DB.formacoes.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
+  const totalPago     = DB.formacoes.filter(f=>f.pago).reduce((s,f)=>s+calcFoTotal(f),0);
+  const totalPendente = DB.formacoes.filter(f=>f.faturado&&!f.pago).reduce((s,f)=>s+calcFoTotal(f),0);
+
   document.getElementById('pg-formacao').innerHTML=`
     <div class="flex-b"><h2 style="margin:0">Formação</h2><button class="btn" onclick="showAddFo()">+ Nova formação</button></div>
+
+    <div class="card" style="margin-bottom:1rem;background:#fffbf5;border-color:#d4a97a">
+      <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:8px">Taxas padrão — aplicadas a novas formações (editável em cada uma)</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div><label>Sessão síncrona (€/h)</label><input type="number" id="taxa-sinc" value="${TAXA_SINC}" step="0.1" onchange="guardarTaxas()"/></div>
+        <div><label>Elaboração conteúdo (€/h síncrona)</label><input type="number" id="taxa-cont" value="${TAXA_CONT}" step="0.1" onchange="guardarTaxas()"/></div>
+        <div><label>Sessão assíncrona (€/h)</label><input type="number" id="taxa-asinc" value="${TAXA_ASINC}" step="0.1" onchange="guardarTaxas()"/></div>
+      </div>
+    </div>
+
+    ${DB.formacoes.length?`<div class="metrics">
+      <div class="met"><div class="lb">Total faturado</div><div class="vl blue">${fmt(totalFaturado)}</div></div>
+      <div class="met"><div class="lb">Recebido</div><div class="vl green">${fmt(totalPago)}</div></div>
+      <div class="met"><div class="lb">Por receber</div><div class="vl amber">${fmt(totalPendente)}</div></div>
+    </div>`:''}
+
     <div id="add-fo-f" style="display:none" class="card">
       <h3>Nova formação</h3>
-      <div class="row c3">
+      <div class="row c2">
         <div><label>Nome / Entidade</label><input id="nfo-n"/></div>
         <div><label>Data início</label><input id="nfo-d" type="date" value="${today()}"/></div>
-        <div><label>Horas totais</label><input id="nfo-h" type="number" placeholder="32"/></div>
       </div>
-      <div class="row c3">
-        <div><label>Valor/hora (€)</label><input id="nfo-vh" type="number" placeholder="15"/></div>
-        <div><label>Valor conteúdo (€)</label><input id="nfo-vc" type="number" placeholder="96" title="Valor pago pela elaboração do conteúdo"/></div>
+      <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Horas do módulo</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+          <div><label>Horas síncronas</label><input id="nfo-hs" type="number" placeholder="32" oninput="calcFoPreview()"/></div>
+          <div><label>Horas assíncronas</label><input id="nfo-ha" type="number" placeholder="18" oninput="calcFoPreview()"/></div>
+          <div><label>Total horas</label><input id="nfo-ht" type="number" placeholder="50" readonly style="background:#f0f0ec"/></div>
+        </div>
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Taxas nesta formação</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><label>€/h síncrona</label><input id="nfo-ts" type="number" value="${TAXA_SINC}" step="0.1" oninput="calcFoPreview()"/></div>
+          <div><label>€/h conteúdo</label><input id="nfo-tc" type="number" value="${TAXA_CONT}" step="0.1" oninput="calcFoPreview()"/></div>
+          <div><label>€/h assíncrona</label><input id="nfo-ta" type="number" value="${TAXA_ASINC}" step="0.1" oninput="calcFoPreview()"/></div>
+        </div>
+        <div id="fo-preview" style="font-size:12px;color:#1a6b1a;padding:8px;background:#f0fff0;border-radius:6px;min-height:20px"></div>
+      </div>
+      <div class="row c2">
         <div><label>Faturado?</label><select id="nfo-fat"><option value="false">Não faturado</option><option value="true">Faturado</option></select></div>
+        <div><label>Data emissão fatura</label><input id="nfo-dfat" type="date"/></div>
+      </div>
+      <div class="row c2">
+        <div><label>Pago?</label><select id="nfo-pago"><option value="false">Por pagar</option><option value="true">Pago</option></select></div>
+        <div><label>Data de pagamento</label><input id="nfo-dpag" type="date"/></div>
       </div>
       <div><label>Notas</label><input id="nfo-no" placeholder="Opcional"/></div>
-      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addFo()">Guardar</button><button class="btn" onclick="showAddFo()">Cancelar</button></div>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn pri" onclick="addFo()">Guardar</button>
+        <button class="btn" onclick="showAddFo()">Cancelar</button>
+      </div>
     </div>
-    ${DB.formacoes.length?`<div class="card" style="padding:0;overflow:hidden"><table>
-      <thead><tr><th>Nome</th><th>Data</th><th>Horas</th><th>€/hora</th><th>Conteúdo</th><th>Total</th><th>Faturado</th><th>Notas</th><th></th></tr></thead>
-      <tbody>${DB.formacoes.map(f=>`<tr>
-        <td><strong>${f.nome}</strong></td>
-        <td>${f.data}</td>
-        <td>${f.horas}h</td>
-        <td>${fmt(f.valorHora)}</td>
-        <td>${fmt(f.valorConteudo)}</td>
-        <td><strong>${fmt(f.horas*f.valorHora+f.valorConteudo)}</strong></td>
-        <td>${f.faturado?'<span class="badge bg-b">Sim</span>':'<span class="badge bg-gray">Não</span>'}</td>
-        <td style="color:#888;font-size:11px">${f.notas||'—'}</td>
-        <td><button class="btn dan sm" onclick="delFormacao('${f.id}')">Apagar</button></td>
-      </tr>`).join('')}</tbody>
-    </table></div>`:'<div class="card" style="color:#999;text-align:center;padding:2rem">Sem formações registadas</div>'}`;
+
+    <div style="display:flex;flex-direction:column;gap:1rem">
+    ${DB.formacoes.length ? DB.formacoes.map(f=>{
+      const total=calcFoTotal(f);
+      const hs=f.hSinc||0, ha=f.hAsinc||0;
+      const ts=f.taxaSinc??TAXA_SINC, tc=f.taxaCont??TAXA_CONT, ta=f.taxaAsinc??TAXA_ASINC;
+
+      if(editingFormacaoId===f.id) return `<div class="card" style="border-color:#d4a97a">
+        <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:10px">A editar: ${f.nome}</div>
+        <div class="row c2">
+          <div><label>Nome / Entidade</label><input id="efo-n" value="${f.nome.replace(/"/g,'&quot;')}"/></div>
+          <div><label>Data início</label><input id="efo-d" type="date" value="${f.data}"/></div>
+        </div>
+        <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px">
+          <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Horas</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+            <div><label>Horas síncronas</label><input id="efo-hs" type="number" value="${hs}" oninput="calcFoEditPreview()"/></div>
+            <div><label>Horas assíncronas</label><input id="efo-ha" type="number" value="${ha}" oninput="calcFoEditPreview()"/></div>
+          </div>
+          <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Taxas</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+            <div><label>€/h síncrona</label><input id="efo-ts" type="number" value="${ts}" step="0.1" oninput="calcFoEditPreview()"/></div>
+            <div><label>€/h conteúdo</label><input id="efo-tc" type="number" value="${tc}" step="0.1" oninput="calcFoEditPreview()"/></div>
+            <div><label>€/h assíncrona</label><input id="efo-ta" type="number" value="${ta}" step="0.1" oninput="calcFoEditPreview()"/></div>
+          </div>
+          <div id="efo-preview" style="font-size:12px;color:#1a6b1a;padding:8px;background:#f0fff0;border-radius:6px;min-height:20px"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><label>Faturado?</label><select id="efo-fat"><option value="false" ${!f.faturado?'selected':''}>Não</option><option value="true" ${f.faturado?'selected':''}>Sim</option></select></div>
+          <div><label>Data fatura</label><input id="efo-dfat" type="date" value="${f.dataFatura||''}"/></div>
+          <div><label>Pago?</label><select id="efo-pago"><option value="false" ${!f.pago?'selected':''}>Por pagar</option><option value="true" ${f.pago?'selected':''}>Pago</option></select></div>
+          <div><label>Data pagamento</label><input id="efo-dpag" type="date" value="${f.dataPagamento||''}"/></div>
+        </div>
+        <div style="margin-bottom:8px"><label>Notas</label><input id="efo-no" value="${(f.notas||'').replace(/"/g,'&quot;')}"/></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn pri" onclick="saveEditFo('${f.id}')">Guardar</button>
+          <button class="btn" onclick="cancelEditFo()">Cancelar</button>
+        </div>
+      </div>`;
+
+      return `<div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+          <div>
+            <div style="font-weight:700;font-size:14px">${f.nome}</div>
+            <div style="font-size:11px;color:#888;margin-top:2px">${f.data} · ${hs+ha}h total (${hs}h síncronas + ${ha}h assíncronas)</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-weight:700;font-size:18px">${fmt(total)}</div>
+            <div style="font-size:11px;color:#888">total módulo</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+          <div style="background:#f8f8f5;border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:#888;margin-bottom:2px">Sessões síncronas</div>
+            <div style="font-weight:600">${fmt(hs*ts)}</div>
+            <div style="font-size:10px;color:#999">${hs}h × ${fmt(ts)}</div>
+          </div>
+          <div style="background:#f8f8f5;border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:#888;margin-bottom:2px">Elaboração conteúdo</div>
+            <div style="font-weight:600">${fmt(hs*tc)}</div>
+            <div style="font-size:10px;color:#999">${hs}h × ${fmt(tc)}</div>
+          </div>
+          <div style="background:#f8f8f5;border-radius:8px;padding:8px 10px">
+            <div style="font-size:10px;color:#888;margin-bottom:2px">Sessões assíncronas</div>
+            <div style="font-weight:600">${fmt(ha*ta)}</div>
+            <div style="font-size:10px;color:#999">${ha}h × ${fmt(ta)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          ${f.faturado
+            ? `<span class="badge bg-b">Faturado</span>${f.dataFatura?`<span style="font-size:11px;color:#888">fatura: ${f.dataFatura}</span>`:''}`
+            : '<span class="badge bg-gray">Por faturar</span>'}
+          ${f.pago
+            ? `<span class="badge bg-g">Pago</span>${f.dataPagamento?`<span style="font-size:11px;color:#888">recebido: ${f.dataPagamento}</span>`:''}`
+            : f.faturado ? `<button class="btn suc sm" onclick="marcarFormacaoPaga('${f.id}')">Marcar pago</button>` : ''}
+          ${f.notas?`<span style="font-size:11px;color:#999">${f.notas}</span>`:''}
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button class="btn sm" onclick="startEditFo('${f.id}')">Editar</button>
+            <button class="btn dan sm" onclick="delFormacao('${f.id}')">Apagar</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('') : '<div class="card" style="color:#999;text-align:center;padding:2rem">Sem formações registadas</div>'}
+    </div>`;
 }
+
+function guardarTaxas(){
+  if(!DB.taxasFormacao) DB.taxasFormacao={};
+  DB.taxasFormacao.sinc  = parseFloat(document.getElementById('taxa-sinc')?.value)||15;
+  DB.taxasFormacao.cont  = parseFloat(document.getElementById('taxa-cont')?.value)||3;
+  DB.taxasFormacao.asinc = parseFloat(document.getElementById('taxa-asinc')?.value)||1.4;
+  save();
+}
+function calcFoPreview(){
+  const hs=parseFloat(document.getElementById('nfo-hs')?.value)||0;
+  const ha=parseFloat(document.getElementById('nfo-ha')?.value)||0;
+  const ts=parseFloat(document.getElementById('nfo-ts')?.value)||0;
+  const tc=parseFloat(document.getElementById('nfo-tc')?.value)||0;
+  const ta=parseFloat(document.getElementById('nfo-ta')?.value)||0;
+  const htEl=document.getElementById('nfo-ht'); if(htEl) htEl.value=hs+ha;
+  const total=hs*ts+hs*tc+ha*ta;
+  const el=document.getElementById('fo-preview'); if(!el) return;
+  el.innerHTML=hs||ha?`${hs}h×${fmt(ts)} (sinc) + ${hs}h×${fmt(tc)} (conteúdo) + ${ha}h×${fmt(ta)} (asinc) = <strong>${fmt(total)}</strong>`:'';
+}
+function calcFoEditPreview(){
+  const hs=parseFloat(document.getElementById('efo-hs')?.value)||0;
+  const ha=parseFloat(document.getElementById('efo-ha')?.value)||0;
+  const ts=parseFloat(document.getElementById('efo-ts')?.value)||0;
+  const tc=parseFloat(document.getElementById('efo-tc')?.value)||0;
+  const ta=parseFloat(document.getElementById('efo-ta')?.value)||0;
+  const total=hs*ts+hs*tc+ha*ta;
+  const el=document.getElementById('efo-preview'); if(!el) return;
+  el.innerHTML=hs||ha?`${hs}h×${fmt(ts)} + ${hs}h×${fmt(tc)} + ${ha}h×${fmt(ta)} = <strong>${fmt(total)}</strong>`:'';
+}
+let editingFormacaoId=null;
 function showAddFo(){const f=document.getElementById('add-fo-f');f.style.display=f.style.display==='none'?'block':'none';}
 function addFo(){
   const n=document.getElementById('nfo-n').value.trim();if(!n)return;
   if(!DB.ids.fo)DB.ids.fo=1;
-  DB.formacoes.push({id:'fo'+DB.ids.fo++,nome:n,data:document.getElementById('nfo-d').value,horas:parseFloat(document.getElementById('nfo-h').value)||0,valorHora:parseFloat(document.getElementById('nfo-vh').value)||0,valorConteudo:parseFloat(document.getElementById('nfo-vc').value)||0,faturado:document.getElementById('nfo-fat').value==='true',notas:document.getElementById('nfo-no').value});
+  DB.formacoes.push({id:'fo'+DB.ids.fo++,nome:n,
+    data:document.getElementById('nfo-d').value,
+    hSinc:parseFloat(document.getElementById('nfo-hs').value)||0,
+    hAsinc:parseFloat(document.getElementById('nfo-ha').value)||0,
+    taxaSinc:parseFloat(document.getElementById('nfo-ts').value)||15,
+    taxaCont:parseFloat(document.getElementById('nfo-tc').value)||3,
+    taxaAsinc:parseFloat(document.getElementById('nfo-ta').value)||1.4,
+    faturado:document.getElementById('nfo-fat').value==='true',
+    dataFatura:document.getElementById('nfo-dfat').value||null,
+    pago:document.getElementById('nfo-pago').value==='true',
+    dataPagamento:document.getElementById('nfo-dpag').value||null,
+    notas:document.getElementById('nfo-no').value
+  });
   save();showAddFo();renderFormacao();
+}
+function startEditFo(id){editingFormacaoId=id;renderFormacao();setTimeout(()=>document.getElementById('efo-n')?.focus(),50);}
+function cancelEditFo(){editingFormacaoId=null;renderFormacao();}
+function saveEditFo(id){
+  const f=DB.formacoes.find(x=>x.id===id);if(!f)return;
+  f.nome=document.getElementById('efo-n').value.trim()||f.nome;
+  f.data=document.getElementById('efo-d').value;
+  f.hSinc=parseFloat(document.getElementById('efo-hs').value)||0;
+  f.hAsinc=parseFloat(document.getElementById('efo-ha').value)||0;
+  f.taxaSinc=parseFloat(document.getElementById('efo-ts').value)||15;
+  f.taxaCont=parseFloat(document.getElementById('efo-tc').value)||3;
+  f.taxaAsinc=parseFloat(document.getElementById('efo-ta').value)||1.4;
+  f.faturado=document.getElementById('efo-fat').value==='true';
+  f.dataFatura=document.getElementById('efo-dfat').value||null;
+  f.pago=document.getElementById('efo-pago').value==='true';
+  f.dataPagamento=document.getElementById('efo-dpag').value||null;
+  f.notas=document.getElementById('efo-no').value;
+  editingFormacaoId=null;save();renderFormacao();
+}
+function marcarFormacaoPaga(id){
+  const f=DB.formacoes.find(x=>x.id===id);if(!f)return;
+  f.pago=true;f.dataPagamento=today();save();renderFormacao();
 }
 function delFormacao(id){
   const f=DB.formacoes.find(x=>x.id===id);
@@ -2067,38 +2348,74 @@ function renderEncomendas(){
 
 // ─── RELATÓRIO ───────────────────────────────────────────────────────────────
 function renderRelatorio(){
-  const tServ=DB.consultas.reduce((s,c)=>s+c.valor,0);
-  const tProd=DB.consultas.reduce((s,c)=>s+c.totalProd,0);
-  const tLucro=DB.consultas.reduce((s,c)=>s+c.lucroProd,0);
-  const tPacks=DB.packs.reduce((s,p)=>s+p.valor,0);
-  const tWork=DB.workshops.reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
-  const tGasto=DB.gastos.reduce((s,g)=>s+g.valor,0);
-  const tFat=DB.consultas.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)+DB.packs.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0)+DB.workshops.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
-  const tNFat=(tServ+tPacks+tWork)-tFat;
-  const baseS=tFat*0.7, baseP=tLucro*0.15, ss=(baseS+baseP)*0.214;
-  const custosProd=DB.consultas.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
-  const receitaTotal=tServ+tProd+tPacks+tWork;
-  const lucroReal=receitaTotal-tGasto-custosProd;
-  const topCli=DB.clientes.map(cl=>{
+  // totais gerais
+  const tServ  = DB.consultas.reduce((s,c)=>s+c.valor,0);
+  const tProd  = DB.consultas.reduce((s,c)=>s+c.totalProd,0);
+  const tLucro = DB.consultas.reduce((s,c)=>s+c.lucroProd,0);
+  const tPacks = DB.packs.reduce((s,p)=>s+p.valor,0);
+  const tWork  = DB.workshops.reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+  const tFo    = (DB.formacoes||[]).reduce((s,f)=>s+calcFoTotal(f),0);
+  const tGasto = DB.gastos.reduce((s,g)=>s+g.valor,0);
+  const tFat   = DB.consultas.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)
+               + DB.packs.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0)
+               + DB.workshops.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0)
+               + (DB.formacoes||[]).filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
+  const tNFat  = (tServ+tPacks+tWork+tFo)-tFat;
+  const baseS  = tFat*0.7, baseP = tLucro*0.15, ss = (baseS+baseP)*0.214;
+  const custosProd = DB.consultas.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
+  const receitaTotal = tServ+tProd+tPacks+tWork+tFo;
+  const lucroReal = receitaTotal-tGasto-custosProd;
+  const topCli = DB.clientes.map(cl=>{
     const tot=DB.consultas.filter(c=>c.clienteId===cl.id).reduce((s,c)=>s+c.valor+c.totalProd,0)+DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0);
     return{nome:cl.nome,tot};
   }).sort((a,b)=>b.tot-a.tot).slice(0,5);
+
+  // resumo por mês
+  const mesesSet = new Set([
+    ...DB.consultas.map(c=>c.data.substring(0,7)),
+    ...DB.packs.map(p=>p.data?.substring(0,7)).filter(Boolean),
+    ...DB.workshops.map(w=>w.data?.substring(0,7)).filter(Boolean),
+    ...(DB.formacoes||[]).map(f=>f.data?.substring(0,7)).filter(Boolean),
+    ...DB.gastos.map(g=>g.data?.substring(0,7)).filter(Boolean)
+  ]);
+  const mesesOrdenados = [...mesesSet].sort().reverse();
+
+  const porMes = mesesOrdenados.map(m=>{
+    const cs   = DB.consultas.filter(c=>c.data.startsWith(m));
+    const pks  = DB.packs.filter(p=>p.data?.startsWith(m));
+    const ws   = DB.workshops.filter(w=>w.data?.startsWith(m));
+    const fs   = (DB.formacoes||[]).filter(f=>f.data?.startsWith(m));
+    const gs   = DB.gastos.filter(g=>g.data?.startsWith(m));
+    const serv = cs.reduce((s,c)=>s+c.valor,0);
+    const prod = cs.reduce((s,c)=>s+c.totalProd,0);
+    const lucP = cs.reduce((s,c)=>s+c.lucroProd,0);
+    const pk   = pks.reduce((s,p)=>s+p.valor,0);
+    const wk   = ws.reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+    const fo   = fs.reduce((s,f)=>s+calcFoTotal(f),0);
+    const gasto= gs.reduce((s,g)=>s+g.valor,0);
+    const total= serv+prod+pk+wk+fo;
+    const fat  = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)+pks.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
+    const custos = cs.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
+    const ssM = (fat*0.7+lucP*0.15)*0.214;
+    return {m, serv, prod, lucP, pk, wk, fo, gasto, total, fat, custos, ssM, nCons:cs.length};
+  });
 
   document.getElementById('pg-relatorio').innerHTML=`
     <h2>Relatório financeiro</h2>
     <div class="row c2">
       <div class="card">
-        <h3>Receitas por categoria</h3>
+        <h3>Receitas por categoria (total)</h3>
         <table>
           <tr><td>Consultas / serviços</td><td style="text-align:right">${fmt(tServ)}</td></tr>
           <tr><td>Packs de consultas</td><td style="text-align:right">${fmt(tPacks)}</td></tr>
-          <tr><td>Workshops e formações</td><td style="text-align:right">${fmt(tWork)}</td></tr>
+          <tr><td>Workshops</td><td style="text-align:right">${fmt(tWork)}</td></tr>
+          <tr><td>Formação</td><td style="text-align:right">${fmt(tFo)}</td></tr>
           <tr><td>Produtos (PVP total)</td><td style="text-align:right">${fmt(tProd)}</td></tr>
           <tr style="border-top:1px solid #eee"><td><strong>Total receita</strong></td><td style="text-align:right"><strong>${fmt(receitaTotal)}</strong></td></tr>
         </table>
       </div>
       <div class="card">
-        <h3>Faturação e base SS</h3>
+        <h3>Faturação e SS (total)</h3>
         <table>
           <tr><td>Total faturado</td><td style="text-align:right" class="blue"><strong>${fmt(tFat)}</strong></td></tr>
           <tr><td>Não faturado</td><td style="text-align:right">${fmt(tNFat)}</td></tr>
@@ -2110,11 +2427,11 @@ function renderRelatorio(){
     </div>
     <div class="row c2">
       <div class="card">
-        <h3>Custos e lucro real</h3>
+        <h3>Custos e lucro real (total)</h3>
         <table>
           <tr><td>Receita total</td><td style="text-align:right">${fmt(receitaTotal)}</td></tr>
-          <tr><td>Custo dos produtos vendidos</td><td style="text-align:right" class="red">− ${fmt(custosProd)}</td></tr>
-          <tr><td>Outros gastos do negócio</td><td style="text-align:right" class="red">− ${fmt(tGasto)}</td></tr>
+          <tr><td>Custo produtos vendidos</td><td style="text-align:right" class="red">− ${fmt(custosProd)}</td></tr>
+          <tr><td>Outros gastos</td><td style="text-align:right" class="red">− ${fmt(tGasto)}</td></tr>
           <tr style="border-top:1px solid #eee"><td><strong>Lucro real estimado</strong></td><td style="text-align:right;font-weight:700;font-size:15px" class="green">${fmt(lucroReal)}</td></tr>
         </table>
       </div>
@@ -2123,6 +2440,42 @@ function renderRelatorio(){
         <table>
           ${topCli.map((c,i)=>`<tr><td><span style="color:#ccc;font-size:11px;margin-right:6px">${i+1}</span><strong>${c.nome}</strong></td><td style="text-align:right;font-weight:600">${fmt(c.tot)}</td></tr>`).join('')}
         </table>
+      </div>
+    </div>
+
+    <!-- RESUMO MENSAL -->
+    <div class="card" style="padding:0;overflow:hidden;margin-top:1rem">
+      <div style="padding:10px 14px;background:#fafaf7;border-bottom:1px solid #eee;font-weight:600;font-size:13px">Resumo por mês</div>
+      <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Mês</th><th>Consultas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th>SS est.</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${porMes.map(r=>`<tr>
+            <td style="white-space:nowrap;font-weight:600">${new Date(r.m+'-01').toLocaleDateString('pt-PT',{month:'short',year:'2-digit'})}</td>
+            <td style="text-align:center">${r.nCons}</td>
+            <td>${fmt(r.serv)}</td>
+            <td>${fmt(r.prod)}</td>
+            <td>${r.pk>0?fmt(r.pk):'—'}</td>
+            <td>${r.wk>0?fmt(r.wk):'—'}</td>
+            <td>${r.fo>0?fmt(r.fo):'—'}</td>
+            <td><strong>${fmt(r.total)}</strong></td>
+            <td class="blue">${fmt(r.fat)}</td>
+            <td class="red">${r.gasto>0?fmt(r.gasto):'—'}</td>
+            <td class="green">${fmt(r.lucP)}</td>
+            <td class="amber" style="font-size:11px">${fmt(r.ssM)}</td>
+          </tr>`).join('')}
+          <tr style="border-top:2px solid #eee;font-weight:600;background:#fafaf7">
+            <td>TOTAL</td><td style="text-align:center">${DB.consultas.length}</td>
+            <td>${fmt(tServ)}</td><td>${fmt(tProd)}</td><td>${fmt(tPacks)}</td><td>${fmt(tWork)}</td><td>${fmt(tFo)}</td>
+            <td><strong>${fmt(receitaTotal)}</strong></td><td class="blue">${fmt(tFat)}</td>
+            <td class="red">${fmt(tGasto)}</td><td class="green">${fmt(tLucro)}</td><td class="amber">${fmt(ss)}</td>
+          </tr>
+        </tbody>
+      </table>
       </div>
     </div>`;
 }
