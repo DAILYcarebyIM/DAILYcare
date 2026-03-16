@@ -445,7 +445,7 @@ function renderDash(){
   const totalFaturado = tFatServ+tFatPacks+tFatWork;
   const totalNaoFat = (tServ+tPacks+tWork)-totalFaturado;
   const ticket = cs.length ? (tServ+tProd)/cs.length : 0;
-  const stockB = DB.produtos.filter(p=>p.stock<=p.stockMin);
+  const stockB = DB.produtos.filter(p=>p.ativo!==false && p.stock<=(p.stockMin||1));
   const baseS = totalFaturado*0.7, baseP = tLucro*0.15, ss = (baseS+baseP)*0.214;
   const meses = {};
   cs.forEach(c=>{const m=c.data.substring(0,7);if(!meses[m])meses[m]=0;meses[m]+=c.valor+c.totalProd;});
@@ -1227,6 +1227,8 @@ let editingProdId = null;
 
 function renderProdutos(){
   let ps=DB.produtos;
+  const mostrarInativos = document.getElementById('show-inativos')?.checked || false;
+  if(!mostrarInativos) ps=ps.filter(p=>p.ativo!==false);
   if(fP) ps=ps.filter(p=>p.nome.toLowerCase().includes(fP.toLowerCase())||p.cat.toLowerCase().includes(fP.toLowerCase())||((p.cnp||'').includes(fP)));
   if(fM) ps=ps.filter(p=>p.marca===fM);
   const cats=['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro'];
@@ -1234,9 +1236,14 @@ function renderProdutos(){
   const todasCats = [...new Set([...cats, ...DB.produtos.map(p=>p.cat).filter(Boolean)])].sort();
 
   const rowHtml = p => {
+    const ativo = p.ativo !== false; // default true se não definido
     if(editingProdId===p.id) {
       return `<tr style="background:#fffbf5">
-        <td><input id="ep-n" value="${p.nome.replace(/"/g,'&quot;')}" style="min-width:160px"/></td>
+        <td><input id="ep-n" value="${p.nome.replace(/"/g,'&quot;')}" style="min-width:160px"/>
+          <div style="margin-top:4px"><label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer">
+            <input type="checkbox" id="ep-ativo" ${ativo?'checked':''} style="width:auto"/> Produto ativo
+          </label></div>
+        </td>
         <td><input id="ep-cnp" value="${p.cnp||''}" placeholder="CNP" style="width:90px;font-family:monospace"/></td>
         <td><input id="ep-m" value="${(p.marca||'').replace(/"/g,'&quot;')}" placeholder="Marca" list="ep-marcas-list" style="min-width:100px"/><datalist id="ep-marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></td>
         <td>
@@ -1249,7 +1256,13 @@ function renderProdutos(){
         <td><input id="ep-custo" type="number" value="${p.custo}" style="width:65px"/></td>
         <td><input id="ep-pvp" type="number" value="${p.pvp}" style="width:65px"/></td>
         <td colspan="2" style="color:#888;font-size:11px">auto</td>
-        <td><input id="ep-stock" type="number" value="${p.stock}" style="width:50px"/><br><span style="font-size:10px;color:#888">mín:</span><input id="ep-smin" type="number" value="${p.stockMin}" style="width:45px;display:inline-block"/></td>
+        <td>
+          <div style="display:flex;align-items:center;gap:4px">
+            <input id="ep-stock" type="number" value="${p.stock}" style="width:50px"/>
+            <span style="font-size:10px;color:#888">/ mín</span>
+            <input id="ep-smin" type="number" value="${p.stockMin||1}" style="width:45px"/>
+          </div>
+        </td>
         <td><select id="ep-cons" style="width:70px"><option value="false" ${!p.consig?'selected':''}>Não</option><option value="true" ${p.consig?'selected':''}>Sim</option></select></td>
         <td style="white-space:nowrap">
           <button class="btn pri sm" onclick="saveEditP('${p.id}')">Guardar</button>
@@ -1257,17 +1270,30 @@ function renderProdutos(){
         </td>
       </tr>`;
     }
-    return `<tr>
-      <td><span style="font-weight:600">${p.nome}</span>${p.consig?'<br><span class="badge bg-a" style="margin-top:2px">consig.</span>':''}</td>
+    return `<tr style="${ativo?'':'opacity:0.45'}">
+      <td>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-weight:600">${p.nome}</span>
+          ${p.consig?'<span class="badge bg-a">consig.</span>':''}
+          ${!ativo?'<span class="badge bg-gray">inativo</span>':''}
+        </div>
+      </td>
       <td style="font-family:monospace;font-size:11px;color:#8b6f4e">${p.cnp||'—'}</td>
       <td><span class="tag">${p.marca||'—'}</span></td>
       <td><span class="tag" style="color:#7a4f28;background:#f3e8da">${p.fornecedor||'—'}</span></td>
-      <td><span class="tag">${p.cat}</span></td>
+      <td><span class="tag">${p.cat||'—'}</span></td>
       <td>${fmt(p.custo)}</td><td>${fmt(p.pvp)}</td>
       <td><strong>${fmt(p.pvp-p.custo)}</strong></td>
       <td>${p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100)+'%':'—'}</td>
-      <td><span class="badge ${p.stock<=0?'bg-r':p.stock<=p.stockMin?'bg-a':'bg-g'}">${p.stock}</span></td>
-      <td>—</td>
+      <td>
+        <span class="badge ${p.stock<=0?'bg-r':p.stock<=p.stockMin?'bg-a':'bg-g'}">${p.stock}</span>
+        <span style="font-size:10px;color:#999;margin-left:2px">mín: ${p.stockMin||1}</span>
+      </td>
+      <td>
+        <button class="btn sm" onclick="toggleAtivoProd('${p.id}')" style="${ativo?'background:#fef9f0;border-color:#f0c040;color:#856404':'background:#f0fff0;border-color:#81c784;color:#2e7d32'}">
+          ${ativo?'Desativar':'Ativar'}
+        </button>
+      </td>
       <td style="white-space:nowrap">
         <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28" onclick="abrirHistoricoProd('${p.id}')">Histórico</button>
         <button class="btn sm" onclick="startEditP('${p.id}')" style="margin-top:2px">Editar</button>
@@ -1311,15 +1337,18 @@ function renderProdutos(){
       <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addP()">Guardar</button><button class="btn" onclick="showAddP()">Cancelar</button></div>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
-      <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap">
+      <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap;align-items:center">
         <input placeholder="Filtrar por nome, cat. ou CNP..." oninput="fP=this.value;renderProdutos()" style="max-width:220px" value="${fP}"/>
         <select onchange="fM=this.value;renderProdutos()" style="max-width:200px">
           <option value="">Todas as marcas</option>
           ${getMarcas().map(m=>`<option ${fM===m?'selected':''}>${m}</option>`).join('')}
         </select>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#666;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="show-inativos" onchange="renderProdutos()" style="width:auto"/> Mostrar inativos
+        </label>
       </div>
       <table>
-        <thead><tr><th>Produto</th><th>CNP</th><th>Marca</th><th>Fornecedor</th><th>Cat.</th><th>Custo</th><th>PVP</th><th>Margem €</th><th>Margem %</th><th>Stock</th><th>Consig.</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Produto</th><th>CNP</th><th>Marca</th><th>Fornecedor</th><th>Cat.</th><th>Custo</th><th>PVP</th><th>Margem €</th><th>Margem %</th><th>Stock / Mín.</th><th>Ativo</th><th>Ações</th></tr></thead>
         <tbody>${ps.map(p=>rowHtml(p)).join('')}</tbody>
       </table>
     </div>`;
@@ -1330,6 +1359,7 @@ function cancelEditP(){ editingProdId=null; renderProdutos(); }
 function saveEditP(id){
   const p=DB.produtos.find(x=>x.id===id); if(!p) return;
   p.nome=document.getElementById('ep-n').value.trim()||p.nome;
+  p.ativo=document.getElementById('ep-ativo')?.checked !== false;
   p.cnp=document.getElementById('ep-cnp').value.trim();
   p.marca=document.getElementById('ep-m').value.trim();
   p.fornecedor=getFornVal('ep');
@@ -1341,18 +1371,27 @@ function saveEditP(id){
   p.consig=document.getElementById('ep-cons').value==='true';
   editingProdId=null; save(); renderProdutos();
 }
+function toggleAtivoProd(id){
+  const p=DB.produtos.find(x=>x.id===id); if(!p) return;
+  p.ativo = p.ativo === false ? true : false; // toggle
+  save(); renderProdutos();
+}
+
+function _fornSelId(pfx){ return pfx==='ne' ? 'ne-f' : pfx+'-forn'; }
+function _fornOutroId(pfx){ return pfx==='ne' ? 'ne-forn-outro' : pfx+'-forn-outro'; }
 
 function toggleOutroForn(pfx){
-  const sel = document.getElementById(pfx+'-forn');
-  const outro = document.getElementById(pfx+'-forn-outro');
+  const sel   = document.getElementById(_fornSelId(pfx));
+  const outro = document.getElementById(_fornOutroId(pfx));
   if(!sel||!outro) return;
   outro.style.display = sel.value==='__outro__' ? 'block' : 'none';
+  if(sel.value==='__outro__') setTimeout(()=>outro.focus(), 50);
 }
 function getFornVal(pfx){
-  const sel = document.getElementById(pfx+'-forn');
+  const sel = document.getElementById(_fornSelId(pfx));
   if(!sel) return '';
   if(sel.value==='__outro__'){
-    const outro = document.getElementById(pfx+'-forn-outro');
+    const outro = document.getElementById(_fornOutroId(pfx));
     return outro ? outro.value.trim() : '';
   }
   return sel.value;
@@ -2004,21 +2043,24 @@ function addG(){
 
 // ─── LISTA ENCOMENDAS ────────────────────────────────────────────────────────
 function renderEncomendas(){
-  const baixo=DB.produtos.filter(p=>p.stock<p.stockMin);
-  const esgotado=DB.produtos.filter(p=>p.stock<=0);
+  // só produtos ativos (ativo !== false)
+  const ativos = DB.produtos.filter(p=>p.ativo!==false);
+  const baixo = ativos.filter(p=>p.stock<(p.stockMin||1));
+  const esgotado = ativos.filter(p=>p.stock<=0);
   document.getElementById('pg-encomendas').innerHTML=`
     <h2>Lista de encomendas automática</h2>
-    <p style="color:#888;font-size:12px;margin-bottom:1rem">Produtos com stock abaixo do mínimo definido.</p>
+    <p style="color:#888;font-size:12px;margin-bottom:1rem">Produtos ativos com stock abaixo do mínimo definido. Produtos inativos não aparecem aqui.</p>
     ${esgotado.length?`<div class="alert al-err"><strong>Esgotados:</strong> ${esgotado.map(p=>`<strong>${p.nome}</strong>`).join(', ')}</div>`:''}
-    ${!baixo.length?'<div class="alert al-suc">✓ Todos os produtos têm stock suficiente. Nada a encomendar.</div>':''}
+    ${!baixo.length?'<div class="alert al-suc">✓ Todos os produtos ativos têm stock suficiente. Nada a encomendar.</div>':''}
     ${baixo.length?`<div class="card" style="padding:0;overflow:hidden"><table>
-      <thead><tr><th>Produto</th><th>Marca</th><th>Stock atual</th><th>Stock mínimo</th><th>Qty a encomendar</th></tr></thead>
+      <thead><tr><th>Produto</th><th>Marca</th><th>Fornecedor</th><th>Stock atual</th><th>Stock mínimo</th><th>Qty a encomendar</th></tr></thead>
       <tbody>${baixo.map(p=>`<tr>
-        <td><strong>${p.nome}</strong></td>
-        <td><span class="tag">${p.marca.replace('Farmácia Fonte da Moura','FFM')}</span></td>
+        <td><strong>${p.nome}</strong>${p.cnp?`<div style="font-size:10px;color:#8b6f4e;font-family:monospace">CNP: ${p.cnp}</div>`:''}</td>
+        <td><span class="tag">${p.marca||'—'}</span></td>
+        <td><span class="tag" style="background:#f3e8da;color:#7a4f28">${p.fornecedor||'—'}</span></td>
         <td><span class="badge bg-${p.stock<=0?'r':'a'}">${p.stock}</span></td>
-        <td>${p.stockMin}</td>
-        <td><strong class="green">${Math.max(0,p.stockMin-p.stock+1)}</strong></td>
+        <td>${p.stockMin||1}</td>
+        <td><strong class="green">${Math.max(0,(p.stockMin||1)-p.stock+1)}</strong></td>
       </tr>`).join('')}</tbody>
     </table></div>`:''}`;
 }
