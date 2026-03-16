@@ -1164,7 +1164,7 @@ function renderProdutos(){
         <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços — interligados</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
           <div><label>Custo (€)</label><input id="np-c" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromCusto('np')"/></div>
-          <div><label>PVP (€)</label><input id="np-p" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromPvp('np')"/></div>
+          <div><label>PVP (€)</label><input id="np-pvp" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromPvp('np')"/></div>
           <div><label>Margem (€)</label><input id="np-meur" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromMargEur('np')"/></div>
           <div><label>Margem (%)</label><input id="np-mpct" type="number" placeholder="0" step="0.5" min="0" max="100" oninput="calcProdFromMargPct('np')"/></div>
         </div>
@@ -1218,7 +1218,7 @@ function addP(){
     marca:document.getElementById('np-m').value,
     cat:document.getElementById('np-cat').value,
     custo:parseFloat(document.getElementById('np-c').value)||0,
-    pvp:parseFloat(document.getElementById('np-p').value)||0,
+    pvp:parseFloat(document.getElementById('np-pvp').value)||0,
     stock:parseInt(document.getElementById('np-s').value)||0,
     stockMin:parseInt(document.getElementById('np-sm').value)||1,
     consig:document.getElementById('np-co').value==='true'
@@ -1228,43 +1228,43 @@ function addP(){
 
 // ─── CÁLCULOS INTERLIGADOS (partilhados: produtos e entradas) ─────────────────
 function _v(id){return parseFloat(document.getElementById(id)?.value)||0;}
-function _s(id,val){const el=document.getElementById(id);if(el&&document.activeElement!==id&&document.activeElement?.id!==id)el.value=val>0?+val.toFixed(4):'';}
+function _s(id,val){const el=document.getElementById(id);if(el&&document.activeElement?.id!==id)el.value=val>0?+val.toFixed(4):'';}
+
+// resolve o id do campo PVP — todos os prefixos usam pfx+'-pvp'
+function _pvpId(pfx){ return pfx+'-pvp'; }
+// resolve o id de meur/mpct (np usa np-meur/np-mpct, outros usam pfx+'-meur'/pfx+'-mpct')
+function _meurId(pfx){ return pfx+'-meur'; }
+function _mpctId(pfx){ return pfx+'-mpct'; }
+
 function _prev(pfx){
-  const c=_v(pfx+'-c'),p=_v(pfx+'-p'||pfx+'-pvp');
   const el=document.getElementById(pfx+'-preview');if(!el)return;
-  const pvp=pfx==='np'?_v('np-p'):_v('ne-pvp');
-  const custo=_v(pfx+'-c');
+  const pvp=_v(_pvpId(pfx)), custo=_v(pfx+'-c');
   if(custo>0&&pvp>0){const m=pvp-custo,pct=Math.round(m/pvp*100);el.textContent=`Custo ${fmt(custo)} + Margem ${fmt(m)} (${pct}%) = PVP ${fmt(pvp)}`;el.style.color=m>=0?'#1a6b1a':'#c0392b';}
   else el.textContent='';
 }
 
 function calcProdFromCusto(pfx){
-  const c=_v(pfx+'-c'), p=pfx==='np'?_v('np-p'):_v('ne-pvp');
-  if(c>0&&p>0){_s(pfx==='np'?'np-meur':'ne-meur',p-c);_s(pfx==='np'?'np-mpct':'ne-mpct',Math.round((p-c)/p*100));}
-  else{const pct=_v(pfx==='np'?'np-mpct':'ne-mpct');if(pct>0){const pv=c/(1-pct/100);_s(pfx==='np'?'np-p':'ne-pvp',pv);_s(pfx==='np'?'np-meur':'ne-meur',pv-c);}}
+  const c=_v(pfx+'-c'), pv=_v(_pvpId(pfx));
+  if(c>0&&pv>0){ _s(_meurId(pfx),pv-c); _s(_mpctId(pfx),Math.round((pv-c)/pv*100)); }
+  else{ const pct=_v(_mpctId(pfx)); if(pct>0){ const newPv=c/(1-pct/100); _s(_pvpId(pfx),newPv); _s(_meurId(pfx),newPv-c); } }
   _prev(pfx);
 }
 function calcProdFromPvp(pfx){
-  const pvpId=pfx==='np'?'np-p':'ne-pvp';
-  const pv=_v(pvpId), c=_v(pfx+'-c');
-  if(pv>0&&c>0){_s(pfx==='np'?'np-meur':'ne-meur',pv-c);_s(pfx==='np'?'np-mpct':'ne-mpct',Math.round((pv-c)/pv*100));}
-  else if(pv>0){const pct=_v(pfx==='np'?'np-mpct':'ne-mpct');if(pct>0)_s(pfx+'-c',pv*(1-pct/100));}
+  const pv=_v(_pvpId(pfx)), c=_v(pfx+'-c');
+  if(pv>0&&c>0){ _s(_meurId(pfx),pv-c); _s(_mpctId(pfx),Math.round((pv-c)/pv*100)); }
+  else if(pv>0){ const pct=_v(_mpctId(pfx)); if(pct>0) _s(pfx+'-c',pv*(1-pct/100)); }
   _prev(pfx);
 }
 function calcProdFromMargEur(pfx){
-  const meurId=pfx==='np'?'np-meur':'ne-meur';
-  const pvpId=pfx==='np'?'np-p':'ne-pvp';
-  const m=_v(meurId),c=_v(pfx+'-c'),pv=_v(pvpId);
-  if(m>=0&&c>0){_s(pvpId,c+m);_s(pfx==='np'?'np-mpct':'ne-mpct',Math.round(m/(c+m)*100));}
-  else if(m>=0&&pv>0){_s(pfx+'-c',pv-m);_s(pfx==='np'?'np-mpct':'ne-mpct',Math.round(m/pv*100));}
+  const m=_v(_meurId(pfx)), c=_v(pfx+'-c'), pv=_v(_pvpId(pfx));
+  if(m>=0&&c>0){ _s(_pvpId(pfx),c+m); _s(_mpctId(pfx),Math.round(m/(c+m)*100)); }
+  else if(m>=0&&pv>0){ _s(pfx+'-c',pv-m); _s(_mpctId(pfx),Math.round(m/pv*100)); }
   _prev(pfx);
 }
 function calcProdFromMargPct(pfx){
-  const mpctId=pfx==='np'?'np-mpct':'ne-mpct';
-  const pvpId=pfx==='np'?'np-p':'ne-pvp';
-  const pct=_v(mpctId),c=_v(pfx+'-c'),pv=_v(pvpId);
-  if(pct>0&&c>0){const newPv=c/(1-pct/100);_s(pvpId,newPv);_s(pfx==='np'?'np-meur':'ne-meur',newPv-c);}
-  else if(pct>0&&pv>0){const newC=pv*(1-pct/100);_s(pfx+'-c',newC);_s(pfx==='np'?'np-meur':'ne-meur',pv-newC);}
+  const pct=_v(_mpctId(pfx)), c=_v(pfx+'-c'), pv=_v(_pvpId(pfx));
+  if(pct>0&&c>0){ const newPv=c/(1-pct/100); _s(_pvpId(pfx),newPv); _s(_meurId(pfx),newPv-c); }
+  else if(pct>0&&pv>0){ const newC=pv*(1-pct/100); _s(pfx+'-c',newC); _s(_meurId(pfx),pv-newC); }
   _prev(pfx);
 }
 
@@ -1277,9 +1277,36 @@ function renderEntradas(){
       <div class="row c2">
         <div><label>Produto</label>
           <div class="dd-wrap">
-            <input id="ne-p" placeholder="Pesquisar produto..." oninput="ddProdE(this.value)" autocomplete="off"/>
+            <input id="ne-p" placeholder="Pesquisar produto... (ou escreve para criar novo)" oninput="ddProdE(this.value)" autocomplete="off"/>
             <input type="hidden" id="ne-p-id"/>
             <div class="dropdown" id="dd-ep" style="display:none"></div>
+          </div>
+          <!-- formulário inline de criação de produto -->
+          <div id="ne-criar-prod" style="display:none;background:#fffbf5;border:1px solid #d4a97a;border-radius:8px;padding:10px 12px;margin-top:6px">
+            <div style="font-size:11px;font-weight:600;color:#8b6f4e;margin-bottom:8px">Criar novo produto</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+              <div><label>Nome</label><input id="nep-n" placeholder="Nome do produto"/></div>
+              <div><label>CNP</label><input id="nep-cnp" placeholder="Código nacional" style="font-family:monospace"/></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
+              <div><label>Marca</label><select id="nep-m">${getMarcas().map(m=>`<option>${m}</option>`).join('')}</select></div>
+              <div><label>Categoria</label><select id="nep-cat"><option>Limpeza</option><option>Sérum</option><option>Hidratante</option><option>SPF</option><option>Suplemento</option><option>Maquilhagem</option><option>Outro</option></select></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:6px">
+              <div><label>Custo (€)</label><input id="nep-c" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromCusto('nep')"/></div>
+              <div><label>PVP (€)</label><input id="nep-pvp" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromPvp('nep')"/></div>
+              <div><label>Margem (€)</label><input id="nep-meur" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromMargEur('nep')"/></div>
+              <div><label>Margem (%)</label><input id="nep-mpct" type="number" placeholder="0" step="0.5" oninput="calcProdFromMargPct('nep')"/></div>
+            </div>
+            <div id="nep-preview" style="font-size:11px;color:#888;margin-bottom:6px;min-height:12px"></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <div><label>Stock mínimo</label><input id="nep-smin" type="number" placeholder="1" value="1"/></div>
+              <div><label>Consignação farmácia</label><select id="nep-co"><option value="false">Não</option><option value="true">Sim</option></select></div>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn pri" onclick="criarProdutoInline()" style="background:#8b6f4e;border-color:#8b6f4e">Criar e selecionar produto</button>
+              <button class="btn" onclick="fecharCriarProdInline()">Cancelar</button>
+            </div>
           </div>
         </div>
         <div><label>Quantidade</label><input id="ne-q" type="number" placeholder="0" min="1"/></div>
@@ -1333,12 +1360,72 @@ function renderEntradas(){
 function showAddE(){const f=document.getElementById('add-e-f');f.style.display=f.style.display==='none'?'block':'none';}
 function ddProdE(v){
   const dd=document.getElementById('dd-ep');
+  if(!v||v.length<1){dd.style.display='none';return;}
   const m=DB.produtos.filter(p=>p.nome.toLowerCase().includes(v.toLowerCase())||(p.cnp||'').includes(v));
+  const criar=`<div class="ddi" onclick="mostrarCriarProdInline()" style="color:#8b6f4e;font-weight:600;border-top:1px solid #eee">
+    + Criar novo produto "${v}"
+  </div>`;
+  if(!m.length){
+    dd.innerHTML=criar;
+    dd.style.display='block';
+    return;
+  }
   dd.innerHTML=m.map(p=>`<div class="ddi" onclick="selProdE('${p.id}','${p.nome.replace(/'/g,"\\'")}')">
     <strong>${p.nome}</strong>
     <span style="color:#999;font-size:11px"> — stock: ${p.stock} ${p.cnp?'· CNP: '+p.cnp:''} · custo: ${fmt(p.custo)} · PVP: ${fmt(p.pvp)}</span>
-  </div>`).join('');
-  dd.style.display=m.length?'block':'none';
+  </div>`).join('')+criar;
+  dd.style.display='block';
+}
+
+function mostrarCriarProdInline(){
+  document.getElementById('dd-ep').style.display='none';
+  const nomePesquisado = document.getElementById('ne-p').value.trim();
+  const el = document.getElementById('ne-criar-prod');
+  if(!el) return;
+  el.style.display='block';
+  // pré-preencher o nome com o que já estava a pesquisar
+  const nInput = document.getElementById('nep-n');
+  if(nInput && nomePesquisado) nInput.value = nomePesquisado;
+}
+
+function fecharCriarProdInline(){
+  const el=document.getElementById('ne-criar-prod');
+  if(el) el.style.display='none';
+}
+
+function criarProdutoInline(){
+  const nome=document.getElementById('nep-n').value.trim();
+  if(!nome){alert('O nome do produto é obrigatório.');return;}
+  if(!DB.ids.p) DB.ids.p=1;
+  const custo=parseFloat(document.getElementById('nep-c').value)||0;
+  const pvp=parseFloat(document.getElementById('nep-pvp').value)||0;
+  const novoProd={
+    id:'p'+DB.ids.p++,
+    nome, cnp:document.getElementById('nep-cnp').value.trim(),
+    marca:document.getElementById('nep-m').value,
+    cat:document.getElementById('nep-cat').value,
+    custo, pvp,
+    stock:0, stockMin:parseInt(document.getElementById('nep-smin').value)||1,
+    consig:document.getElementById('nep-co').value==='true'
+  };
+  DB.produtos.push(novoProd);
+  save();
+  // selecionar automaticamente o produto recém criado
+  document.getElementById('ne-p').value=nome;
+  document.getElementById('ne-p-id').value=novoProd.id;
+  if(custo>0) document.getElementById('ne-c').value=custo;
+  if(pvp>0){
+    document.getElementById('ne-pvp').value=pvp;
+    if(custo>0){
+      document.getElementById('ne-meur').value=(pvp-custo).toFixed(2);
+      document.getElementById('ne-mpct').value=Math.round((pvp-custo)/pvp*100);
+    }
+  }
+  calcProdFromPvp('ne');
+  fecharCriarProdInline();
+  // feedback visual
+  const prev=document.getElementById('ne-preview');
+  if(prev){prev.textContent='✓ Produto "'+nome+'" criado e selecionado';prev.style.color='#1a6b1a';}
 }
 function selProdE(id,nome){
   const p=DB.produtos.find(x=>x.id===id);
