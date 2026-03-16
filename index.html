@@ -1281,33 +1281,7 @@ function renderEntradas(){
             <input type="hidden" id="ne-p-id"/>
             <div class="dropdown" id="dd-ep" style="display:none"></div>
           </div>
-          <!-- formulário inline de criação de produto -->
-          <div id="ne-criar-prod" style="display:none;background:#fffbf5;border:1px solid #d4a97a;border-radius:8px;padding:10px 12px;margin-top:6px">
-            <div style="font-size:11px;font-weight:600;color:#8b6f4e;margin-bottom:8px">Criar novo produto</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
-              <div><label>Nome</label><input id="nep-n" placeholder="Nome do produto"/></div>
-              <div><label>CNP</label><input id="nep-cnp" placeholder="Código nacional" style="font-family:monospace"/></div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:6px">
-              <div><label>Marca</label><select id="nep-m">${getMarcas().map(m=>`<option>${m}</option>`).join('')}</select></div>
-              <div><label>Categoria</label><select id="nep-cat"><option>Limpeza</option><option>Sérum</option><option>Hidratante</option><option>SPF</option><option>Suplemento</option><option>Maquilhagem</option><option>Outro</option></select></div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:6px">
-              <div><label>Custo (€)</label><input id="nep-c" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromCusto('nep')"/></div>
-              <div><label>PVP (€)</label><input id="nep-pvp" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromPvp('nep')"/></div>
-              <div><label>Margem (€)</label><input id="nep-meur" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromMargEur('nep')"/></div>
-              <div><label>Margem (%)</label><input id="nep-mpct" type="number" placeholder="0" step="0.5" oninput="calcProdFromMargPct('nep')"/></div>
-            </div>
-            <div id="nep-preview" style="font-size:11px;color:#888;margin-bottom:6px;min-height:12px"></div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-              <div><label>Stock mínimo</label><input id="nep-smin" type="number" placeholder="1" value="1"/></div>
-              <div><label>Consignação farmácia</label><select id="nep-co"><option value="false">Não</option><option value="true">Sim</option></select></div>
-            </div>
-            <div style="display:flex;gap:8px">
-              <button class="btn pri" onclick="criarProdutoInline()" style="background:#8b6f4e;border-color:#8b6f4e">Criar e selecionar produto</button>
-              <button class="btn" onclick="fecharCriarProdInline()">Cancelar</button>
-            </div>
-          </div>
+          <div id="ne-criar-prod" style="display:none"></div>
         </div>
         <div><label>Quantidade</label><input id="ne-q" type="number" placeholder="0" min="1"/></div>
       </div>
@@ -1382,10 +1356,41 @@ function mostrarCriarProdInline(){
   const nomePesquisado = document.getElementById('ne-p').value.trim();
   const el = document.getElementById('ne-criar-prod');
   if(!el) return;
+
+  // construir o formulário agora (getMarcas() chamado aqui, não no template)
+  el.innerHTML = `
+    <div style="background:#fffbf5;border:1px solid #d4a97a;border-radius:8px;padding:12px;margin-top:6px">
+      <div style="font-size:11px;font-weight:600;color:#8b6f4e;margin-bottom:10px">Criar novo produto</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label>Nome</label><input id="nep-n" placeholder="Nome do produto" value="${nomePesquisado.replace(/"/g,'&quot;')}"/></div>
+        <div><label>CNP</label><input id="nep-cnp" placeholder="Código nacional" style="font-family:monospace"/></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label>Marca</label><select id="nep-m">${getMarcas().map(m=>`<option>${m}</option>`).join('')}</select></div>
+        <div><label>Categoria</label><select id="nep-cat">
+          <option>Limpeza</option><option>Sérum</option><option>Hidratante</option>
+          <option>SPF</option><option>Suplemento</option><option>Maquilhagem</option><option>Outro</option>
+        </select></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label>Custo (€)</label><input id="nep-c" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromCusto('nep')"/></div>
+        <div><label>PVP (€)</label><input id="nep-pvp" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromPvp('nep')"/></div>
+        <div><label>Margem (€)</label><input id="nep-meur" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromMargEur('nep')"/></div>
+        <div><label>Margem (%)</label><input id="nep-mpct" type="number" placeholder="0" step="0.5" oninput="calcProdFromMargPct('nep')"/></div>
+      </div>
+      <div id="nep-preview" style="font-size:11px;color:#888;margin-bottom:8px;min-height:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div><label>Stock mínimo</label><input id="nep-smin" type="number" placeholder="1" value="1"/></div>
+        <div><label>Consignação farmácia</label><select id="nep-co"><option value="false">Não</option><option value="true">Sim</option></select></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" onclick="criarProdutoInline()" style="background:#8b6f4e;border-color:#8b6f4e">Criar e selecionar produto</button>
+        <button class="btn" onclick="fecharCriarProdInline()">Cancelar</button>
+      </div>
+    </div>`;
   el.style.display='block';
-  // pré-preencher o nome com o que já estava a pesquisar
-  const nInput = document.getElementById('nep-n');
-  if(nInput && nomePesquisado) nInput.value = nomePesquisado;
+  // focar no nome
+  setTimeout(()=>document.getElementById('nep-n')?.focus(), 50);
 }
 
 function fecharCriarProdInline(){
