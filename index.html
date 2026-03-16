@@ -354,47 +354,52 @@ function migrarCampos(){
 async function load(){
   showSyncStatus('A carregar…', false);
 
-  // 1. tentar cloud primeiro
-  const cloudData = await loadFromCloud();
+  // se aberto como ficheiro local (file://) não consegue fazer fetch — usar só localStorage
+  const isLocal = window.location.protocol === 'file:';
 
-  if(cloudData){
-    // cloud tem dados — usar cloud
-    DB = cloudData;
-    migrarCampos();
-    // verificar se local tem dados mais recentes para migrar
-    const local = localStorage.getItem(KEY);
-    if(local){
-      try{
-        const localDB = JSON.parse(local);
-        // se local tem mais consultas do que a cloud, oferecer migração
-        if(localDB.consultas && localDB.consultas.length > (DB.consultas||[]).length){
-          if(confirm(`Encontrei dados no teu browser (${localDB.consultas.length} consultas) que parecem mais recentes do que a nuvem (${DB.consultas.length} consultas).\n\nQueres usar os dados do browser e sincronizar para a nuvem?`)){
-            DB = localDB;
-            migrarCampos();
-            await saveToCloud();
+  if(!isLocal){
+    // tentar cloud primeiro
+    const cloudData = await loadFromCloud();
+    if(cloudData){
+      DB = cloudData;
+      migrarCampos();
+      const local = localStorage.getItem(KEY);
+      if(local){
+        try{
+          const localDB = JSON.parse(local);
+          if(localDB.consultas && localDB.consultas.length > (DB.consultas||[]).length){
+            if(confirm(`Encontrei dados no teu browser (${localDB.consultas.length} consultas) mais recentes do que a nuvem (${DB.consultas.length}).\n\nUsar dados do browser?`)){
+              DB = localDB; migrarCampos(); await saveToCloud();
+            }
           }
-        }
-      }catch(e){}
+        }catch(e){}
+      }
+      showSyncStatus('Carregado da nuvem ✓', true);
+      return;
     }
-    showSyncStatus('Carregado da nuvem ✓', true);
-  } else {
-    // sem cloud — tentar localStorage
-    const local = localStorage.getItem(KEY);
-    if(local){
-      try{
-        DB = JSON.parse(local);
-        migrarCampos();
-        // tentar migrar para cloud
+  }
+
+  // fallback: localStorage
+  const local = localStorage.getItem(KEY);
+  if(local){
+    try{
+      DB = JSON.parse(local);
+      migrarCampos();
+      if(!isLocal){
         showSyncStatus('A sincronizar com a nuvem…', false);
         await saveToCloud();
-      }catch(e){
-        DB = JSON.parse(JSON.stringify(DEFAULT));
+      } else {
+        showSyncStatus('Local (abre via GitHub para nuvem)', false);
       }
-    } else {
+    }catch(e){
       DB = JSON.parse(JSON.stringify(DEFAULT));
-      await saveToCloud();
+      migrarCampos();
     }
-    if(!sbOnline) showSyncStatus('Offline — dados locais', false);
+  } else {
+    DB = JSON.parse(JSON.stringify(DEFAULT));
+    migrarCampos();
+    if(!isLocal) await saveToCloud();
+    else showSyncStatus('Local — sem dados guardados', false);
   }
 }
 
@@ -1493,7 +1498,6 @@ function renderEntradas(){
       </table>
     </div>`;
 }
-}
 function showAddE(){const f=document.getElementById('add-e-f');f.style.display=f.style.display==='none'?'block':'none';}
 function ddProdE(v){
   const dd=document.getElementById('dd-ep');
@@ -2435,27 +2439,44 @@ function applySettings(){ saveTabSettings(); applyTabOrder(); closeSettings(); }
 document.getElementById('settings-modal').addEventListener('click',e=>{ if(e.target===e.currentTarget)closeSettings(); });
 
 // ─── ARRANQUE ────────────────────────────────────────────────────────────────
-// mostrar loading no dashboard enquanto carrega
+function mostrarErro(msg){
+  const el = document.getElementById('pg-dashboard');
+  if(el) el.innerHTML = `<div style="padding:2rem;background:#fde;border:1px solid #f99;border-radius:8px;margin-top:1rem;font-size:13px">
+    <strong>Erro ao arrancar:</strong><br><pre style="white-space:pre-wrap;margin-top:8px;font-size:11px">${msg}</pre>
+    <button onclick="location.reload()" style="margin-top:1rem;padding:6px 14px;background:#1a1a1a;color:#fff;border:none;border-radius:6px;cursor:pointer">Tentar novamente</button>
+  </div>`;
+}
+
 document.getElementById('pg-dashboard').innerHTML = `
   <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:1rem">
     <div style="font-size:22px;font-weight:600;color:#8b6f4e">DAILY<span style="color:#1a1a1a">care</span></div>
-    <div style="font-size:13px;color:#888">A carregar dados…</div>
+    <div style="font-size:13px;color:#888" id="loading-msg">A carregar dados…</div>
     <div style="width:200px;height:3px;background:#eee;border-radius:2px;overflow:hidden">
       <div style="width:60%;height:100%;background:#8b6f4e;border-radius:2px;animation:prog 1.2s ease-in-out infinite alternate"></div>
     </div>
   </div>
   <style>@keyframes prog{from{transform:translateX(-20%)}to{transform:translateX(120%)}}</style>`;
 
+function setLoadMsg(m){ const el=document.getElementById('loading-msg'); if(el) el.textContent=m; }
+
 loadTabSettings();
 
 load().then(()=>{
+  setLoadMsg('A renderizar…');
+  // garantir que DB tem estrutura mínima
+  if(!DB || !DB.clientes){
+    DB = JSON.parse(JSON.stringify(DEFAULT));
+    migrarCampos();
+  }
   renderDash();
 }).catch(e=>{
   console.error('Erro no arranque:', e);
-  // fallback — usar dados que tivermos
-  if(!DB.clientes) DB = JSON.parse(JSON.stringify(DEFAULT));
-  migrarCampos();
-  renderDash();
+  mostrarErro(String(e) + '\n\nStack: ' + (e.stack||'n/a'));
+  // tentar mesmo assim
+  try{
+    if(!DB || !DB.clientes){ DB = JSON.parse(JSON.stringify(DEFAULT)); migrarCampos(); }
+    renderDash();
+  }catch(e2){ mostrarErro('Erro fatal: '+e2); }
 });
 </script>
 </body>
