@@ -177,12 +177,12 @@ const DEFAULT = {
     {id:'p4',nome:'TimeWise Hidratante Antioxidante',marca:'Mary Kay',cat:'Hidratante',custo:7.14,pvp:47,stock:1,stockMin:1,consig:false},
     {id:'p5',nome:'TimeWise Leite de Limpeza 4em1',marca:'Mary Kay',cat:'Limpeza',custo:5.32,pvp:35,stock:1,stockMin:1,consig:false},
     {id:'p6',nome:'TimeWise Base 3D Luminosa',marca:'Mary Kay',cat:'Maquilhagem',custo:3.95,pvp:26,stock:1,stockMin:1,consig:false},
-    {id:'p7',nome:'PHOTOAGE Water SPF50',marca:'Farmácia Fonte da Moura',cat:'SPF',custo:22,pvp:27.5,stock:3,stockMin:2,consig:true},
-    {id:'p8',nome:'ACNIBEN Spray',marca:'Farmácia Fonte da Moura',cat:'Sérum',custo:21.8,pvp:24.85,stock:2,stockMin:1,consig:true},
-    {id:'p9',nome:'VINOPERFECT Noite',marca:'Farmácia Fonte da Moura',cat:'Sérum',custo:33,pvp:35.9,stock:2,stockMin:1,consig:true},
-    {id:'p10',nome:'COMPOSE Mousse',marca:'Farmácia Fonte da Moura',cat:'Limpeza',custo:12.72,pvp:15.9,stock:2,stockMin:1,consig:true},
-    {id:'p11',nome:'COMPOSE Hidracare',marca:'Farmácia Fonte da Moura',cat:'Hidratante',custo:23.92,pvp:29.9,stock:2,stockMin:1,consig:true},
-    {id:'p12',nome:'Dermagius Exocare PDRN Sérum',marca:'Farmácia Fonte da Moura',cat:'Sérum',custo:38.49,pvp:50,stock:1,stockMin:1,consig:true},
+    {id:'p7',nome:'PHOTOAGE Water SPF50',marca:'SVR',fornecedor:'Farmácia Fonte da Moura',cat:'SPF',custo:22,pvp:27.5,stock:3,stockMin:2,consig:true},
+    {id:'p8',nome:'ACNIBEN Spray',marca:'ACNIBEN',fornecedor:'Farmácia Fonte da Moura',cat:'Sérum',custo:21.8,pvp:24.85,stock:2,stockMin:1,consig:true},
+    {id:'p9',nome:'VINOPERFECT Noite',marca:'Caudalie',fornecedor:'Farmácia Fonte da Moura',cat:'Sérum',custo:33,pvp:35.9,stock:2,stockMin:1,consig:true},
+    {id:'p10',nome:'COMPOSE Mousse',marca:'Uriage',fornecedor:'Farmácia Fonte da Moura',cat:'Limpeza',custo:12.72,pvp:15.9,stock:2,stockMin:1,consig:true},
+    {id:'p11',nome:'COMPOSE Hidracare',marca:'Uriage',fornecedor:'Farmácia Fonte da Moura',cat:'Hidratante',custo:23.92,pvp:29.9,stock:2,stockMin:1,consig:true},
+    {id:'p12',nome:'Dermagius Exocare PDRN Sérum',marca:'Dermagius',fornecedor:'Farmácia Fonte da Moura',cat:'Sérum',custo:38.49,pvp:50,stock:1,stockMin:1,consig:true},
   ],
   consultas:[
     {id:'c1',clienteId:'cl1',data:'2025-09-30',tipo:'Consulta individual',valor:30,faturado:false,estado:'Pago',notas:'',vendas:[],totalProd:0,lucroProd:0},
@@ -275,10 +275,10 @@ async function saveToCloud(){
 async function syncConsignacaoPublica(){
   try{
     const items = DB.consultas.flatMap(c=>
-      c.vendas.filter(v=>v.marca==='Farmácia Fonte da Moura'||v.consig).map(v=>{
+      c.vendas.filter(v=>v.consig).map(v=>{
         const prod=DB.produtos.find(p=>p.id===v.prodId);
         const pagas=DB.consignacoesPagas||[];
-        const idx=DB.consultas.flatMap(cc=>cc.vendas.filter(vv=>vv.marca==='Farmácia Fonte da Moura'||vv.consig)).indexOf(v);
+        const idx=DB.consultas.flatMap(cc=>cc.vendas.filter(vv=>vv.consig)).indexOf(v);
         return {
           data:c.data, cnp:prod?.cnp||'', produto:v.nome, cliente:cNome(c.clienteId),
           qty:v.qty||1, pvp:v.pvp, custo_base:v.custoOriginal||v.custo,
@@ -324,6 +324,14 @@ function migrarCampos(){
   if(!DB.ids.ci) DB.ids.ci = 1;
   if(!DB.ids.f) DB.ids.f = 4;
   if(!DB.ids.fo) DB.ids.fo = 1;
+  // migrar produtos que têm fornecedor no campo marca
+  const fornNomes = ['Mary Kay','Dermagius','Farmácia Fonte da Moura'];
+  (DB.produtos||[]).forEach(p=>{
+    if(fornNomes.includes(p.marca)){
+      if(!p.fornecedor) p.fornecedor = p.marca;
+      p.marca = ''; // limpar — utilizador edita depois
+    }
+  });
 }
 
 async function load(){
@@ -674,7 +682,7 @@ function renderVendasTabela(){
     const poupanca  = (v.custoOriginal - custoEfetivo)*v.qty;
     return `<div class="vrow" style="align-items:flex-start;padding:10px 0">
       <div style="flex:1;min-width:0">
-        <div style="font-weight:600;margin-bottom:4px">${v.nome} ${v.consig||v.marca.includes('Farmácia')?'<span class="badge bg-a">consig.</span>':''}</div>
+        <div style="font-weight:600;margin-bottom:4px">${v.nome} ${v.consig?'<span class="badge bg-a">consig.</span>':''}</div>
         <div style="font-size:11px;color:#888;margin-bottom:6px">${v.marca} &nbsp;·&nbsp; custo base: ${fmt(v.custoOriginal)} &nbsp;·&nbsp; margem base: ${v.margemBase}%</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <div style="display:flex;flex-direction:column;gap:2px">
@@ -1668,7 +1676,7 @@ function addCI(){
 // ─── CONSIGNAÇÃO ─────────────────────────────────────────────────────────────
 function renderConsign(){
   const items = DB.consultas.flatMap(c=>
-    c.vendas.filter(v=>v.marca==='Farmácia Fonte da Moura'||v.consig).map(v=>({...v,data:c.data,cliente:cNome(c.clienteId),consId:c.id}))
+    c.vendas.filter(v=>v.consig).map(v=>({...v,data:c.data,cliente:cNome(c.clienteId),consId:c.id}))
   );
   const pagas = DB.consignacoesPagas||[];
   const pendentes = items.filter((_,i)=>!pagas.includes(i));
@@ -1745,8 +1753,8 @@ function pagarC(i,btn){
 function _consignRows(apenasItens){
   const pagas = DB.consignacoesPagas||[];
   return DB.consultas.flatMap(c=>
-    c.vendas.filter(v=>v.marca==='Farmácia Fonte da Moura'||v.consig).map((v,li)=>{
-      const globalIdx = DB.consultas.slice(0,DB.consultas.indexOf(c)).reduce((s,cc)=>s+cc.vendas.filter(vv=>vv.marca==='Farmácia Fonte da Moura'||vv.consig).length,0)+li;
+    c.vendas.filter(v=>v.consig).map((v,li)=>{
+      const globalIdx = DB.consultas.slice(0,DB.consultas.indexOf(c)).reduce((s,cc)=>s+cc.vendas.filter(vv=>vv.consig).length,0)+li;
       const prod=DB.produtos.find(p=>p.id===v.prodId);
       return {...v, data:c.data, cliente:cNome(c.clienteId), cnp:prod?.cnp||'', pago:pagas.includes(globalIdx)};
     })
@@ -2172,12 +2180,14 @@ function getFornecedores(){
 }
 function fornOptions(sel=''){
   return getFornecedores().map(f=>`<option ${f===sel?'selected':''}>${f}</option>`).join('')
-    + `<option value="__outro__" ${sel&&!getFornecedores().includes(sel)?'selected':''}>Outro (escrever)</option>`;
+    + `<option value="__outro__" ${sel&&!getFornecedores().includes(sel)&&sel!==''?'selected':''}>Outro (escrever)</option>`;
 }
-// marcas são texto livre — só usadas para filtrar
+// marcas = texto livre dos produtos, excluindo nomes de fornecedores
 function getMarcas(){
-  const marcas = [...new Set(DB.produtos.map(p=>p.marca).filter(Boolean))].sort();
-  return marcas;
+  const fornNomes = new Set(getFornecedores().map(f=>f.toLowerCase()));
+  return [...new Set(
+    DB.produtos.map(p=>p.marca).filter(m=>m && !fornNomes.has(m.toLowerCase()))
+  )].sort();
 }
 function marcaOptions(sel=''){return getMarcas().map(m=>`<option ${m===sel?'selected':''}>${m}</option>`).join('');}
 
@@ -2190,7 +2200,7 @@ function exportarExcel(){
     ],
     'Vendas_Produtos': [
       ['Data','Cliente','Produto','Marca','Qty','PVP','Custo','Margem','Consignação'],
-      ...DB.consultas.flatMap(c=>c.vendas.map(v=>[c.data,cNome(c.clienteId),v.nome,v.marca,v.qty,v.pvp,v.custo,(v.pvp-v.custo)*v.qty,(v.marca==='Farmácia Fonte da Moura'||v.consig)?'Sim':'Não']))
+      ...DB.consultas.flatMap(c=>c.vendas.map(v=>[c.data,cNome(c.clienteId),v.nome,v.marca,v.qty,v.pvp,v.custo,(v.pvp-v.custo)*v.qty,(v.consig)?'Sim':'Não']))
     ],
     'Produtos': [
       ['Nome','Marca','Categoria','Custo','PVP','Margem','Stock','Stock Mínimo','Consignação'],
