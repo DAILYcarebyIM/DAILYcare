@@ -464,7 +464,12 @@ function renderDash(){
   const totalNaoFat   = (tServ+tPacks+tWork+tFo)-totalFaturado;
   const ticket  = cs.length ? (tServ+tProd)/cs.length : 0;
   const stockB  = DB.produtos.filter(p=>p.ativo!==false && p.stock<=(p.stockMin||1));
-  const baseS   = totalFaturado*0.7, baseP = tLucro*0.15, ss = (baseS+baseP)*0.214;
+  const receitaServicos = tServ+tPacks+tWork+tFo;   // prestação de serviços → 70%
+  const receitaProdutos = tProd;                      // venda de produtos → 20%
+  const rendRelvServ    = receitaServicos*0.70;
+  const rendRelvProd    = receitaProdutos*0.20;
+  const rendRelevante   = rendRelvServ+rendRelvProd;
+  const ss              = rendRelevante*0.252;        // 25,2%
 
   // gráfico — sempre todos os meses
   const meses = {}; DB.consultas.forEach(c=>{const m=c.data.substring(0,7);if(!meses[m])meses[m]=0;meses[m]+=c.valor+c.totalProd;});
@@ -503,17 +508,22 @@ function renderDash(){
     ${stockB.length&&!dashMes?`<div class="alert al-err">⚠ Stock baixo: ${stockB.map(p=>`<strong>${p.nome}</strong> (${p.stock})`).join(', ')}</div>`:''}
 
     <div class="ss-box" style="margin-bottom:1rem">
-      <h3 style="margin-bottom:10px">Segurança Social — estimativa ${dashMes?'('+mesLabel+')':''}</h3>
+      <h3 style="margin-bottom:10px">Segurança Social — estimativa ENI ${dashMes?'('+mesLabel+')':''}</h3>
       <div class="metrics" style="margin-bottom:10px">
-        <div class="met"><div class="lb">Faturado</div><div class="vl blue">${fmt(totalFaturado)}</div></div>
-        <div class="met"><div class="lb">Não faturado</div><div class="vl">${fmt(totalNaoFat)}</div></div>
-        <div class="met"><div class="lb">SS a reservar</div><div class="vl amber">${fmt(ss)}</div></div>
+        <div class="met"><div class="lb">Serviços (70%)</div><div class="vl">${fmt(rendRelvServ)}</div></div>
+        <div class="met"><div class="lb">Produtos (20%)</div><div class="vl">${fmt(rendRelvProd)}</div></div>
+        <div class="met"><div class="lb">Rendimento relevante</div><div class="vl blue">${fmt(rendRelevante)}</div></div>
+        <div class="met"><div class="lb">SS a reservar (25,2%)</div><div class="vl amber">${fmt(ss)}</div></div>
       </div>
       <table>
-        <tr><td style="color:#888">Base serviços faturados (70% × ${fmt(totalFaturado)})</td><td style="text-align:right">${fmt(baseS)}</td></tr>
-        <tr><td style="color:#888">Base lucro produtos (15% × ${fmt(tLucro)})</td><td style="text-align:right">${fmt(baseP)}</td></tr>
-        <tr style="border-top:1px solid #f0e8d0"><td><strong>Contribuição SS (21,4%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
+        <tr><td style="color:#888">Receita serviços (consultas+packs+workshops+formação)</td><td style="text-align:right">${fmt(receitaServicos)}</td></tr>
+        <tr><td style="color:#888">Base serviços (70% × ${fmt(receitaServicos)})</td><td style="text-align:right">${fmt(rendRelvServ)}</td></tr>
+        <tr><td style="color:#888">Receita produtos</td><td style="text-align:right">${fmt(receitaProdutos)}</td></tr>
+        <tr><td style="color:#888">Base produtos (20% × ${fmt(receitaProdutos)})</td><td style="text-align:right">${fmt(rendRelvProd)}</td></tr>
+        <tr><td style="color:#888">Rendimento relevante total</td><td style="text-align:right">${fmt(rendRelevante)}</td></tr>
+        <tr style="border-top:1px solid #f0e8d0"><td><strong>Contribuição SS (25,2%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
       </table>
+      <div style="font-size:11px;color:#999;margin-top:6px">ENI: serviços → 70% receita bruta · produtos → 20% receita bruta · taxa 25,2% · declaração trimestral · pagamento mensal até dia 20</div>
     </div>
 
     ${!dashMes?`<div class="card">
@@ -2027,8 +2037,11 @@ function addPart(wid){
 
 // ─── FORMAÇÃO ────────────────────────────────────────────────────────────────
 function calcFoTotal(f){
-  const ts=f.taxaSinc??15, tc=f.taxaCont??3, ta=f.taxaAsinc??1.4;
-  return (f.hSinc||0)*ts + (f.hSinc||0)*tc + (f.hAsinc||0)*ta;
+  // cada componente é independente — horas a 0 = não fatura essa componente
+  const vSinc = (f.hSinc||0)  * (f.taxaSinc ??15);
+  const vCont = (f.hCont||0)  * (f.taxaCont  ??3);
+  const vAsinc= (f.hAsinc||0) * (f.taxaAsinc ??1.4);
+  return vSinc + vCont + vAsinc;
 }
 
 function renderFormacao(){
@@ -2065,19 +2078,25 @@ function renderFormacao(){
         <div><label>Data início</label><input id="nfo-d" type="date" value="${today()}"/></div>
       </div>
       <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Horas do módulo</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
-          <div><label>Horas síncronas</label><input id="nfo-hs" type="number" placeholder="32" oninput="calcFoPreview()"/></div>
-          <div><label>Horas assíncronas</label><input id="nfo-ha" type="number" placeholder="18" oninput="calcFoPreview()"/></div>
-          <div><label>Total horas</label><input id="nfo-ht" type="number" placeholder="50" readonly style="background:#f0f0ec"/></div>
+        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:10px">Componentes — cada uma é independente. Deixa a 0 para não faturar.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+          <div style="background:#fff;border:1px solid #eee;border-radius:6px;padding:8px">
+            <div style="font-size:10px;font-weight:600;color:#8b6f4e;margin-bottom:6px">SESSÕES SÍNCRONAS</div>
+            <div><label>Horas</label><input id="nfo-hs" type="number" placeholder="0" min="0" oninput="calcFoPreview()"/></div>
+            <div style="margin-top:6px"><label>€/hora</label><input id="nfo-ts" type="number" value="${TAXA_SINC}" step="0.1" oninput="calcFoPreview()"/></div>
+          </div>
+          <div style="background:#fff;border:1px solid #eee;border-radius:6px;padding:8px">
+            <div style="font-size:10px;font-weight:600;color:#8b6f4e;margin-bottom:6px">ELABORAÇÃO CONTEÚDO</div>
+            <div><label>Horas</label><input id="nfo-hc" type="number" placeholder="0" min="0" oninput="calcFoPreview()"/></div>
+            <div style="margin-top:6px"><label>€/hora</label><input id="nfo-tc" type="number" value="${TAXA_CONT}" step="0.1" oninput="calcFoPreview()"/></div>
+          </div>
+          <div style="background:#fff;border:1px solid #eee;border-radius:6px;padding:8px">
+            <div style="font-size:10px;font-weight:600;color:#8b6f4e;margin-bottom:6px">SESSÕES ASSÍNCRONAS</div>
+            <div><label>Horas</label><input id="nfo-ha" type="number" placeholder="0" min="0" oninput="calcFoPreview()"/></div>
+            <div style="margin-top:6px"><label>€/hora</label><input id="nfo-ta" type="number" value="${TAXA_ASINC}" step="0.1" oninput="calcFoPreview()"/></div>
+          </div>
         </div>
-        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Taxas nesta formação</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-          <div><label>€/h síncrona</label><input id="nfo-ts" type="number" value="${TAXA_SINC}" step="0.1" oninput="calcFoPreview()"/></div>
-          <div><label>€/h conteúdo</label><input id="nfo-tc" type="number" value="${TAXA_CONT}" step="0.1" oninput="calcFoPreview()"/></div>
-          <div><label>€/h assíncrona</label><input id="nfo-ta" type="number" value="${TAXA_ASINC}" step="0.1" oninput="calcFoPreview()"/></div>
-        </div>
-        <div id="fo-preview" style="font-size:12px;color:#1a6b1a;padding:8px;background:#f0fff0;border-radius:6px;min-height:20px"></div>
+        <div id="fo-preview" style="font-size:12px;color:#1a6b1a;padding:8px;background:#f0fff0;border-radius:6px;min-height:20px;margin-top:8px"></div>
       </div>
       <div class="row c2">
         <div><label>Faturado?</label><select id="nfo-fat"><option value="false">Não faturado</option><option value="true">Faturado</option></select></div>
@@ -2097,8 +2116,9 @@ function renderFormacao(){
     <div style="display:flex;flex-direction:column;gap:1rem">
     ${DB.formacoes.length ? DB.formacoes.map(f=>{
       const total=calcFoTotal(f);
-      const hs=f.hSinc||0, ha=f.hAsinc||0;
+      const hs=f.hSinc||0, hc=f.hCont||0, ha=f.hAsinc||0;
       const ts=f.taxaSinc??TAXA_SINC, tc=f.taxaCont??TAXA_CONT, ta=f.taxaAsinc??TAXA_ASINC;
+      const vSinc=hs*ts, vCont=hc*tc, vAsinc=ha*ta;
 
       if(editingFormacaoId===f.id) return `<div class="card" style="border-color:#d4a97a">
         <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:10px">A editar: ${f.nome}</div>
@@ -2107,16 +2127,23 @@ function renderFormacao(){
           <div><label>Data início</label><input id="efo-d" type="date" value="${f.data}"/></div>
         </div>
         <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px">
-          <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Horas</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-            <div><label>Horas síncronas</label><input id="efo-hs" type="number" value="${hs}" oninput="calcFoEditPreview()"/></div>
-            <div><label>Horas assíncronas</label><input id="efo-ha" type="number" value="${ha}" oninput="calcFoEditPreview()"/></div>
-          </div>
-          <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Taxas</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-            <div><label>€/h síncrona</label><input id="efo-ts" type="number" value="${ts}" step="0.1" oninput="calcFoEditPreview()"/></div>
-            <div><label>€/h conteúdo</label><input id="efo-tc" type="number" value="${tc}" step="0.1" oninput="calcFoEditPreview()"/></div>
-            <div><label>€/h assíncrona</label><input id="efo-ta" type="number" value="${ta}" step="0.1" oninput="calcFoEditPreview()"/></div>
+          <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Componentes — deixa a 0 para não faturar</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:8px">
+            <div style="background:#fff;border:1px solid #eee;border-radius:6px;padding:8px">
+              <div style="font-size:10px;font-weight:600;color:#8b6f4e;margin-bottom:6px">SESSÕES SÍNCRONAS</div>
+              <div><label>Horas</label><input id="efo-hs" type="number" value="${hs}" min="0" oninput="calcFoEditPreview()"/></div>
+              <div style="margin-top:6px"><label>€/hora</label><input id="efo-ts" type="number" value="${ts}" step="0.1" oninput="calcFoEditPreview()"/></div>
+            </div>
+            <div style="background:#fff;border:1px solid #eee;border-radius:6px;padding:8px">
+              <div style="font-size:10px;font-weight:600;color:#8b6f4e;margin-bottom:6px">ELABORAÇÃO CONTEÚDO</div>
+              <div><label>Horas</label><input id="efo-hc" type="number" value="${hc}" min="0" oninput="calcFoEditPreview()"/></div>
+              <div style="margin-top:6px"><label>€/hora</label><input id="efo-tc" type="number" value="${tc}" step="0.1" oninput="calcFoEditPreview()"/></div>
+            </div>
+            <div style="background:#fff;border:1px solid #eee;border-radius:6px;padding:8px">
+              <div style="font-size:10px;font-weight:600;color:#8b6f4e;margin-bottom:6px">SESSÕES ASSÍNCRONAS</div>
+              <div><label>Horas</label><input id="efo-ha" type="number" value="${ha}" min="0" oninput="calcFoEditPreview()"/></div>
+              <div style="margin-top:6px"><label>€/hora</label><input id="efo-ta" type="number" value="${ta}" step="0.1" oninput="calcFoEditPreview()"/></div>
+            </div>
           </div>
           <div id="efo-preview" style="font-size:12px;color:#1a6b1a;padding:8px;background:#f0fff0;border-radius:6px;min-height:20px"></div>
         </div>
@@ -2137,7 +2164,7 @@ function renderFormacao(){
         <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px">
           <div>
             <div style="font-weight:700;font-size:14px">${f.nome}</div>
-            <div style="font-size:11px;color:#888;margin-top:2px">${f.data} · ${hs+ha}h total (${hs}h síncronas + ${ha}h assíncronas)</div>
+            <div style="font-size:11px;color:#888;margin-top:2px">${f.data} · ${hs+hc+ha}h total (${hs}h sinc + ${hc}h conteúdo + ${ha}h asinc)</div>
           </div>
           <div style="text-align:right">
             <div style="font-weight:700;font-size:18px">${fmt(total)}</div>
@@ -2145,21 +2172,26 @@ function renderFormacao(){
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
-          <div style="background:#f8f8f5;border-radius:8px;padding:8px 10px">
+          <div style="background:${hs>0?'#f8f8f5':'#f0f0ec'};border-radius:8px;padding:8px 10px;${hs===0?'opacity:0.5':''}">
             <div style="font-size:10px;color:#888;margin-bottom:2px">Sessões síncronas</div>
-            <div style="font-weight:600">${fmt(hs*ts)}</div>
+            <div style="font-weight:600">${hs>0?fmt(vSinc):'—'}</div>
             <div style="font-size:10px;color:#999">${hs}h × ${fmt(ts)}</div>
           </div>
-          <div style="background:#f8f8f5;border-radius:8px;padding:8px 10px">
+          <div style="background:${hc>0?'#f8f8f5':'#f0f0ec'};border-radius:8px;padding:8px 10px;${hc===0?'opacity:0.5':''}">
             <div style="font-size:10px;color:#888;margin-bottom:2px">Elaboração conteúdo</div>
-            <div style="font-weight:600">${fmt(hs*tc)}</div>
-            <div style="font-size:10px;color:#999">${hs}h × ${fmt(tc)}</div>
+            <div style="font-weight:600">${hc>0?fmt(vCont):'—'}</div>
+            <div style="font-size:10px;color:#999">${hc}h × ${fmt(tc)}</div>
           </div>
-          <div style="background:#f8f8f5;border-radius:8px;padding:8px 10px">
+          <div style="background:${ha>0?'#f8f8f5':'#f0f0ec'};border-radius:8px;padding:8px 10px;${ha===0?'opacity:0.5':''}">
             <div style="font-size:10px;color:#888;margin-bottom:2px">Sessões assíncronas</div>
-            <div style="font-weight:600">${fmt(ha*ta)}</div>
+            <div style="font-weight:600">${ha>0?fmt(vAsinc):'—'}</div>
             <div style="font-size:10px;color:#999">${ha}h × ${fmt(ta)}</div>
           </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span style="font-size:11px;color:#888">Total:</span>
+          <strong style="font-size:16px">${fmt(total)}</strong>
+          <span style="font-size:11px;color:#999">(${hs+hc+ha}h total)</span>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           ${f.faturado
@@ -2188,24 +2220,35 @@ function guardarTaxas(){
 }
 function calcFoPreview(){
   const hs=parseFloat(document.getElementById('nfo-hs')?.value)||0;
+  const hc=parseFloat(document.getElementById('nfo-hc')?.value)||0;
   const ha=parseFloat(document.getElementById('nfo-ha')?.value)||0;
   const ts=parseFloat(document.getElementById('nfo-ts')?.value)||0;
   const tc=parseFloat(document.getElementById('nfo-tc')?.value)||0;
   const ta=parseFloat(document.getElementById('nfo-ta')?.value)||0;
-  const htEl=document.getElementById('nfo-ht'); if(htEl) htEl.value=hs+ha;
-  const total=hs*ts+hs*tc+ha*ta;
+  const vS=hs*ts, vC=hc*tc, vA=ha*ta;
+  const total=vS+vC+vA;
   const el=document.getElementById('fo-preview'); if(!el) return;
-  el.innerHTML=hs||ha?`${hs}h×${fmt(ts)} (sinc) + ${hs}h×${fmt(tc)} (conteúdo) + ${ha}h×${fmt(ta)} (asinc) = <strong>${fmt(total)}</strong>`:'';
+  const parts=[];
+  if(hs>0) parts.push(`${hs}h×${fmt(ts)} sinc = ${fmt(vS)}`);
+  if(hc>0) parts.push(`${hc}h×${fmt(tc)} cont = ${fmt(vC)}`);
+  if(ha>0) parts.push(`${ha}h×${fmt(ta)} asinc = ${fmt(vA)}`);
+  el.innerHTML=parts.length?parts.join(' + ')+` = <strong>${fmt(total)}</strong>`:'';
 }
 function calcFoEditPreview(){
   const hs=parseFloat(document.getElementById('efo-hs')?.value)||0;
+  const hc=parseFloat(document.getElementById('efo-hc')?.value)||0;
   const ha=parseFloat(document.getElementById('efo-ha')?.value)||0;
   const ts=parseFloat(document.getElementById('efo-ts')?.value)||0;
   const tc=parseFloat(document.getElementById('efo-tc')?.value)||0;
   const ta=parseFloat(document.getElementById('efo-ta')?.value)||0;
-  const total=hs*ts+hs*tc+ha*ta;
+  const vS=hs*ts, vC=hc*tc, vA=ha*ta;
+  const total=vS+vC+vA;
   const el=document.getElementById('efo-preview'); if(!el) return;
-  el.innerHTML=hs||ha?`${hs}h×${fmt(ts)} + ${hs}h×${fmt(tc)} + ${ha}h×${fmt(ta)} = <strong>${fmt(total)}</strong>`:'';
+  const parts=[];
+  if(hs>0) parts.push(`${hs}h×${fmt(ts)} sinc = ${fmt(vS)}`);
+  if(hc>0) parts.push(`${hc}h×${fmt(tc)} cont = ${fmt(vC)}`);
+  if(ha>0) parts.push(`${ha}h×${fmt(ta)} asinc = ${fmt(vA)}`);
+  el.innerHTML=parts.length?parts.join(' + ')+` = <strong>${fmt(total)}</strong>`:'';
 }
 let editingFormacaoId=null;
 function showAddFo(){const f=document.getElementById('add-fo-f');f.style.display=f.style.display==='none'?'block':'none';}
@@ -2214,7 +2257,8 @@ function addFo(){
   if(!DB.ids.fo)DB.ids.fo=1;
   DB.formacoes.push({id:'fo'+DB.ids.fo++,nome:n,
     data:document.getElementById('nfo-d').value,
-    hSinc:parseFloat(document.getElementById('nfo-hs').value)||0,
+    hSinc: parseFloat(document.getElementById('nfo-hs').value)||0,
+    hCont: parseFloat(document.getElementById('nfo-hc').value)||0,
     hAsinc:parseFloat(document.getElementById('nfo-ha').value)||0,
     taxaSinc:parseFloat(document.getElementById('nfo-ts').value)||15,
     taxaCont:parseFloat(document.getElementById('nfo-tc').value)||3,
@@ -2233,7 +2277,8 @@ function saveEditFo(id){
   const f=DB.formacoes.find(x=>x.id===id);if(!f)return;
   f.nome=document.getElementById('efo-n').value.trim()||f.nome;
   f.data=document.getElementById('efo-d').value;
-  f.hSinc=parseFloat(document.getElementById('efo-hs').value)||0;
+  f.hSinc= parseFloat(document.getElementById('efo-hs').value)||0;
+  f.hCont= parseFloat(document.getElementById('efo-hc').value)||0;
   f.hAsinc=parseFloat(document.getElementById('efo-ha').value)||0;
   f.taxaSinc=parseFloat(document.getElementById('efo-ts').value)||15;
   f.taxaCont=parseFloat(document.getElementById('efo-tc').value)||3;
@@ -2361,10 +2406,14 @@ function renderRelatorio(){
                + DB.workshops.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0)
                + (DB.formacoes||[]).filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
   const tNFat  = (tServ+tPacks+tWork+tFo)-tFat;
-  const baseS  = tFat*0.7, baseP = tLucro*0.15, ss = (baseS+baseP)*0.214;
   const custosProd = DB.consultas.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
   const receitaTotal = tServ+tProd+tPacks+tWork+tFo;
-  const lucroReal = receitaTotal-tGasto-custosProd;
+  const lucroReal    = receitaTotal-tGasto-custosProd;
+  // SS ENI: serviços=70%, produtos=20%, taxa=25,2%
+  const rRelServ = (tServ+tPacks+tWork+tFo)*0.70;
+  const rRelProd = tProd*0.20;
+  const rendRel  = rRelServ+rRelProd;
+  const ss       = rendRel*0.252;
   const topCli = DB.clientes.map(cl=>{
     const tot=DB.consultas.filter(c=>c.clienteId===cl.id).reduce((s,c)=>s+c.valor+c.totalProd,0)+DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0);
     return{nome:cl.nome,tot};
@@ -2396,7 +2445,7 @@ function renderRelatorio(){
     const total= serv+prod+pk+wk+fo;
     const fat  = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)+pks.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
     const custos = cs.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
-    const ssM = (fat*0.7+lucP*0.15)*0.214;
+    const ssM = ((serv+pk+wk+fo)*0.70 + prod*0.20)*0.252;
     return {m, serv, prod, lucP, pk, wk, fo, gasto, total, fat, custos, ssM, nCons:cs.length};
   });
 
@@ -2415,14 +2464,16 @@ function renderRelatorio(){
         </table>
       </div>
       <div class="card">
-        <h3>Faturação e SS (total)</h3>
+        <h3>SS estimada ENI (total)</h3>
         <table>
-          <tr><td>Total faturado</td><td style="text-align:right" class="blue"><strong>${fmt(tFat)}</strong></td></tr>
-          <tr><td>Não faturado</td><td style="text-align:right">${fmt(tNFat)}</td></tr>
-          <tr><td>Base serviços (70% faturado)</td><td style="text-align:right">${fmt(tFat*0.7)}</td></tr>
-          <tr><td>Base produtos (15% lucro)</td><td style="text-align:right">${fmt(baseP)}</td></tr>
-          <tr style="border-top:1px solid #eee"><td><strong>SS estimada (21,4%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
+          <tr><td>Receita serviços (consultas+packs+workshops+formação)</td><td style="text-align:right">${fmt(tServ+tPacks+tWork+tFo)}</td></tr>
+          <tr><td style="color:#888">Base serviços (70%)</td><td style="text-align:right">${fmt(rRelServ)}</td></tr>
+          <tr><td>Receita produtos (PVP)</td><td style="text-align:right">${fmt(tProd)}</td></tr>
+          <tr><td style="color:#888">Base produtos (20%)</td><td style="text-align:right">${fmt(rRelProd)}</td></tr>
+          <tr><td style="color:#888">Rendimento relevante total</td><td style="text-align:right">${fmt(rendRel)}</td></tr>
+          <tr style="border-top:1px solid #eee"><td><strong>SS estimada (25,2%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
         </table>
+        <div style="font-size:10px;color:#bbb;margin-top:6px">Serviços→70% · Produtos→20% · Taxa 25,2%</div>
       </div>
     </div>
     <div class="row c2">
