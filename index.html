@@ -454,11 +454,12 @@ let cvs = [];
 let fP='', fM='';
 
 // ─── ORDENAÇÃO DE TABELAS ─────────────────────────────────────────────────────
-const sortState = {}; // { 'consultas': {col:'data', dir:-1}, ... }
-function getSort(tbl){ return sortState[tbl] || {col:null, dir:1}; }
+const sortState = {};
+function getSort(tbl){ return sortState[tbl] || {col:'data', dir:-1}; } // default: data desc
 function toggleSort(tbl, col){
   const s = getSort(tbl);
-  sortState[tbl] = { col, dir: s.col===col ? -s.dir : -1 }; // novo col: desc primeiro
+  // mesma coluna → inverte; coluna diferente → desc primeiro
+  sortState[tbl] = { col, dir: s.col===col ? -s.dir : -1 };
   const renders = {
     consultas:renderConsultas, clientes:renderClientes,
     produtos:renderProdutos, entradas:renderEntradas, vendas:renderVendas
@@ -466,21 +467,22 @@ function toggleSort(tbl, col){
   if(renders[tbl]) renders[tbl]();
 }
 function sortArr(arr, tbl, defs){
-  // defs = [{col, fn}] — fn(item) devolve valor comparável
   const {col, dir} = getSort(tbl);
-  if(!col) return arr; // sem ordenação, usa default
   const def = defs.find(d=>d.col===col);
   if(!def) return arr;
   return [...arr].sort((a,b)=>{
     const va=def.fn(a), vb=def.fn(b);
     if(va===vb) return 0;
-    return (va>vb?1:-1)*dir;
+    // dir=1 → ascendente (a→z, antigo→recente)
+    // dir=-1 → descendente (z→a, recente→antigo)
+    return (va<vb ? -1 : 1) * dir;
   });
 }
 function thSort(tbl, col, label){
   const {col:c, dir:d} = getSort(tbl);
-  const arrow = c===col ? (d===1?' ↑':' ↓') : '';
-  return `<th onclick="toggleSort('${tbl}','${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${label}${arrow}</th>`;
+  const arrow = c===col ? (d===-1?' ↓':' ↑') : ' ↕';
+  const active = c===col ? 'font-weight:700;color:#8b6f4e;' : 'color:#888;';
+  return `<th onclick="toggleSort('${tbl}','${col}')" style="cursor:pointer;user-select:none;white-space:nowrap;${active}">${label}<span style="font-size:10px">${arrow}</span></th>`;
 }
 
 function nav(page, btn){
@@ -536,12 +538,13 @@ function renderDash(){
   const totalNaoFat   = (tServ+tPacks+tWork+tFo)-totalFaturado;
   const ticket  = cs.length ? (tServ+tProd)/cs.length : 0;
   const stockB  = DB.produtos.filter(p=>p.ativo!==false && p.stock<=(p.stockMin||1));
-  const receitaServicos = tServ+tPacks+tWork+tFo;   // prestação de serviços → 70%
-  const receitaProdutos = tProd;                      // venda de produtos → 20%
-  const rendRelvServ    = receitaServicos*0.70;
-  const rendRelvProd    = receitaProdutos*0.20;
-  const rendRelevante   = rendRelvServ+rendRelvProd;
-  const ss              = rendRelevante*0.252;        // 25,2%
+  // SS ENI — só sobre receitas FATURADAS
+  // serviços faturados → 70%; produtos faturados → 20%; taxa 25,2%
+  const tFatProd   = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.totalProd,0);
+  const rendRelvServ = (tFatServ+tFatPacks+tFatWork+tFatFo)*0.70;
+  const rendRelvProd = tFatProd*0.20;
+  const rendRelevante = rendRelvServ+rendRelvProd;
+  const ss            = rendRelevante*0.252;
 
   // gráfico — sempre todos os meses
   const meses = {}; DB.consultas.forEach(c=>{const m=c.data.substring(0,7);if(!meses[m])meses[m]=0;meses[m]+=c.valor+c.totalProd;});
@@ -582,20 +585,20 @@ function renderDash(){
     <div class="ss-box" style="margin-bottom:1rem">
       <h3 style="margin-bottom:10px">Segurança Social — estimativa ENI ${dashMes?'('+mesLabel+')':''}</h3>
       <div class="metrics" style="margin-bottom:10px">
-        <div class="met"><div class="lb">Serviços (70%)</div><div class="vl">${fmt(rendRelvServ)}</div></div>
-        <div class="met"><div class="lb">Produtos (20%)</div><div class="vl">${fmt(rendRelvProd)}</div></div>
+        <div class="met"><div class="lb">Serviços fat. (70%)</div><div class="vl">${fmt(rendRelvServ)}</div></div>
+        <div class="met"><div class="lb">Produtos fat. (20%)</div><div class="vl">${fmt(rendRelvProd)}</div></div>
         <div class="met"><div class="lb">Rendimento relevante</div><div class="vl blue">${fmt(rendRelevante)}</div></div>
         <div class="met"><div class="lb">SS a reservar (25,2%)</div><div class="vl amber">${fmt(ss)}</div></div>
       </div>
       <table>
-        <tr><td style="color:#888">Receita serviços (consultas+packs+workshops+formação)</td><td style="text-align:right">${fmt(receitaServicos)}</td></tr>
-        <tr><td style="color:#888">Base serviços (70% × ${fmt(receitaServicos)})</td><td style="text-align:right">${fmt(rendRelvServ)}</td></tr>
-        <tr><td style="color:#888">Receita produtos</td><td style="text-align:right">${fmt(receitaProdutos)}</td></tr>
-        <tr><td style="color:#888">Base produtos (20% × ${fmt(receitaProdutos)})</td><td style="text-align:right">${fmt(rendRelvProd)}</td></tr>
+        <tr><td style="color:#888">Serviços faturados (consultas+packs+workshops+formação)</td><td style="text-align:right">${fmt(tFatServ+tFatPacks+tFatWork+tFatFo)}</td></tr>
+        <tr><td style="color:#888">Base serviços (70%)</td><td style="text-align:right">${fmt(rendRelvServ)}</td></tr>
+        <tr><td style="color:#888">Produtos faturados (PVP)</td><td style="text-align:right">${fmt(tFatProd)}</td></tr>
+        <tr><td style="color:#888">Base produtos (20%)</td><td style="text-align:right">${fmt(rendRelvProd)}</td></tr>
         <tr><td style="color:#888">Rendimento relevante total</td><td style="text-align:right">${fmt(rendRelevante)}</td></tr>
         <tr style="border-top:1px solid #f0e8d0"><td><strong>Contribuição SS (25,2%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
       </table>
-      <div style="font-size:11px;color:#999;margin-top:6px">ENI: serviços → 70% receita bruta · produtos → 20% receita bruta · taxa 25,2% · declaração trimestral · pagamento mensal até dia 20</div>
+      <div style="font-size:11px;color:#999;margin-top:6px">Só receitas <strong>faturadas</strong> entram no cálculo · Serviços→70% · Produtos→20% · Taxa 25,2% · Declaração trimestral · Pagamento até dia 20</div>
     </div>
 
     ${!dashMes?`<div class="card">
@@ -1000,7 +1003,6 @@ function gravarConsulta(){
 let editingConsId = null;
 
 function renderConsultas(){
-  const {col, dir} = getSort('consultas');
   const defs = [
     {col:'data',   fn:c=>c.data},
     {col:'cliente',fn:c=>cNome(c.clienteId)},
@@ -1008,8 +1010,6 @@ function renderConsultas(){
     {col:'estado', fn:c=>c.estado},
   ];
   const sorted = sortArr([...DB.consultas], 'consultas', defs);
-  // default: data desc se sem sort
-  if(!col) sorted.sort((a,b)=>b.data.localeCompare(a.data));
 
   const sortOpts = [
     {v:'data',l:'Data (mais recente)'},{v:'data_asc',l:'Data (mais antiga)'},
@@ -1671,7 +1671,7 @@ function renderPacks(){
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr><th>Cliente</th><th>Pack</th><th>Sessões</th><th>Progresso</th><th>Valor</th><th>Data</th><th>Faturado</th><th>Estado</th><th></th></tr></thead>
-        <tbody>${DB.packs.map(pk=>{
+        <tbody>${[...DB.packs].sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(pk=>{
           const pct=Math.round(pk.usadas/pk.incluidas*100);
           return`<tr>
             <td><strong>${cNome(pk.clienteId)}</strong></td>
@@ -2300,7 +2300,7 @@ function addCI(){
 function renderConsign(){
   const items = DB.consultas.flatMap(c=>
     c.vendas.filter(v=>v.consig).map(v=>({...v,data:c.data,cliente:cNome(c.clienteId),consId:c.id}))
-  );
+  ).sort((a,b)=>b.data.localeCompare(a.data));
   const pagas = DB.consignacoesPagas||[];
   const pendentes = items.filter((_,i)=>!pagas.includes(i));
   const tCusto = pendentes.reduce((s,v)=>s+v.custo*(v.qty||1),0);
@@ -2420,7 +2420,7 @@ function _downloadConsignCSV(rows, filename, titulo){
 
 // ─── WORKSHOPS ───────────────────────────────────────────────────────────────
 function renderWorkshops(){
-  const ws = DB.workshops.filter(w=>!w.tipo||w.tipo==='Workshop'||w.tipo==='Corporativo');
+  const ws = [...DB.workshops.filter(w=>!w.tipo||w.tipo==='Workshop'||w.tipo==='Corporativo')].sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   document.getElementById('pg-workshops').innerHTML=`
     <div class="flex-b"><h2 style="margin:0">Workshops</h2><button class="btn" onclick="showAddW()">+ Novo workshop</button></div>
     <div id="add-w-f" style="display:none" class="card">
@@ -2439,16 +2439,41 @@ function renderWorkshops(){
     </div>
     ${ws.map(w=>{
       const total=w.participantes.reduce((s,p)=>s+(p.valor||w.preco),0);
+      const pagos=w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro');
+      const porPagar=w.participantes.filter(p=>p.estado!=='Pago'&&p.estado!=='Pago Dinheiro');
+
+      if(editingWorkshopId===w.id) return `<div class="card" style="border-color:#d4a97a">
+        <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:10px">A editar: ${w.nome}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+          <div><label>Nome</label><input id="ew-n" value="${w.nome.replace(/"/g,'&quot;')}"/></div>
+          <div><label>Tipo</label><select id="ew-t"><option ${w.tipo==='Workshop'?'selected':''}>Workshop</option><option ${w.tipo==='Corporativo'?'selected':''}>Corporativo</option></select></div>
+          <div><label>Data</label><input id="ew-d" type="date" value="${w.data}"/></div>
+          <div><label>Preço base/pessoa (€)</label><input id="ew-p" type="number" value="${w.preco}" step="0.01"/></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div><label>Faturado?</label><select id="ew-fat"><option value="false" ${!w.faturado?'selected':''}>Não faturado</option><option value="true" ${w.faturado?'selected':''}>Faturado</option></select></div>
+          <div><label>Notas</label><input id="ew-no" value="${(w.notas||'').replace(/"/g,'&quot;')}"/></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn pri" onclick="saveEditW('${w.id}')">Guardar</button>
+          <button class="btn" onclick="cancelEditW()">Cancelar</button>
+        </div>
+      </div>`;
+
       return`<div class="card">
         <div class="flex-b" style="margin-bottom:10px">
           <div>
             <div style="font-weight:600;font-size:14px">${w.nome}</div>
             <div style="font-size:11px;color:#999;margin-top:2px">${w.data} &nbsp;·&nbsp; ${w.tipo||'Workshop'} &nbsp;·&nbsp; preço base: ${fmt(w.preco)}/pessoa</div>
+            ${w.notas?`<div style="font-size:11px;color:#999;margin-top:2px">${w.notas}</div>`:''}
           </div>
           <div style="text-align:right">
             <div style="font-weight:700;font-size:16px">${fmt(total)}</div>
-            <div style="font-size:11px;color:#999">${w.participantes.length} participantes</div>
-            <div style="margin-top:3px">${w.faturado?'<span class="badge bg-b">Faturado</span>':'<span class="badge bg-gray">Não faturado</span>'}</div>
+            <div style="font-size:11px;color:#999">${w.participantes.length} participantes &nbsp;·&nbsp; <span class="green">${pagos.length} pagos</span>${porPagar.length?` &nbsp;·&nbsp; <span class="amber">${porPagar.length} por pagar</span>`:''}</div>
+            <div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
+              ${w.faturado?'<span class="badge bg-b">Faturado</span>':'<span class="badge bg-gray">Não faturado</span>'}
+              <button class="btn sm" onclick="toggleFaturadoW('${w.id}')" style="font-size:10px;padding:2px 8px">${w.faturado?'Desmarcar faturado':'Marcar faturado'}</button>
+            </div>
           </div>
         </div>
         <table style="margin-bottom:10px">
@@ -2484,10 +2509,29 @@ function renderWorkshops(){
           <div><label style="font-size:10px">Valor (€)</label><input id="wv-${w.id}" type="number" placeholder="${w.preco}" style="width:80px"/></div>
           <div><label style="font-size:10px">Estado</label><select id="ws-${w.id}" style="max-width:140px"><option>Pago</option><option>Pago Dinheiro</option><option>Por pagar</option></select></div>
           <button class="btn sm" onclick="addPart('${w.id}')">+ Adicionar</button>
+          <button class="btn sm" onclick="startEditW('${w.id}')" style="margin-left:4px">Editar workshop</button>
           <button class="btn dan sm" onclick="delWorkshop('${w.id}')" style="margin-left:auto">Apagar evento</button>
         </div>
       </div>`;
     }).join('')}`;
+}
+let editingWorkshopId = null;
+function startEditW(id){ editingWorkshopId=id; renderWorkshops(); setTimeout(()=>document.getElementById('ew-n')?.focus(),50); }
+function cancelEditW(){ editingWorkshopId=null; renderWorkshops(); }
+function saveEditW(id){
+  const w=DB.workshops.find(x=>x.id===id); if(!w) return;
+  w.nome    = document.getElementById('ew-n').value.trim()||w.nome;
+  w.tipo    = document.getElementById('ew-t').value;
+  w.data    = document.getElementById('ew-d').value;
+  w.preco   = parseFloat(document.getElementById('ew-p').value)||0;
+  w.faturado= document.getElementById('ew-fat').value==='true';
+  w.notas   = document.getElementById('ew-no').value;
+  editingWorkshopId=null; save(); renderWorkshops();
+}
+function toggleFaturadoW(id){
+  const w=DB.workshops.find(x=>x.id===id); if(!w) return;
+  w.faturado=!w.faturado;
+  save(); renderWorkshops();
 }
 function showAddW(){const f=document.getElementById('add-w-f');f.style.display=f.style.display==='none'?'block':'none';}
 function addW(){
@@ -2587,7 +2631,7 @@ function renderFormacao(){
     </div>
 
     <div style="display:flex;flex-direction:column;gap:1rem">
-    ${DB.formacoes.length ? DB.formacoes.map(f=>{
+    ${DB.formacoes.length ? [...DB.formacoes].sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(f=>{
       const total=calcFoTotal(f);
       const hs=f.hSinc||0, hc=f.hCont||0, ha=f.hAsinc||0;
       const ts=f.taxaSinc??TAXA_SINC, tc=f.taxaCont??TAXA_CONT, ta=f.taxaAsinc??TAXA_ASINC;
@@ -2882,9 +2926,14 @@ function renderRelatorio(){
   const custosProd = DB.consultas.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
   const receitaTotal = tServ+tProd+tPacks+tWork+tFo;
   const lucroReal    = receitaTotal-tGasto-custosProd;
-  // SS ENI: serviços=70%, produtos=20%, taxa=25,2%
-  const rRelServ = (tServ+tPacks+tWork+tFo)*0.70;
-  const rRelProd = tProd*0.20;
+  // SS ENI — só sobre receitas FATURADAS
+  const tFatServRel = DB.consultas.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
+  const tFatProdRel = DB.consultas.filter(c=>c.faturado).reduce((s,c)=>s+c.totalProd,0);
+  const tFatPacksRel= DB.packs.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
+  const tFatWorkRel = DB.workshops.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+  const tFatFoRel   = (DB.formacoes||[]).filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
+  const rRelServ = (tFatServRel+tFatPacksRel+tFatWorkRel+tFatFoRel)*0.70;
+  const rRelProd = tFatProdRel*0.20;
   const rendRel  = rRelServ+rRelProd;
   const ss       = rendRel*0.252;
   const topCli = DB.clientes.map(cl=>{
@@ -2918,7 +2967,12 @@ function renderRelatorio(){
     const total= serv+prod+pk+wk+fo;
     const fat  = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)+pks.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
     const custos = cs.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
-    const ssM = ((serv+pk+wk+fo)*0.70 + prod*0.20)*0.252;
+    const fatServ= cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
+    const fatProd= cs.filter(c=>c.faturado).reduce((s,c)=>s+c.totalProd,0);
+    const fatPk  = pks.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
+    const fatWk  = ws.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado).length*w.preco,0);
+    const fatFo  = fs.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
+    const ssM = ((fatServ+fatPk+fatWk+fatFo)*0.70 + fatProd*0.20)*0.252;
     return {m, serv, prod, lucP, pk, wk, fo, gasto, total, fat, custos, ssM, nCons:cs.length};
   });
 
@@ -2939,14 +2993,14 @@ function renderRelatorio(){
       <div class="card">
         <h3>SS estimada ENI (total)</h3>
         <table>
-          <tr><td>Receita serviços (consultas+packs+workshops+formação)</td><td style="text-align:right">${fmt(tServ+tPacks+tWork+tFo)}</td></tr>
+          <tr><td>Serviços faturados</td><td style="text-align:right">${fmt(tFatServRel+tFatPacksRel+tFatWorkRel+tFatFoRel)}</td></tr>
           <tr><td style="color:#888">Base serviços (70%)</td><td style="text-align:right">${fmt(rRelServ)}</td></tr>
-          <tr><td>Receita produtos (PVP)</td><td style="text-align:right">${fmt(tProd)}</td></tr>
+          <tr><td>Produtos faturados (PVP)</td><td style="text-align:right">${fmt(tFatProdRel)}</td></tr>
           <tr><td style="color:#888">Base produtos (20%)</td><td style="text-align:right">${fmt(rRelProd)}</td></tr>
-          <tr><td style="color:#888">Rendimento relevante total</td><td style="text-align:right">${fmt(rendRel)}</td></tr>
+          <tr><td style="color:#888">Rendimento relevante</td><td style="text-align:right">${fmt(rendRel)}</td></tr>
           <tr style="border-top:1px solid #eee"><td><strong>SS estimada (25,2%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
         </table>
-        <div style="font-size:10px;color:#bbb;margin-top:6px">Serviços→70% · Produtos→20% · Taxa 25,2%</div>
+        <div style="font-size:10px;color:#bbb;margin-top:6px">Só receitas faturadas · Serviços→70% · Produtos→20% · Taxa 25,2%</div>
       </div>
     </div>
     <div class="row c2">
@@ -3254,7 +3308,7 @@ function renderVouchers(){
     ${DB.vouchers.length ? `<div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr><th>Código</th><th>Pagador</th><th>Beneficiário</th><th>Valor</th><th>Emitido</th><th>Validade</th><th>Estado</th><th>Usado por / data</th><th></th></tr></thead>
-        <tbody>${DB.vouchers.map(v=>`<tr>
+        <tbody>${[...DB.vouchers].sort((a,b)=>(b.dataEmissao||b.data||'').localeCompare(a.dataEmissao||a.data||'')).map(v=>`<tr>
           <td><strong style="font-family:monospace;color:#8b6f4e">${v.codigo}</strong></td>
           <td>${v.pagador||'—'}</td>
           <td>${v.beneficiario||'—'}</td>
