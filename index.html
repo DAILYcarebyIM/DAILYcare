@@ -1981,6 +1981,7 @@ function renderEntradas(){
           <input id="enc-ps" placeholder="Pesquisar produto por nome ou CNP..." oninput="ddProdEnc(this.value)" autocomplete="off"/>
           <div class="dropdown" id="dd-enc-prod" style="display:none"></div>
         </div>
+        <div id="enc-criar-prod" style="display:none"></div>
       </div>
 
       <!-- linhas da encomenda -->
@@ -2160,12 +2161,93 @@ let encLinhas = []; // [{prodId, prodNome, qty, custo, pvp, consig}]
 function ddProdEnc(v){
   const dd=document.getElementById('dd-enc-prod');
   if(!v||v.length<1){dd.style.display='none';return;}
-  const m=DB.produtos.filter(p=>p.ativo!==false&&(p.nome.toLowerCase().includes(v.toLowerCase())||(p.cnp||'').includes(v)));
+  const termo=v.toLowerCase();
+  const m=DB.produtos.filter(p=>p.ativo!==false&&(p.nome.toLowerCase().includes(termo)||(p.cnp||'').includes(v)));
+  const criar=`<div class="ddi" onclick="mostrarCriarProdEnc()" style="color:#8b6f4e;font-weight:600;border-top:1px solid #eee">
+    + Criar novo produto "${v.replace(/"/g,'&quot;')}"
+  </div>`;
   dd.innerHTML=m.map(p=>`<div class="ddi" onclick="addLinhaEnc('${p.id}')">
     <strong>${p.nome}</strong>
     <span style="color:#999;font-size:11px"> — stock: ${p.stock} · custo: ${fmt(p.custo)} · PVP: ${fmt(p.pvp)}${p.cnp?' · CNP: '+p.cnp:''}</span>
-  </div>`).join('');
-  dd.style.display=m.length?'block':'none';
+  </div>`).join('')+criar;
+  dd.style.display='block';
+}
+
+function mostrarCriarProdEnc(){
+  document.getElementById('dd-enc-prod').style.display='none';
+  const nomePesquisado=document.getElementById('enc-ps').value.trim();
+  const el=document.getElementById('enc-criar-prod');
+  if(!el) return;
+  const cats=[...new Set(['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro',...DB.produtos.map(p=>p.cat).filter(Boolean)])].sort();
+  el.innerHTML=`
+    <div style="background:#fffbf5;border:1px solid #d4a97a;border-radius:8px;padding:12px;margin-top:6px">
+      <div style="font-size:11px;font-weight:600;color:#8b6f4e;margin-bottom:10px">Criar novo produto</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label>Nome</label><input id="encp-n" value="${nomePesquisado.replace(/"/g,'&quot;')}"/></div>
+        <div><label>CNP</label><input id="encp-cnp" placeholder="Código nacional" style="font-family:monospace"/></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label>Marca</label><input id="encp-m" placeholder="ex: SVR, ISDIN" list="encp-marcas-list"/><datalist id="encp-marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></div>
+        <div><label>Fornecedor</label>
+          <select id="encp-forn" onchange="toggleOutroForn('encp')">
+            <option value="">-- selecionar --</option>${fornOptions()}
+          </select>
+          <input id="encp-forn-outro" placeholder="Outro" style="display:none;margin-top:3px"/>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label>Custo (€)</label><input id="encp-c" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromCusto('encp')"/></div>
+        <div><label>PVP (€)</label><input id="encp-pvp" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromPvp('encp')"/></div>
+        <div><label>Margem (€)</label><input id="encp-meur" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromMargEur('encp')"/></div>
+        <div><label>Margem (%)</label><input id="encp-mpct" type="number" placeholder="0" step="0.5" oninput="calcProdFromMargPct('encp')"/></div>
+      </div>
+      <div id="encp-preview" style="font-size:11px;color:#888;margin-bottom:8px;min-height:12px"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">
+        <div><label>Categoria</label><input id="encp-cat" placeholder="ex: Sérum, SPF..." list="encp-cats-list"/><datalist id="encp-cats-list">${cats.map(c=>`<option value="${c}">`).join('')}</datalist></div>
+        <div><label>Stock mínimo</label><input id="encp-smin" type="number" placeholder="1" value="1" min="0"/></div>
+        <div><label>Consignação farmácia</label><select id="encp-co"><option value="false">Não</option><option value="true">Sim</option></select></div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" onclick="criarProdutoEnc()" style="background:#8b6f4e;border-color:#8b6f4e">Criar e adicionar à encomenda</button>
+        <button class="btn" onclick="fecharCriarProdEnc()">Cancelar</button>
+      </div>
+    </div>`;
+  el.style.display='block';
+  setTimeout(()=>document.getElementById('encp-n')?.focus(),50);
+}
+
+function fecharCriarProdEnc(){
+  const el=document.getElementById('enc-criar-prod');
+  if(el){ el.style.display='none'; el.innerHTML=''; }
+}
+
+function criarProdutoEnc(){
+  const nome=document.getElementById('encp-n')?.value.trim();
+  if(!nome){ alert('O nome do produto é obrigatório.'); return; }
+  if(!DB.ids.p) DB.ids.p=1;
+  const custo=parseFloat(document.getElementById('encp-c')?.value)||0;
+  const pvp=parseFloat(document.getElementById('encp-pvp')?.value)||0;
+  const novoProd={
+    id:'p'+DB.ids.p++, nome,
+    cnp:document.getElementById('encp-cnp')?.value.trim()||'',
+    marca:document.getElementById('encp-m')?.value.trim()||'',
+    fornecedor:getFornVal('encp'),
+    cat:document.getElementById('encp-cat')?.value||'',
+    custo, pvp, stock:0,
+    stockMin:parseInt(document.getElementById('encp-smin')?.value)||0,
+    consig:document.getElementById('encp-co')?.value==='true',
+    ativo:true
+  };
+  DB.produtos.push(novoProd);
+  // adicionar à encomenda automaticamente
+  encLinhas.push({prodId:novoProd.id, prodNome:nome, qty:1,
+    custo, pvp, consig:novoProd.consig, marca:novoProd.marca});
+  document.getElementById('enc-ps').value='';
+  fecharCriarProdEnc();
+  renderEncLinhas();
+  // feedback
+  const prev=document.getElementById('enc-totais');
+  if(prev) prev.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 function addLinhaEnc(pid){
