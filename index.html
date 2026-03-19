@@ -453,6 +453,36 @@ document.addEventListener('keydown', e=>{
 let cvs = [];
 let fP='', fM='';
 
+// ─── ORDENAÇÃO DE TABELAS ─────────────────────────────────────────────────────
+const sortState = {}; // { 'consultas': {col:'data', dir:-1}, ... }
+function getSort(tbl){ return sortState[tbl] || {col:null, dir:1}; }
+function toggleSort(tbl, col){
+  const s = getSort(tbl);
+  sortState[tbl] = { col, dir: s.col===col ? -s.dir : -1 }; // novo col: desc primeiro
+  const renders = {
+    consultas:renderConsultas, clientes:renderClientes,
+    produtos:renderProdutos, entradas:renderEntradas, vendas:renderVendas
+  };
+  if(renders[tbl]) renders[tbl]();
+}
+function sortArr(arr, tbl, defs){
+  // defs = [{col, fn}] — fn(item) devolve valor comparável
+  const {col, dir} = getSort(tbl);
+  if(!col) return arr; // sem ordenação, usa default
+  const def = defs.find(d=>d.col===col);
+  if(!def) return arr;
+  return [...arr].sort((a,b)=>{
+    const va=def.fn(a), vb=def.fn(b);
+    if(va===vb) return 0;
+    return (va>vb?1:-1)*dir;
+  });
+}
+function thSort(tbl, col, label){
+  const {col:c, dir:d} = getSort(tbl);
+  const arrow = c===col ? (d===1?' ↑':' ↓') : '';
+  return `<th onclick="toggleSort('${tbl}','${col}')" style="cursor:pointer;user-select:none;white-space:nowrap">${label}${arrow}</th>`;
+}
+
 function nav(page, btn){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nb').forEach(b=>b.classList.remove('active'));
@@ -970,9 +1000,34 @@ function gravarConsulta(){
 let editingConsId = null;
 
 function renderConsultas(){
-  const sorted=[...DB.consultas].sort((a,b)=>b.data.localeCompare(a.data));
+  const {col, dir} = getSort('consultas');
+  const defs = [
+    {col:'data',   fn:c=>c.data},
+    {col:'cliente',fn:c=>cNome(c.clienteId)},
+    {col:'valor',  fn:c=>c.valor+c.totalProd},
+    {col:'estado', fn:c=>c.estado},
+  ];
+  const sorted = sortArr([...DB.consultas], 'consultas', defs);
+  // default: data desc se sem sort
+  if(!col) sorted.sort((a,b)=>b.data.localeCompare(a.data));
+
+  const sortOpts = [
+    {v:'data',l:'Data (mais recente)'},{v:'data_asc',l:'Data (mais antiga)'},
+    {v:'cliente',l:'Cliente A→Z'},{v:'valor',l:'Valor (maior primeiro)'},
+    {v:'estado',l:'Estado'},
+  ];
+  const curLabel = col ? `${col} ${dir===1?'↑':'↓'}` : 'Data (mais recente)';
+
   document.getElementById('pg-consultas').innerHTML=`
-    <h2>Histórico de consultas</h2>
+    <div class="flex-b" style="margin-bottom:1rem">
+      <h2 style="margin:0">Histórico de consultas</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;color:#888">Ordenar:</label>
+        <select onchange="(()=>{const v=this.value;if(v==='data')sortState.consultas={col:'data',dir:-1};else if(v==='data_asc')sortState.consultas={col:'data',dir:1};else if(v==='cliente')sortState.consultas={col:'cliente',dir:1};else if(v==='valor')sortState.consultas={col:'valor',dir:-1};else if(v==='estado')sortState.consultas={col:'estado',dir:1};renderConsultas();})()" style="font-size:12px">
+          ${sortOpts.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}
+        </select>
+      </div>
+    </div>
     ${sorted.map(c=>{
       if(editingConsId===c.id) return `<div class="card" style="border-color:#d4a97a">
         <h3 style="margin-bottom:10px">Editar consulta — ${cNome(c.clienteId)}</h3>
@@ -1248,12 +1303,19 @@ function renderVendas(){
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th>Produtos</th><th>PVP total</th><th>Lucro total</th><th>Estado</th><th></th></tr></thead>
-        <tbody>${(() => {
-          // agrupar por consulta (id)
-          const consultas = DB.consultas
-            .filter(c=>c.vendas&&c.vendas.length>0)
-            .sort((a,b)=>b.data.localeCompare(a.data));
+        <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Estado</th><th></th></tr></thead>
+        <tbody>${(()=>{
+          const consultas = DB.consultas.filter(c=>c.vendas&&c.vendas.length>0);
+          if(!consultas.length) return '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem vendas registadas</td></tr>';
+          const defs=[
+            {col:'data',    fn:c=>c.data},
+            {col:'cliente', fn:c=>cNome(c.clienteId)},
+            {col:'pvp',     fn:c=>c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0)},
+            {col:'lucro',   fn:c=>c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0)},
+            {col:'produtos',fn:c=>c.vendas.length},
+          ];
+          const {col} = getSort('vendas');
+          const lista = col ? sortArr(consultas,'vendas',defs) : [...consultas].sort((a,b)=>b.data.localeCompare(a.data));
           if(!consultas.length) return '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem vendas registadas</td></tr>';
           return consultas.map(c=>{
             const tp = c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
@@ -1315,12 +1377,19 @@ function toggleVendaDetalhe(cId, btn){
 let editingCliId = null;
 
 function renderClientes(){
-  const clis = DB.clientes.map(cl=>{
+  const defs=[
+    {col:'nome',   fn:cl=>cl.nome},
+    {col:'total',  fn:cl=>DB.consultas.filter(c=>c.clienteId===cl.id).reduce((s,c)=>s+c.valor+c.totalProd,0)+DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0)},
+    {col:'numCons',fn:cl=>DB.consultas.filter(c=>c.clienteId===cl.id).length},
+  ];
+  let clis = DB.clientes.map(cl=>{
     const cs = DB.consultas.filter(c=>c.clienteId===cl.id);
     const pk = DB.packs.find(p=>p.clienteId===cl.id&&p.estado==='Ativo');
     const total = cs.reduce((s,c)=>s+c.valor+c.totalProd,0)+(DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0));
     return{...cl,numCons:cs.length,total,pack:pk};
-  }).sort((a,b)=>b.total-a.total);
+  });
+  const {col} = getSort('clientes');
+  clis = col ? sortArr(clis,'clientes',defs) : clis.sort((a,b)=>b.total-a.total);
 
   const rowHtml = cl => {
     if(editingCliId===cl.id) return `<tr style="background:#fffbf5">
@@ -1360,7 +1429,7 @@ function renderClientes(){
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Cliente</th><th>Telefone</th><th>Consultas</th><th>Valor total</th><th>Pack ativo</th><th>Ações</th></tr></thead>
+        <thead><tr>${thSort('clientes','nome','Cliente')}${thSort('clientes','numCons','Consultas')}${thSort('clientes','total','Valor total')}<th>Pack ativo</th><th>Ações</th></tr></thead>
         <tbody>${clis.map(cl=>rowHtml(cl)).join('')}</tbody>
       </table>
     </div>`;
@@ -1634,10 +1703,22 @@ function addPk(){
 let editingProdId = null;
 
 function renderProdutos(){
-  let ps=DB.produtos;
-  // inativos SEMPRE visíveis — não filtrar por defeito
+  const defs=[
+    {col:'nome',     fn:p=>p.nome},
+    {col:'marca',    fn:p=>p.marca||''},
+    {col:'fornecedor',fn:p=>p.fornecedor||''},
+    {col:'cat',      fn:p=>p.cat||''},
+    {col:'custo',    fn:p=>p.custo},
+    {col:'pvp',      fn:p=>p.pvp},
+    {col:'margem',   fn:p=>p.pvp-p.custo},
+    {col:'stock',    fn:p=>p.stock},
+    {col:'stockMin', fn:p=>p.stockMin??0},
+  ];
+  let ps = DB.produtos;
   if(fP) ps=ps.filter(p=>p.nome.toLowerCase().includes(fP.toLowerCase())||p.cat.toLowerCase().includes(fP.toLowerCase())||((p.cnp||'').includes(fP)));
   if(fM) ps=ps.filter(p=>p.marca===fM);
+  const {col} = getSort('produtos');
+  ps = col ? sortArr(ps,'produtos',defs) : ps;
   const cats=['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro'];
   const todasCats = [...new Set([...cats, ...DB.produtos.map(p=>p.cat).filter(Boolean)])].sort();
 
@@ -1673,7 +1754,7 @@ function renderProdutos(){
           </div>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px">
             <div><label>Stock atual</label><input id="ep-stock" type="number" value="${p.stock}"/></div>
-            <div><label>Stock mínimo</label><input id="ep-smin" type="number" value="${p.stockMin||1}"/></div>
+            <div><label>Stock mínimo</label><input id="ep-smin" type="number" value="${p.stockMin??1}"/></div>
             <div><label>Consignação</label><select id="ep-cons"><option value="false" ${!p.consig?'selected':''}>Não</option><option value="true" ${p.consig?'selected':''}>Sim</option></select></div>
             <div><label>Estado</label>
               <select id="ep-ativo">
@@ -1760,7 +1841,7 @@ function renderProdutos(){
         </select>
       </div>
       <table>
-        <thead><tr><th>Produto</th><th>CNP</th><th>Marca</th><th>Fornecedor</th><th>Cat.</th><th>Custo</th><th>PVP</th><th>Margem €</th><th>Margem %</th><th>Stock</th><th>Ações</th></tr></thead>
+        <thead><tr>${thSort('produtos','nome','Produto')}<th>CNP</th>${thSort('produtos','marca','Marca')}${thSort('produtos','fornecedor','Fornecedor')}${thSort('produtos','cat','Cat.')}${thSort('produtos','custo','Custo')}${thSort('produtos','pvp','PVP')}${thSort('produtos','margem','Margem €')}<th>Margem %</th>${thSort('produtos','stock','Stock')}<th>Ações</th></tr></thead>
         <tbody>${ps.map(p=>rowHtml(p)).join('')}</tbody>
       </table>
     </div>`;
@@ -1779,7 +1860,7 @@ function saveEditP(id){
   p.custo=parseFloat(document.getElementById('ep-custo').value)||0;
   p.pvp=parseFloat(document.getElementById('ep-pvp').value)||0;
   p.stock=parseInt(document.getElementById('ep-stock').value)||0;
-  p.stockMin=parseInt(document.getElementById('ep-smin').value)||0;
+  const _sm=document.getElementById('ep-smin').value; p.stockMin=_sm===''?0:parseInt(_sm);
   p.consig=document.getElementById('ep-cons').value==='true';
   editingProdId=null; save(); renderProdutos();
 }
@@ -1821,7 +1902,7 @@ function addP(){
     custo:parseFloat(document.getElementById('np-c').value)||0,
     pvp:parseFloat(document.getElementById('np-pvp').value)||0,
     stock:parseInt(document.getElementById('np-s').value)||0,
-    stockMin:parseInt(document.getElementById('np-sm').value)||0,
+    stockMin:(()=>{const _s=document.getElementById('np-sm').value;return _s===''?0:parseInt(_s);})(),
     consig:document.getElementById('np-co').value==='true'
   });
   save();showAddP();renderProdutos();
@@ -1923,9 +2004,21 @@ function renderEntradas(){
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Data</th><th>Produto</th><th>CNP</th><th>Qty</th><th>Custo unit.</th><th>PVP</th><th>Margem</th><th>Total</th><th>Fornecedor</th><th>Consig.</th><th>Ações</th></tr></thead>
-        <tbody>${DB.entradas.length
-          ? [...DB.entradas].sort((a,b)=>b.data.localeCompare(a.data)).map(e=>{
+        <thead><tr>${thSort('entradas','data','Data')}${thSort('entradas','nome','Produto')}<th>CNP</th>${thSort('entradas','qty','Qty')}${thSort('entradas','custo','Custo unit.')}${thSort('entradas','pvp','PVP')}${thSort('entradas','margem','Margem')}<th>Total</th>${thSort('entradas','fornecedor','Fornecedor')}<th>Consig.</th><th>Ações</th></tr></thead>
+        <tbody>${(()=>{
+          if(!DB.entradas.length) return '<tr><td colspan="11" style="text-align:center;padding:2rem;color:#999">Sem entradas registadas</td></tr>';
+          const defs=[
+            {col:'data',      fn:e=>e.data},
+            {col:'nome',      fn:e=>e.prodNome},
+            {col:'qty',       fn:e=>e.qty},
+            {col:'custo',     fn:e=>e.custo},
+            {col:'pvp',       fn:e=>e.pvp||0},
+            {col:'margem',    fn:e=>(e.pvp||0)-e.custo},
+            {col:'fornecedor',fn:e=>e.fornecedor||''},
+          ];
+          const {col} = getSort('entradas');
+          const lista = col ? sortArr(DB.entradas,'entradas',defs) : [...DB.entradas].sort((a,b)=>b.data.localeCompare(a.data));
+          return lista.map(e=>{
               if(editingEntradaId===e.id){
                 return `<tr style="background:#fffbf5;vertical-align:top">
                   <td colspan="11" style="padding:12px">
@@ -1984,8 +2077,8 @@ function renderEntradas(){
                   <button class="btn dan sm" onclick="delEntrada('${e.id}')" style="margin-top:2px">Apagar</button>
                 </td>
               </tr>`;
-            }).join('')
-          : '<tr><td colspan="11" style="text-align:center;padding:2rem;color:#999">Sem entradas registadas</td></tr>'}
+          }).join('');
+        })()}
         </tbody>
       </table>
     </div>`;
@@ -2359,12 +2452,31 @@ function renderWorkshops(){
           </div>
         </div>
         <table style="margin-bottom:10px">
-          <thead><tr><th>Nome</th><th>Valor pago</th><th>Estado</th><th></th></tr></thead>
-          <tbody>${w.participantes.map((p,i)=>`<tr>
+          <thead><tr><th>Nome</th><th>Valor</th><th>Estado</th><th></th></tr></thead>
+          <tbody>${w.participantes.map((p,i)=>`<tr id="wpart-${w.id}-${i}">
             <td>${p.nome}</td>
             <td><strong>${fmt(p.valor||w.preco)}</strong></td>
             <td><span class="badge ${p.estado==='Pago'||p.estado==='Pago Dinheiro'?'bg-g':'bg-a'}">${p.estado}</span></td>
-            <td><button class="btn dan sm" onclick="delParticipante('${w.id}',${i})">×</button></td>
+            <td style="white-space:nowrap;display:flex;gap:4px">
+              ${p.estado!=='Pago'&&p.estado!=='Pago Dinheiro'
+                ? `<button class="btn suc sm" onclick="marcarPartPaga('${w.id}',${i})">✓ Pago</button>`
+                : ''}
+              <button class="btn sm" onclick="editarParticipante('${w.id}',${i})">Editar</button>
+              <button class="btn dan sm" onclick="delParticipante('${w.id}',${i})">×</button>
+            </td>
+          </tr>
+          <tr id="wpart-edit-${w.id}-${i}" style="display:none;background:#fffbf5">
+            <td><input id="wpe-n-${w.id}-${i}" value="${p.nome.replace(/"/g,'&quot;')}" style="min-width:140px"/></td>
+            <td><input id="wpe-v-${w.id}-${i}" type="number" value="${p.valor||w.preco}" style="width:80px"/></td>
+            <td><select id="wpe-s-${w.id}-${i}">
+              <option ${p.estado==='Pago'?'selected':''}>Pago</option>
+              <option ${p.estado==='Pago Dinheiro'?'selected':''}>Pago Dinheiro</option>
+              <option ${p.estado==='Por pagar'?'selected':''}>Por pagar</option>
+            </select></td>
+            <td style="white-space:nowrap;display:flex;gap:4px">
+              <button class="btn pri sm" onclick="guardarEditPart('${w.id}',${i})">Guardar</button>
+              <button class="btn sm" onclick="cancelarEditPart('${w.id}',${i})">Cancelar</button>
+            </td>
           </tr>`).join('')}</tbody>
         </table>
         <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">
@@ -2910,6 +3022,28 @@ function delProduto(id){ const p=DB.produtos.find(x=>x.id===id); confirmDel(`Apa
 function delEntrada(id){ const e=DB.entradas.find(x=>x.id===id); confirmDel(`Apagar esta entrada de stock?\nNota: o stock NÃO será ajustado.`, ()=>{ DB.entradas=DB.entradas.filter(x=>x.id!==id); save(); renderEntradas(); }); }
 function delConsumo(id){ confirmDel(`Apagar este consumo interno?\nNota: o stock NÃO será ajustado.`, ()=>{ DB.consumo=DB.consumo.filter(x=>x.id!==id); save(); renderConsumo(); }); }
 function delWorkshop(id){ const w=DB.workshops.find(x=>x.id===id); confirmDel(`Apagar workshop "${w.nome}" e todos os participantes?`, ()=>{ DB.workshops=DB.workshops.filter(x=>x.id!==id); save(); renderWorkshops(); }); }
+function marcarPartPaga(wid, idx){
+  const w=DB.workshops.find(x=>x.id===wid); if(!w) return;
+  w.participantes[idx].estado='Pago';
+  save(); renderWorkshops();
+}
+function editarParticipante(wid, idx){
+  document.getElementById(`wpart-${wid}-${idx}`)?.style && (document.getElementById(`wpart-${wid}-${idx}`).style.display='none');
+  document.getElementById(`wpart-edit-${wid}-${idx}`)?.style && (document.getElementById(`wpart-edit-${wid}-${idx}`).style.display='table-row');
+  setTimeout(()=>document.getElementById(`wpe-n-${wid}-${idx}`)?.focus(), 50);
+}
+function cancelarEditPart(wid, idx){
+  document.getElementById(`wpart-${wid}-${idx}`)?.style && (document.getElementById(`wpart-${wid}-${idx}`).style.display='table-row');
+  document.getElementById(`wpart-edit-${wid}-${idx}`)?.style && (document.getElementById(`wpart-edit-${wid}-${idx}`).style.display='none');
+}
+function guardarEditPart(wid, idx){
+  const w=DB.workshops.find(x=>x.id===wid); if(!w) return;
+  const nome=document.getElementById(`wpe-n-${wid}-${idx}`)?.value.trim();
+  const valor=parseFloat(document.getElementById(`wpe-v-${wid}-${idx}`)?.value)||w.preco;
+  const estado=document.getElementById(`wpe-s-${wid}-${idx}`)?.value;
+  if(nome) w.participantes[idx]={...w.participantes[idx], nome, valor, estado};
+  save(); renderWorkshops();
+}
 function delParticipante(wid,idx){ confirmDel('Apagar este participante?', ()=>{ const w=DB.workshops.find(x=>x.id===wid); if(w)w.participantes.splice(idx,1); save(); renderWorkshops(); }); }
 function delGasto(id){ const g=DB.gastos.find(x=>x.id===id); confirmDel(`Apagar gasto "${g.desc}" (${fmt(g.valor)})?`, ()=>{ DB.gastos=DB.gastos.filter(x=>x.id!==id); save(); renderGastos(); }); }
 
