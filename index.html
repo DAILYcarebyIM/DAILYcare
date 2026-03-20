@@ -1927,26 +1927,58 @@ function _prev(pfx){
 
 function calcProdFromCusto(pfx){
   const c=_v(pfx+'-c'), pv=_v(_pvpId(pfx));
-  if(c>0&&pv>0){ _s(_meurId(pfx),pv-c); _s(_mpctId(pfx),Math.round((pv-c)/pv*100)); }
-  else{ const pct=_v(_mpctId(pfx)); if(pct>0){ const newPv=c/(1-pct/100); _s(_pvpId(pfx),newPv); _s(_meurId(pfx),newPv-c); } }
+  if(c>0&&pv>0){
+    // ambos preenchidos — recalcular margens
+    _s(_meurId(pfx),pv-c);
+    _s(_mpctId(pfx),Math.round((pv-c)/pv*100));
+  } else if(c>0){
+    // só custo — usar margem % se existir para calcular PVP
+    const pct=_v(_mpctId(pfx));
+    if(pct>0){ const newPv=c/(1-pct/100); _s(_pvpId(pfx),newPv); _s(_meurId(pfx),newPv-c); }
+  }
   _prev(pfx);
 }
 function calcProdFromPvp(pfx){
   const pv=_v(_pvpId(pfx)), c=_v(pfx+'-c');
-  if(pv>0&&c>0){ _s(_meurId(pfx),pv-c); _s(_mpctId(pfx),Math.round((pv-c)/pv*100)); }
-  else if(pv>0){ const pct=_v(_mpctId(pfx)); if(pct>0) _s(pfx+'-c',pv*(1-pct/100)); }
+  if(pv>0&&c>0){
+    // ambos preenchidos — recalcular margens
+    _s(_meurId(pfx),pv-c);
+    _s(_mpctId(pfx),Math.round((pv-c)/pv*100));
+  } else if(pv>0){
+    // só PVP — usar margem % se existir para calcular custo
+    const pct=_v(_mpctId(pfx));
+    if(pct>0){ const newC=pv*(1-pct/100); _s(pfx+'-c',newC); _s(_meurId(pfx),pv-newC); }
+  }
   _prev(pfx);
 }
 function calcProdFromMargEur(pfx){
   const m=_v(_meurId(pfx)), c=_v(pfx+'-c'), pv=_v(_pvpId(pfx));
-  if(m>=0&&c>0){ _s(_pvpId(pfx),c+m); _s(_mpctId(pfx),Math.round(m/(c+m)*100)); }
-  else if(m>=0&&pv>0){ _s(pfx+'-c',pv-m); _s(_mpctId(pfx),Math.round(m/pv*100)); }
+  if(pv>0){
+    // PVP preenchido — calcular custo a partir da margem €
+    const newC=pv-m;
+    _s(pfx+'-c', newC);
+    _s(_mpctId(pfx), pv>0 ? Math.round(m/pv*100) : 0);
+  } else if(c>0){
+    // só custo — calcular PVP
+    const newPv=c+m;
+    _s(_pvpId(pfx), newPv);
+    _s(_mpctId(pfx), newPv>0 ? Math.round(m/newPv*100) : 0);
+  }
   _prev(pfx);
 }
 function calcProdFromMargPct(pfx){
   const pct=_v(_mpctId(pfx)), c=_v(pfx+'-c'), pv=_v(_pvpId(pfx));
-  if(pct>0&&c>0){ const newPv=c/(1-pct/100); _s(_pvpId(pfx),newPv); _s(_meurId(pfx),newPv-c); }
-  else if(pct>0&&pv>0){ const newC=pv*(1-pct/100); _s(pfx+'-c',newC); _s(_meurId(pfx),pv-newC); }
+  if(pv>0){
+    // PVP preenchido — calcular custo a partir da margem %
+    const newC=pv*(1-pct/100);
+    _s(pfx+'-c', newC);
+    _s(_meurId(pfx), pv-newC);
+  } else if(c>0){
+    // só custo — calcular PVP
+    const newPv=c/(1-pct/100);
+    _s(_pvpId(pfx), newPv);
+    _s(_meurId(pfx), newPv-c);
+  }
   _prev(pfx);
 }
 
