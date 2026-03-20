@@ -1010,7 +1010,7 @@ function renderConsultas(){
   ];
   // default: data mais recente primeiro
   if(!sortState.consultas) sortState.consultas={col:'data',dir:-1};
-  const sorted = sortArr([...DB.consultas], 'consultas', defs);
+  const sorted = sortArr(DB.consultas.filter(c=>c.tipo!=='Venda direta'), 'consultas', defs);
 
   const sortOpts = [
     {v:'data',     l:'Data (mais recente)'},
