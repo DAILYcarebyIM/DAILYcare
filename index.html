@@ -2147,7 +2147,8 @@ function renderEntradas(){
                 <td style="font-size:11px;color:#8b6f4e;font-family:monospace">${e.fatura||'—'}</td>
                 <td>${e.consig?'<span class="badge bg-a">Sim</span>':'<span class="badge bg-gray">Não</span>'}</td>
                 <td style="white-space:nowrap">
-                  <button class="btn sm" onclick="startEditE('${e.id}')">Editar</button>
+                  <button class="btn sm" onclick="startEditE('${e.id}')">Editar linha</button>
+                  ${e.encomendaId?`<button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28;margin-top:2px" onclick="abrirEditEncomenda('${e.encomendaId}')">Editar encomenda</button>`:''}
                   <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28;margin-top:2px" onclick="abrirHistoricoProd('${e.prodId}')">Histórico</button>
                   <button class="btn dan sm" onclick="delEntrada('${e.id}')" style="margin-top:2px">Apagar</button>
                 </td>
@@ -2171,7 +2172,7 @@ function saveEditE(id){
   e.consig=document.getElementById('ee-consig').value==='true';
   // actualizar produto com novos preços
   const p=DB.produtos.find(x=>x.id===e.prodId);
-  if(p){ if(e.custo>0)p.custo=e.custo; if(e.pvp>0)p.pvp=e.pvp; }
+  if(p){ if(e.custo>0)p.custo=e.custo; if(e.pvp>0)p.pvp=Math.max(p.pvp||0,e.pvp); }
   editingEntradaId=null; save(); renderEntradas();
 }
 function showAddE(){
@@ -2284,12 +2285,9 @@ function criarProdutoEnc(){
 
 function addLinhaEnc(pid){
   const p=DB.produtos.find(x=>x.id===pid); if(!p) return;
-  const ex=encLinhas.find(l=>l.prodId===pid);
-  if(ex){ ex.qty++; }
-  else {
-    encLinhas.push({prodId:pid, prodNome:p.nome, qty:1,
-      custo:p.custo, pvp:p.pvp, consig:p.consig||false, marca:p.marca||''});
-  }
+  // sempre nova linha — pode ser produto bónus ou entrada diferente
+  encLinhas.push({prodId:pid, prodNome:p.nome, qty:1,
+    custo:p.custo, pvp:p.pvp, consig:p.consig||false, marca:p.marca||'', bonus:false});
   document.getElementById('enc-ps').value='';
   document.getElementById('dd-enc-prod').style.display='none';
   renderEncLinhas();
@@ -2308,24 +2306,34 @@ function renderEncLinhas(){
   }
 
   el.innerHTML=`<table>
-    <thead><tr><th>Produto</th><th style="width:80px">Qty</th><th style="width:90px">Custo unit.</th><th style="width:90px">PVP</th><th style="width:90px">Margem</th><th style="width:80px">Total</th><th style="width:80px">Consig.</th><th style="width:30px"></th></tr></thead>
-    <tbody>${encLinhas.map((l,i)=>{
-      const marg=l.pvp&&l.custo?l.pvp-l.custo:0;
-      const margPct=l.pvp?Math.round(marg/l.pvp*100):0;
-      return `<tr>
-        <td><strong>${l.prodNome}</strong>${l.marca?`<div style="font-size:10px;color:#888">${l.marca}</div>`:''}</td>
+    <thead><tr><th>Produto</th><th style="width:80px">Qty</th><th style="width:90px">Custo unit.</th><th style="width:90px">PVP</th><th style="width:90px">Margem</th><th style="width:80px">Total</th><th style="width:65px">Consig.</th><th style="width:65px">Bónus</th><th style="width:30px"></th></tr></thead>
+    <tbody>${[...encLinhas].reverse().map((l,ri)=>{
+      const i=encLinhas.length-1-ri;
+      const marg=l.pvp-l.custo;  // custo=0 é válido (bónus)
+      const margPct=l.pvp>0?Math.round(marg/l.pvp*100):0;
+      return `<tr style="${l.bonus?'background:#f0fff0':''}">
+        <td>
+          <strong>${l.prodNome}</strong>
+          ${l.marca?`<div style="font-size:10px;color:#888">${l.marca}</div>`:''}
+          ${l.bonus?'<span class="badge bg-g" style="font-size:9px">BÓNUS</span>':''}
+        </td>
         <td><input type="number" value="${l.qty}" min="1" style="width:65px"
           oninput="encLinhas[${i}].qty=parseInt(this.value)||1;renderEncLinhas()"/></td>
-        <td><input type="number" value="${l.custo}" step="0.01" style="width:75px"
+        <td><input type="number" value="${l.custo}" step="0.01" min="0" style="width:75px;${l.bonus?'background:#f0fff0':''}"
           oninput="encLinhas[${i}].custo=parseFloat(this.value)||0;renderEncLinhas()"/></td>
         <td><input type="number" value="${l.pvp}" step="0.01" style="width:75px"
           oninput="encLinhas[${i}].pvp=parseFloat(this.value)||0;renderEncLinhas()"/></td>
         <td class="green" style="font-size:12px"><strong>${fmt(marg)}</strong><br><span style="color:#888;font-size:10px">(${margPct}%)</span></td>
         <td><strong>${fmt(l.custo*l.qty)}</strong></td>
-        <td><select style="width:70px" onchange="encLinhas[${i}].consig=this.value==='true';renderEncLinhas()">
+        <td><select style="width:60px" onchange="encLinhas[${i}].consig=this.value==='true';renderEncLinhas()">
           <option value="false" ${!l.consig?'selected':''}>Não</option>
           <option value="true" ${l.consig?'selected':''}>Sim</option>
         </select></td>
+        <td><label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap">
+          <input type="checkbox" ${l.bonus?'checked':''} style="width:auto"
+            onchange="encLinhas[${i}].bonus=this.checked;if(this.checked){encLinhas[${i}].custo=0;}renderEncLinhas()"/>
+          Bónus
+        </label></td>
         <td><button class="btn dan sm" onclick="encLinhas.splice(${i},1);renderEncLinhas()">×</button></td>
       </tr>`;
     }).join('')}</tbody>
@@ -2350,6 +2358,43 @@ function renderEncLinhas(){
   }
 }
 
+function abrirEditEncomenda(encId){
+  // carregar as entradas da encomenda para o formulário
+  const linhas=DB.entradas.filter(e=>e.encomendaId===encId);
+  if(!linhas.length) return;
+  const primeira=linhas[0];
+  encLinhas = linhas.map(e=>({
+    prodId:e.prodId, prodNome:e.prodNome, qty:e.qty,
+    custo:e.custo, pvp:e.pvp, consig:e.consig||false,
+    marca:e.marca||'', bonus:e.bonus||false,
+    _editId:e.id // para saber que é edição
+  }));
+  // fechar outros formulários
+  document.getElementById('add-e-f').style.display='none';
+  const f=document.getElementById('enc-form');
+  f.style.display='block';
+  // preencher cabeçalho
+  setTimeout(()=>{
+    const dEl=document.getElementById('enc-data');
+    const fatEl=document.getElementById('enc-fatura');
+    const portEl=document.getElementById('enc-portes');
+    const fornSel=document.getElementById('enc-forn');
+    if(dEl) dEl.value=primeira.data;
+    if(fatEl) fatEl.value=primeira.fatura||'';
+    if(portEl) portEl.value=linhas.reduce((s,e)=>s+(e.portes||0),0)||'';
+    if(fornSel){
+      const forn=primeira.fornecedor||'';
+      const opts=[...fornSel.options].map(o=>o.value);
+      if(opts.includes(forn)) fornSel.value=forn;
+      else if(forn){ fornSel.value='__outro__'; const outro=document.getElementById('enc-forn-outro'); if(outro){outro.value=forn;outro.style.display='block';} }
+    }
+    // marcar como edição
+    f.dataset.editEncId=encId;
+    renderEncLinhas();
+    f.scrollIntoView({behavior:'smooth'});
+  },50);
+}
+
 function guardarEncomenda(){
   if(!encLinhas.length){ alert('Adiciona pelo menos um produto.'); return; }
   if(!DB.ids.e) DB.ids.e=1;
@@ -2357,20 +2402,34 @@ function guardarEncomenda(){
   const forn   = getFornVal('enc');
   const fatura = document.getElementById('enc-fatura').value.trim();
   const portes = parseFloat(document.getElementById('enc-portes')?.value)||0;
-  const nEnc   = 'enc'+(Date.now());
+  const f      = document.getElementById('enc-form');
+  const editId = f?.dataset?.editEncId;
 
-  encLinhas.forEach(l=>{
+  // se edição: remover entradas antigas e reverter stock
+  if(editId){
+    const antigas=DB.entradas.filter(e=>e.encomendaId===editId);
+    antigas.forEach(e=>{
+      const p=DB.produtos.find(x=>x.id===e.prodId);
+      if(p) p.stock-=e.qty; // reverter stock
+    });
+    DB.entradas=DB.entradas.filter(e=>e.encomendaId!==editId);
+    delete f.dataset.editEncId;
+  }
+
+  const nEnc = editId || 'enc'+(Date.now());
+
+  encLinhas.forEach((l,idx)=>{
     const p=DB.produtos.find(x=>x.id===l.prodId);
     if(p){
       p.stock+=l.qty;
       if(l.custo>0) p.custo=l.custo;
-      if(l.pvp>0)   p.pvp=l.pvp;
+      if(l.pvp>0)   p.pvp=Math.max(p.pvp||0,l.pvp);
     }
     DB.entradas.push({
       id:'e'+DB.ids.e++, prodId:l.prodId, prodNome:l.prodNome,
       qty:l.qty, custo:l.custo, pvp:l.pvp, marca:l.marca,
-      data, fornecedor:forn, consig:l.consig,
-      fatura, portes: encLinhas.indexOf(l)===0?portes:0, // portes só na 1ª linha
+      data, fornecedor:forn, consig:l.consig, bonus:l.bonus||false,
+      fatura, portes:idx===0?portes:0,
       encomendaId:nEnc
     });
   });
@@ -2529,7 +2588,7 @@ function addE(){
     p.stock+=qty;
     // atualizar custo e pvp na ficha do produto se tiverem mudado
     if(custo>0) p.custo=custo;
-    if(pvp>0)   p.pvp=pvp;
+    if(pvp>0)   p.pvp=Math.max(p.pvp||0,pvp);
   }
   DB.entradas.push({
     id:'e'+DB.ids.e++, prodId:pid,
