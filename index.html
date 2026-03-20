@@ -455,7 +455,7 @@ let fP='', fM='';
 
 // ─── ORDENAÇÃO DE TABELAS ─────────────────────────────────────────────────────
 const sortState = {};
-function getSort(tbl){ return sortState[tbl] || {col:'data', dir:-1}; } // default: data desc
+function getSort(tbl){ return sortState[tbl] || {col:null, dir:-1}; }
 function toggleSort(tbl, col){
   const s = getSort(tbl);
   // mesma coluna → inverte; coluna diferente → desc primeiro
@@ -468,13 +468,12 @@ function toggleSort(tbl, col){
 }
 function sortArr(arr, tbl, defs){
   const {col, dir} = getSort(tbl);
+  if(!col) return arr;
   const def = defs.find(d=>d.col===col);
   if(!def) return arr;
   return [...arr].sort((a,b)=>{
     const va=def.fn(a), vb=def.fn(b);
     if(va===vb) return 0;
-    // dir=1 → ascendente (a→z, antigo→recente)
-    // dir=-1 → descendente (z→a, recente→antigo)
     return (va<vb ? -1 : 1) * dir;
   });
 }
@@ -537,7 +536,7 @@ function renderDash(){
   const totalFaturado = tFatServ+tFatPacks+tFatWork+tFatFo;
   const totalNaoFat   = (tServ+tPacks+tWork+tFo)-totalFaturado;
   const ticket  = cs.length ? (tServ+tProd)/cs.length : 0;
-  const stockB  = DB.produtos.filter(p=>p.ativo!==false && p.stock<=(p.stockMin??0));
+  const stockB  = DB.produtos.filter(p=>p.ativo!==false && (p.stockMin??0)>0 && p.stock<(p.stockMin??0));
   // SS ENI — só sobre receitas FATURADAS
   // serviços faturados → 70%; produtos faturados → 20%; taxa 25,2%
   const tFatProd   = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.totalProd,0);
@@ -1009,14 +1008,19 @@ function renderConsultas(){
     {col:'valor',  fn:c=>c.valor+c.totalProd},
     {col:'estado', fn:c=>c.estado},
   ];
+  // default: data mais recente primeiro
+  if(!sortState.consultas) sortState.consultas={col:'data',dir:-1};
   const sorted = sortArr([...DB.consultas], 'consultas', defs);
 
   const sortOpts = [
-    {v:'data',l:'Data (mais recente)'},{v:'data_asc',l:'Data (mais antiga)'},
-    {v:'cliente',l:'Cliente A→Z'},{v:'valor',l:'Valor (maior primeiro)'},
-    {v:'estado',l:'Estado'},
+    {v:'data',     l:'Data (mais recente)'},
+    {v:'data_asc', l:'Data (mais antiga)'},
+    {v:'cliente',  l:'Cliente A→Z'},
+    {v:'valor',    l:'Valor (maior primeiro)'},
+    {v:'estado',   l:'Estado'},
   ];
-  const curLabel = col ? `${col} ${dir===1?'↑':'↓'}` : 'Data (mais recente)';
+  const curSort = sortState.consultas;
+  const curOptVal = curSort.col==='data'&&curSort.dir===-1?'data':curSort.col==='data'&&curSort.dir===1?'data_asc':curSort.col||'data';
 
   document.getElementById('pg-consultas').innerHTML=`
     <div class="flex-b" style="margin-bottom:1rem">
@@ -1024,7 +1028,7 @@ function renderConsultas(){
       <div style="display:flex;align-items:center;gap:8px">
         <label style="font-size:12px;color:#888">Ordenar:</label>
         <select onchange="(()=>{const v=this.value;if(v==='data')sortState.consultas={col:'data',dir:-1};else if(v==='data_asc')sortState.consultas={col:'data',dir:1};else if(v==='cliente')sortState.consultas={col:'cliente',dir:1};else if(v==='valor')sortState.consultas={col:'valor',dir:-1};else if(v==='estado')sortState.consultas={col:'estado',dir:1};renderConsultas();})()" style="font-size:12px">
-          ${sortOpts.map(o=>`<option value="${o.v}">${o.l}</option>`).join('')}
+          ${sortOpts.map(o=>`<option value="${o.v}" ${curOptVal===o.v?'selected':''}>${o.l}</option>`).join('')}
         </select>
       </div>
     </div>
@@ -1378,40 +1382,67 @@ let editingCliId = null;
 
 function renderClientes(){
   const defs=[
-    {col:'nome',   fn:cl=>cl.nome},
-    {col:'total',  fn:cl=>DB.consultas.filter(c=>c.clienteId===cl.id).reduce((s,c)=>s+c.valor+c.totalProd,0)+DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0)},
-    {col:'numCons',fn:cl=>DB.consultas.filter(c=>c.clienteId===cl.id).length},
+    {col:'nome',      fn:cl=>cl.nome},
+    {col:'total',     fn:cl=>cl._total||0},
+    {col:'numCons',   fn:cl=>cl._numCons||0},
+    {col:'ultimaData',fn:cl=>cl._ultimaData||''},
   ];
   let clis = DB.clientes.map(cl=>{
-    const cs = DB.consultas.filter(c=>c.clienteId===cl.id);
-    const pk = DB.packs.find(p=>p.clienteId===cl.id&&p.estado==='Ativo');
-    const total = cs.reduce((s,c)=>s+c.valor+c.totalProd,0)+(DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0));
-    return{...cl,numCons:cs.length,total,pack:pk};
+    const cs   = DB.consultas.filter(c=>c.clienteId===cl.id).sort((a,b)=>b.data.localeCompare(a.data));
+    const pks  = DB.packs.filter(p=>p.clienteId===cl.id);
+    const pkAt = pks.find(p=>p.estado==='Ativo');
+    const total= cs.reduce((s,c)=>s+c.valor+c.totalProd,0)+pks.reduce((s,p)=>s+p.valor,0);
+    return{...cl, _numCons:cs.length, _total:total, _pack:pkAt,
+           _ultimaData:cs[0]?.data||'', _packs:pks, _cs:cs};
   });
   const {col} = getSort('clientes');
-  clis = col ? sortArr(clis,'clientes',defs) : clis.sort((a,b)=>b.total-a.total);
+  clis = col ? sortArr(clis,'clientes',defs) : clis.sort((a,b)=>b._total-a._total);
 
   const rowHtml = cl => {
+    const credito = cl.credito||0;
     if(editingCliId===cl.id) return `<tr style="background:#fffbf5">
-      <td><input id="ecl-n" value="${cl.nome.replace(/"/g,'&quot;')}" style="min-width:160px"/></td>
-      <td><input id="ecl-t" value="${cl.telefone||''}" style="width:120px"/></td>
-      <td colspan="2"><input id="ecl-no" value="${cl.notas||''}" style="min-width:160px"/></td>
-      <td></td>
-      <td style="white-space:nowrap">
-        <button class="btn pri sm" onclick="saveEditCli('${cl.id}')">Guardar</button>
-        <button class="btn sm" onclick="cancelEditCli()" style="margin-top:2px">Cancelar</button>
+      <td colspan="8" style="padding:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+          <div><label>Nome</label><input id="ecl-n" value="${cl.nome.replace(/"/g,'&quot;')}"/></div>
+          <div><label>Telefone</label><input id="ecl-t" value="${cl.telefone||''}"/></div>
+          <div><label>Email</label><input id="ecl-e" value="${cl.email||''}"/></div>
+          <div><label>Notas</label><input id="ecl-no" value="${cl.notas||''}"/></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn pri sm" onclick="saveEditCli('${cl.id}')">Guardar</button>
+          <button class="btn sm" onclick="cancelEditCli()">Cancelar</button>
+        </div>
       </td>
     </tr>`;
     return `<tr>
-      <td><div style="font-weight:600">${cl.nome}</div>${cl.notas?`<div style="font-size:10px;color:#999">${cl.notas}</div>`:''}</td>
-      <td style="color:#888;font-size:12px">${cl.telefone||'—'}</td>
-      <td>${cl.numCons}</td>
-      <td><strong>${fmt(cl.total)}</strong></td>
-      <td>${cl.pack?`<span class="badge bg-g">${cl.pack.tipo} — ${cl.pack.incluidas-cl.pack.usadas} rest.</span>`:'—'}</td>
-      <td style="white-space:nowrap;display:flex;flex-direction:column;gap:3px">
+      <td>
+        <div style="font-weight:600">${cl.nome}</div>
+        ${cl.notas?`<div style="font-size:10px;color:#999">${cl.notas}</div>`:''}
+      </td>
+      <td style="font-size:12px;color:#888">
+        ${cl.telefone?`<div>📞 ${cl.telefone}</div>`:''}
+        ${cl.email?`<div style="font-size:10px">✉ ${cl.email}</div>`:''}
+        ${!cl.telefone&&!cl.email?'—':''}
+      </td>
+      <td style="text-align:center">${cl._numCons}</td>
+      <td style="font-size:11px;color:#888">${cl._ultimaData||'—'}</td>
+      <td>
+        ${cl._pack
+          ? `<div><span class="badge bg-g">${cl._pack.tipo}</span></div>
+             <div style="font-size:11px;color:#888;margin-top:2px">${cl._pack.usadas}/${cl._pack.incluidas} usadas · <strong>${cl._pack.incluidas-cl._pack.usadas} restantes</strong></div>`
+          : '<span style="color:#bbb;font-size:11px">—</span>'}
+      </td>
+      <td>
+        ${credito>0
+          ? `<span class="badge bg-g" style="font-size:11px">Crédito: ${fmt(credito)}</span>`
+          : '<span style="color:#bbb;font-size:11px">—</span>'}
+      </td>
+      <td><strong>${fmt(cl._total)}</strong></td>
+      <td style="white-space:nowrap">
         <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28;font-weight:600" onclick="abrirFicha('${cl.id}')">Ver ficha</button>
-        <button class="btn sm" onclick="startEditCli('${cl.id}')">Editar</button>
-        <button class="btn dan sm" onclick="delCliente('${cl.id}')">Apagar</button>
+        <button class="btn sm" onclick="adicionarCredito('${cl.id}')" style="margin-top:2px" title="Registar pré-pagamento">💳 Crédito</button>
+        <button class="btn sm" onclick="startEditCli('${cl.id}')" style="margin-top:2px">Editar</button>
+        <button class="btn dan sm" onclick="delCliente('${cl.id}')" style="margin-top:2px">Apagar</button>
       </td>
     </tr>`;
   };
@@ -1420,33 +1451,86 @@ function renderClientes(){
     <div class="flex-b"><h2 style="margin:0">Clientes</h2><button class="btn" onclick="showAddCli()">+ Novo cliente</button></div>
     <div id="add-cli-f" style="display:none" class="card">
       <h3>Novo cliente</h3>
-      <div class="row c3">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
         <div><label>Nome</label><input id="ncl-n"/></div>
         <div><label>Telefone</label><input id="ncl-t"/></div>
+        <div><label>Email</label><input id="ncl-e"/></div>
         <div><label>Notas</label><input id="ncl-no"/></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addCli()">Guardar</button><button class="btn" onclick="showAddCli()">Cancelar</button></div>
     </div>
+    <!-- modal crédito -->
+    <div id="credito-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:1000;align-items:center;justify-content:center">
+      <div style="background:#fff;border-radius:12px;padding:1.5rem;max-width:360px;width:90%;box-shadow:0 10px 40px rgba(0,0,0,0.2)">
+        <h3 style="margin-bottom:1rem">Registar pré-pagamento / crédito</h3>
+        <input type="hidden" id="credito-cli-id"/>
+        <div style="margin-bottom:8px"><label>Valor (€)</label><input id="credito-val" type="number" step="0.01" placeholder="0.00"/></div>
+        <div style="margin-bottom:8px"><label>Descrição</label><input id="credito-desc" placeholder="ex: Adiantamento consulta, Voucher..."/></div>
+        <div style="margin-bottom:1rem"><label>Data</label><input id="credito-data" type="date"/></div>
+        <div style="display:flex;gap:8px">
+          <button class="btn pri" onclick="guardarCredito()">Guardar</button>
+          <button class="btn" onclick="document.getElementById('credito-modal').style.display='none'">Cancelar</button>
+        </div>
+      </div>
+    </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr>${thSort('clientes','nome','Cliente')}${thSort('clientes','numCons','Consultas')}${thSort('clientes','total','Valor total')}<th>Pack ativo</th><th>Ações</th></tr></thead>
+        <thead><tr>
+          ${thSort('clientes','nome','Cliente')}
+          <th>Contacto</th>
+          ${thSort('clientes','numCons','Consultas')}
+          ${thSort('clientes','ultimaData','Última consulta')}
+          <th>Pack ativo</th>
+          <th>Crédito</th>
+          ${thSort('clientes','total','Valor total')}
+          <th>Ações</th>
+        </tr></thead>
         <tbody>${clis.map(cl=>rowHtml(cl)).join('')}</tbody>
       </table>
     </div>`;
 }
+
+function adicionarCredito(cliId){
+  document.getElementById('credito-cli-id').value=cliId;
+  document.getElementById('credito-val').value='';
+  document.getElementById('credito-desc').value='';
+  document.getElementById('credito-data').value=today();
+  document.getElementById('credito-modal').style.display='flex';
+  setTimeout(()=>document.getElementById('credito-val')?.focus(),50);
+}
+function guardarCredito(){
+  const cliId=document.getElementById('credito-cli-id').value;
+  const val=parseFloat(document.getElementById('credito-val').value)||0;
+  const desc=document.getElementById('credito-desc').value.trim();
+  const data=document.getElementById('credito-data').value;
+  if(!val||val<=0){ alert('Indica um valor válido.'); return; }
+  const cl=DB.clientes.find(x=>x.id===cliId); if(!cl) return;
+  cl.credito=(cl.credito||0)+val;
+  if(!cl.creditoHistorico) cl.creditoHistorico=[];
+  cl.creditoHistorico.push({val, desc:desc||'Pré-pagamento', data});
+  document.getElementById('credito-modal').style.display='none';
+  save(); renderClientes();
+}
+
 function startEditCli(id){ editingCliId=id; renderClientes(); setTimeout(()=>document.getElementById('ecl-n')?.focus(),50); }
 function cancelEditCli(){ editingCliId=null; renderClientes(); }
 function saveEditCli(id){
   const cl=DB.clientes.find(x=>x.id===id); if(!cl) return;
   cl.nome=document.getElementById('ecl-n').value.trim()||cl.nome;
   cl.telefone=document.getElementById('ecl-t').value;
+  cl.email=document.getElementById('ecl-e')?.value||cl.email||'';
   cl.notas=document.getElementById('ecl-no').value;
   editingCliId=null; save(); renderClientes();
 }
 function showAddCli(){const f=document.getElementById('add-cli-f');f.style.display=f.style.display==='none'?'block':'none';}
 function addCli(){
   const n=document.getElementById('ncl-n').value.trim();if(!n)return;
-  DB.clientes.push({id:'cl'+DB.ids.cl++,nome:n,telefone:document.getElementById('ncl-t').value,notas:document.getElementById('ncl-no').value});
+  DB.clientes.push({id:'cl'+DB.ids.cl++,nome:n,
+    telefone:document.getElementById('ncl-t').value,
+    email:document.getElementById('ncl-e')?.value||'',
+    notas:document.getElementById('ncl-no').value,
+    credito:0, creditoHistorico:[]
+  });
   save();showAddCli();renderClientes();
 }
 
@@ -1535,6 +1619,23 @@ function abrirFicha(cliId){
       </table>` : '<div style="padding:1.5rem;text-align:center;color:#999;font-size:12px">Sem consultas registadas</div>'}
     </div>
 
+    <!-- crédito / pré-pagamentos -->
+    ${(cl.credito||0)>0 || (cl.creditoHistorico||[]).length ? `
+    <div class="card" style="margin-top:1rem;background:#f0fff0;border-color:#c3e6cb">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-weight:600;font-size:13px;color:#155724">Crédito / Pré-pagamentos</div>
+        <div style="font-size:18px;font-weight:700;color:#155724">${fmt(cl.credito||0)} disponível</div>
+      </div>
+      ${(cl.creditoHistorico||[]).length ? `<table>
+        <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th></tr></thead>
+        <tbody>${(cl.creditoHistorico||[]).map(h=>`<tr>
+          <td style="font-size:11px">${h.data}</td>
+          <td>${h.desc}</td>
+          <td class="green"><strong>${fmt(h.val)}</strong></td>
+        </tr>`).join('')}</tbody>
+      </table>` : ''}
+    </div>` : ''}
+
     <!-- vouchers -->
     ${vouchers.length ? `
     <div class="card" style="margin-top:1rem;padding:0;overflow:hidden">
@@ -1552,6 +1653,7 @@ function abrirFicha(cliId){
     </div>` : ''}
 
     <div style="margin-top:1rem;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="adicionarCredito('${cliId}');closeFicha()">💳 Adicionar crédito</button>
       <button class="btn" onclick="startEditCli('${cliId}');closeFicha();nav('clientes',document.querySelector('.nb.active'))">Editar dados</button>
       <button class="btn" onclick="closeFicha()">Fechar</button>
     </div>`;
@@ -1787,7 +1889,7 @@ function renderProdutos(){
       <td><strong>${fmt(p.pvp-p.custo)}</strong></td>
       <td>${p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100)+'%':'—'}</td>
       <td>
-        <span class="badge ${p.stock<=0?'bg-r':p.stock<=(p.stockMin??0)?'bg-a':'bg-g'}">${p.stock}</span>
+        <span class="badge ${p.stock<=0&&(p.stockMin??0)>0?'bg-r':(p.stockMin??0)>0&&p.stock<=(p.stockMin??0)?'bg-a':'bg-g'}">${p.stock}</span>
         <span style="font-size:10px;color:#999;display:block;margin-top:1px">mín: ${p.stockMin??0}</span>
       </td>
       <td style="white-space:nowrap">
@@ -2138,7 +2240,7 @@ function renderEntradas(){
                   ${e.portes>0?`<div style="font-size:10px;color:#856404">+portes: ${fmt(e.portes)}</div>`:''}
                 </td>
                 <td style="font-family:monospace;font-size:11px;color:#8b6f4e">${prod?.cnp||e.cnp||'—'}</td>
-                <td>${e.qty}</td>
+                <td>${e.qty}${e.qtyBonus>0?` <span class="badge bg-g" style="font-size:9px">+${e.qtyBonus}B</span>`:''}</td>
                 <td>${fmt(e.custo)}</td>
                 <td>${pvp?fmt(pvp):'—'}</td>
                 <td>${marg!==null?`<strong>${fmt(marg)}</strong> <span style="color:#888;font-size:10px">(${margPct}%)</span>`:'—'}</td>
@@ -2305,46 +2407,87 @@ function renderEncLinhas(){
     return;
   }
 
-  el.innerHTML=`<table>
-    <thead><tr><th>Produto</th><th style="width:80px">Qty</th><th style="width:90px">Custo unit.</th><th style="width:90px">PVP</th><th style="width:90px">Margem</th><th style="width:80px">Total</th><th style="width:65px">Consig.</th><th style="width:65px">Bónus</th><th style="width:30px"></th></tr></thead>
-    <tbody>${[...encLinhas].reverse().map((l,ri)=>{
-      const i=encLinhas.length-1-ri;
-      const marg=l.pvp-l.custo;  // custo=0 é válido (bónus)
-      const margPct=l.pvp>0?Math.round(marg/l.pvp*100):0;
-      return `<tr style="${l.bonus?'background:#f0fff0':''}">
-        <td>
-          <strong>${l.prodNome}</strong>
-          ${l.marca?`<div style="font-size:10px;color:#888">${l.marca}</div>`:''}
-          ${l.bonus?'<span class="badge bg-g" style="font-size:9px">BÓNUS</span>':''}
-        </td>
-        <td><input type="number" value="${l.qty}" min="1" style="width:65px"
-          oninput="encLinhas[${i}].qty=parseInt(this.value)||1;renderEncLinhas()"/></td>
-        <td><input type="number" value="${l.custo}" step="0.01" min="0" style="width:75px;${l.bonus?'background:#f0fff0':''}"
-          oninput="encLinhas[${i}].custo=parseFloat(this.value)||0;renderEncLinhas()"/></td>
-        <td><input type="number" value="${l.pvp}" step="0.01" style="width:75px"
-          oninput="encLinhas[${i}].pvp=parseFloat(this.value)||0;renderEncLinhas()"/></td>
-        <td class="green" style="font-size:12px"><strong>${fmt(marg)}</strong><br><span style="color:#888;font-size:10px">(${margPct}%)</span></td>
-        <td><strong>${fmt(l.custo*l.qty)}</strong></td>
-        <td><select style="width:60px" onchange="encLinhas[${i}].consig=this.value==='true';renderEncLinhas()">
-          <option value="false" ${!l.consig?'selected':''}>Não</option>
-          <option value="true" ${l.consig?'selected':''}>Sim</option>
-        </select></td>
-        <td><label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;white-space:nowrap">
-          <input type="checkbox" ${l.bonus?'checked':''} style="width:auto"
-            onchange="encLinhas[${i}].bonus=this.checked;if(this.checked){encLinhas[${i}].custo=0;}renderEncLinhas()"/>
-          Bónus
-        </label></td>
-        <td><button class="btn dan sm" onclick="encLinhas.splice(${i},1);renderEncLinhas()">×</button></td>
-      </tr>`;
-    }).join('')}</tbody>
-  </table>`;
+   el.innerHTML=`<table>
+     <thead><tr>
+       <th>Produto</th>
+       <th style="width:65px" title="Unidades a pagar">Qty</th>
+       <th style="width:65px;background:#f0fff0;color:#1a6b1a" title="Unidades bónus — custo 0">Bónus</th>
+       <th style="width:85px">Custo unit.</th>
+       <th style="width:85px">PVP</th>
+       <th style="width:80px">Margem</th>
+       <th style="width:75px">Total custo</th>
+       <th style="width:55px">Consig.</th>
+       <th style="width:30px"></th>
+     </tr></thead>
+     <tbody>${[...encLinhas].reverse().map((l,ri)=>{
+       const i=encLinhas.length-1-ri;
+       const marg=l.pvp-l.custo;
+       const margPct=l.pvp>0?Math.round(marg/l.pvp*100):0;
+       const qtyBonus=l.qtyBonus||0;
+       return `<tr id="enc-row-${i}" style="${qtyBonus>0?'background:#f8fff8':''}">
+         <td>
+           <strong>${l.prodNome}</strong>
+           ${l.marca?`<div style="font-size:10px;color:#888">${l.marca}</div>`:''}
+           ${qtyBonus>0?`<span class="badge bg-g" style="font-size:9px">+${qtyBonus} bónus</span>`:''}
+         </td>
+         <td><input type="number" id="enc-qty-${i}" value="${l.qty}" min="0" style="width:58px"
+           onblur="syncEncLinha(${i});atualizarTotaisEnc()"
+           onkeydown="if(event.key==='Enter')this.blur()"/></td>
+         <td style="background:#f0fff0"><input type="number" id="enc-bonus-${i}" value="${qtyBonus}" min="0" style="width:58px;background:#f0fff0"
+           onblur="syncEncLinha(${i});atualizarTotaisEnc()"
+           onkeydown="if(event.key==='Enter')this.blur()"/></td>
+         <td><input type="number" id="enc-custo-${i}" value="${l.custo}" step="0.01" min="0" style="width:78px"
+           onblur="syncEncLinha(${i});atualizarTotaisEnc()"
+           onkeydown="if(event.key==='Enter')this.blur()"/></td>
+         <td><input type="number" id="enc-pvp-${i}" value="${l.pvp}" step="0.01" style="width:78px"
+           onblur="syncEncLinha(${i});atualizarTotaisEnc()"
+           onkeydown="if(event.key==='Enter')this.blur()"/></td>
+         <td class="green" id="enc-marg-${i}" style="font-size:12px"><strong>${fmt(marg)}</strong><br><span style="color:#888;font-size:10px">(${margPct}%)</span></td>
+         <td id="enc-total-${i}"><strong>${fmt(l.custo*l.qty)}</strong></td>
+         <td><select style="width:50px" onchange="encLinhas[${i}].consig=this.value==='true';atualizarTotaisEnc()">
+           <option value="false" ${!l.consig?'selected':''}>Não</option>
+           <option value="true" ${l.consig?'selected':''}>Sim</option>
+         </select></td>
+         <td><button class="btn dan sm" onclick="encLinhas.splice(${i},1);renderEncLinhas()">×</button></td>
+       </tr>`;
+     }).join('')}</tbody>
+   </table>`;
 
-  // totais
+   atualizarTotaisEnc();
+}
+
+function syncEncLinha(i){
+  if(i<0||i>=encLinhas.length) return;
+  const qty   = document.getElementById('enc-qty-'+i)?.value;
+  const bonus = document.getElementById('enc-bonus-'+i)?.value;
+  const custo = document.getElementById('enc-custo-'+i)?.value;
+  const pvp   = document.getElementById('enc-pvp-'+i)?.value;
+  if(qty   !==undefined && qty  !=='') encLinhas[i].qty      = Math.max(0, parseFloat(qty)||0);
+  if(bonus !==undefined && bonus!=='') encLinhas[i].qtyBonus = Math.max(0, parseFloat(bonus)||0);
+  if(custo !==undefined && custo!=='') encLinhas[i].custo    = Math.max(0, parseFloat(custo)||0);
+  if(pvp   !==undefined && pvp  !=='') encLinhas[i].pvp      = Math.max(0, parseFloat(pvp)||0);
+}
+
+function atualizarTotaisEnc(){
+  encLinhas.forEach((_,i)=>syncEncLinha(i));
+  encLinhas.forEach((l,i)=>{
+    const marg=l.pvp-l.custo;
+    const margPct=l.pvp>0?Math.round(marg/l.pvp*100):0;
+    const qtyBonus=l.qtyBonus||0;
+    const elM=document.getElementById('enc-marg-'+i);
+    const elT=document.getElementById('enc-total-'+i);
+    const elR=document.getElementById('enc-row-'+i);
+    if(elM) elM.innerHTML=`<strong>${fmt(marg)}</strong><br><span style="color:#888;font-size:10px">(${margPct}%)</span>`;
+    if(elT) elT.innerHTML=`<strong>${fmt(l.custo*l.qty)}</strong>`;
+    if(elR) elR.style.background=qtyBonus>0?'#f8fff8':'';
+  });
+  const portes=parseFloat(document.getElementById('enc-portes')?.value)||0;
   const tCusto=encLinhas.reduce((s,l)=>s+l.custo*l.qty,0);
-  const tPVP=encLinhas.reduce((s,l)=>s+l.pvp*l.qty,0);
-  const tLucro=encLinhas.reduce((s,l)=>s+(l.pvp-l.custo)*l.qty,0);
+  const tPVP=encLinhas.reduce((s,l)=>s+l.pvp*(l.qty+(l.qtyBonus||0)),0);
+  const tLucro=encLinhas.reduce((s,l)=>s+(l.pvp-l.custo)*l.qty+(l.pvp*(l.qtyBonus||0)),0);
   const totalComPortes=tCusto+portes;
-  if(totEl){
+  const totEl=document.getElementById('enc-totais');
+  if(totEl&&encLinhas.length){
     totEl.style.display='block';
     totEl.innerHTML=`
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px">
@@ -2353,7 +2496,7 @@ function renderEncLinhas(){
         <div><div style="font-size:10px;color:#888">Total a pagar</div><div style="font-weight:700;color:#8b6f4e">${fmt(totalComPortes)}</div></div>`:''}
         <div><div style="font-size:10px;color:#888">Total PVP</div><div style="font-weight:600">${fmt(tPVP)}</div></div>
         <div><div style="font-size:10px;color:#888">Lucro total</div><div style="font-weight:600;color:#1a6b1a">${fmt(tLucro)}</div></div>
-        <div><div style="font-size:10px;color:#888">Produtos</div><div style="font-weight:600">${encLinhas.length} ref. · ${encLinhas.reduce((s,l)=>s+l.qty,0)} un.</div></div>
+        <div><div style="font-size:10px;color:#888">Produtos</div><div style="font-weight:600">${encLinhas.length} ref. · ${encLinhas.reduce((s,l)=>s+l.qty+(l.qtyBonus||0),0)} un.</div></div>
       </div>`;
   }
 }
@@ -2421,13 +2564,13 @@ function guardarEncomenda(){
   encLinhas.forEach((l,idx)=>{
     const p=DB.produtos.find(x=>x.id===l.prodId);
     if(p){
-      p.stock+=l.qty;
+      p.stock += l.qty + (l.qtyBonus||0); // bónus entram no stock também
       if(l.custo>0) p.custo=l.custo;
       if(l.pvp>0)   p.pvp=Math.max(p.pvp||0,l.pvp);
     }
     DB.entradas.push({
       id:'e'+DB.ids.e++, prodId:l.prodId, prodNome:l.prodNome,
-      qty:l.qty, custo:l.custo, pvp:l.pvp, marca:l.marca,
+      qty:l.qty, qtyBonus:l.qtyBonus||0, custo:l.custo, pvp:l.pvp, marca:l.marca,
       data, fornecedor:forn, consig:l.consig, bonus:l.bonus||false,
       fatura, portes:idx===0?portes:0,
       encomendaId:nEnc
@@ -3242,7 +3385,7 @@ function addG(){
 function renderEncomendas(){
   // só produtos ativos (ativo !== false)
   const ativos = DB.produtos.filter(p=>p.ativo!==false);
-  const baixo = ativos.filter(p=>p.stock<(p.stockMin??0));
+  const baixo = ativos.filter(p=>(p.stockMin??0)>0 && p.stock<(p.stockMin??0));
   const esgotado = ativos.filter(p=>p.stock<=0);
   document.getElementById('pg-encomendas').innerHTML=`
     <h2>Lista de encomendas automática</h2>
