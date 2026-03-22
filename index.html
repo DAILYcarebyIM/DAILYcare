@@ -98,7 +98,7 @@ tr:hover td{background:#fafaf7}
     <button class="nb" onclick="nav('gastos',this)">Gastos</button>
     <button class="nb" onclick="nav('encomendas',this)">Lista encomendas</button>
     <button class="nb" onclick="nav('relatorio',this)">Relatório</button>
-    <button class="nb" onclick="nav('fornecedores',this)">Fornecedores</button>
+    <button class="nb" onclick="nav('fornecedores',this)">Fornecedores e Marcas</button>
     <button class="nb" onclick="nav('vouchers',this)">Vouchers</button>
     <button class="nb" onclick="exportarExcel()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel</button>
   </nav>
@@ -233,10 +233,11 @@ const DEFAULT = {
   ],
   consignacoesPagas:[],
   fornecedores:[
-    {id:'f1',nome:'Mary Kay',tipo:'Distribuidor',contacto:'',email:'',notas:'Encomenda direta. Margem ~50%.'},
-    {id:'f2',nome:'Farmácia Fonte da Moura',tipo:'Consignação',contacto:'',email:'',notas:'Produtos em consignação. Pagamento semanal.'},
-    {id:'f3',nome:'Dermagius',tipo:'Distribuidor',contacto:'',email:'',notas:''},
+    {id:'f1',nome:'Mary Kay',tipo:'Distribuidor',contacto:'',email:'',notas:'Encomenda direta. Margem ~50%.',consigDefault:false},
+    {id:'f2',nome:'Farmácia Fonte da Moura',tipo:'Consignação',contacto:'',email:'',notas:'Produtos em consignação. Pagamento semanal.',consigDefault:true},
+    {id:'f3',nome:'Dermagius',tipo:'Distribuidor',contacto:'',email:'',notas:'',consigDefault:false},
   ],
+  marcas:[],
   ids:{cl:7,c:7,pk:3,w:2,g:3,p:13,e:1,ci:1,f:4,fo:1,v:1},
   vouchers:[],
 };
@@ -340,6 +341,7 @@ function migrarCampos(){
   if(!DB.ids.v) DB.ids.v = 1;
   if(!DB.ids.e) DB.ids.e = 1;
   if(!DB.ids.ci) DB.ids.ci = 1;
+  if(!DB.marcas) DB.marcas = [];
   if(!DB.ids.f) DB.ids.f = 4;
   if(!DB.ids.fo) DB.ids.fo = 1;
   // migrar produtos que têm fornecedor no campo marca
@@ -406,6 +408,15 @@ async function load(){
 
 // ─── UTILS ───────────────────────────────────────────────────────────────────
 const fmt = n => (Math.round(n*100)/100).toFixed(2)+'€';
+// pesquisa por todas as palavras em qualquer ordem
+// ex: "antiox timewise" encontra "TimeWise Hidratante Antioxidante"
+function matchWords(texto, query){
+  const t = texto.toLowerCase();
+  return query.toLowerCase().split(/\s+/).filter(Boolean).every(w=>t.includes(w));
+}
+function matchProd(p, v){
+  return matchWords(p.nome+(p.marca?' '+p.marca:'')+(p.cat?' '+p.cat:'')+(p.cnp?' '+p.cnp:''), v);
+}
 const cNome = id => { const c=DB.clientes.find(x=>x.id===id); return c?c.nome:'—'; };
 const today = () => new Date().toISOString().split('T')[0];
 
@@ -662,7 +673,14 @@ function renderConsultaAtual(){
           </select>
           <div style="font-size:10px;color:#888;margin-top:3px">Os produtos assumem automaticamente o mesmo estado de faturação do serviço.</div>
         </div>
-        <div><label>Notas</label><input id="cc-notas" placeholder="Opcional"/></div>
+        <div><label>Notas da consulta</label><input id="cc-notas" placeholder="Opcional"/></div>
+      </div>
+      <div style="margin-top:8px">
+        <label style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          Notas clínicas da cliente
+          <span style="font-size:10px;color:#888;font-weight:400">(guardam-se na ficha · visíveis em todas as consultas)</span>
+        </label>
+        <textarea id="cc-notas-cli" rows="4" placeholder="Historial, alergias, preferências, observações..." style="width:100%;resize:vertical;font-size:12px;line-height:1.5;border:1px solid #ddd;border-radius:6px;padding:8px;font-family:inherit;background:#fffbf5"></textarea>
       </div>
       <div id="pk-info" style="display:none"></div>
     </div>
@@ -692,6 +710,10 @@ function selCli(id,nome){
   document.getElementById('cc-cli').value=nome;
   document.getElementById('cc-cli-id').value=id;
   document.getElementById('dd-cli').style.display='none';
+  // preencher notas clínicas da cliente
+  const cl=DB.clientes.find(x=>x.id===id);
+  const el=document.getElementById('cc-notas-cli');
+  if(el&&cl) el.value=cl.notasClinicas||'';
   checkPk();
 }
 function novoCliente(){
@@ -826,7 +848,7 @@ function selecionarVoucher(vid){
 function ddProd(v){
   const dd = document.getElementById('dd-prod');
   if(!v||v.length<2){dd.style.display='none';return;}
-  const m = DB.produtos.filter(p=>p.nome.toLowerCase().includes(v.toLowerCase())||p.marca.toLowerCase().includes(v.toLowerCase()));
+  const m = DB.produtos.filter(p=>matchProd(p,v));
   if(!m.length){dd.style.display='none';return;}
   dd.innerHTML = m.map(p=>`<div class="ddi" onclick="addV('${p.id}')">
     <div style="font-weight:600">${p.nome}</div>
@@ -894,7 +916,7 @@ function renderVendasTabela(){
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <div style="display:flex;flex-direction:column;gap:2px">
             <span style="font-size:10px;color:#888">PVP (€)</span>
-            <input id="vi-pvp-${v.prodId}" type="number" value="${v.pvp}" min="0" step="0.01"
+            <input id="vi-pvp-${v.prodId}" type="number" value="${parseFloat(v.pvp||0).toFixed(2)}" min="0" step="0.01"
               oninput="syncInputs();atualizarTotais()"
               style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px"/>
           </div>
@@ -989,11 +1011,17 @@ function gravarConsulta(){
       if(v){ v.estado='Utilizado'; v.dataUso=data; v.usadoPor=cliNome; }
     }
   }
+  // guardar notas clínicas na ficha da cliente
+  const notasCli = document.getElementById('cc-notas-cli')?.value||'';
+  const cl = DB.clientes.find(x=>x.id===cId);
+  if(cl && notasCli !== (cl.notasClinicas||'')) cl.notasClinicas = notasCli;
+
   save();
   al.className='alert al-suc';al.style.display='block';
   al.innerHTML=`✓ Consulta de <strong>${cliNome}</strong> gravada! ${faturado?'<span class="badge bg-b">Faturado</span>':''} Stock atualizado.`;
   document.getElementById('cc-cli').value='';document.getElementById('cc-cli-id').value='';
   document.getElementById('cc-val').value='';document.getElementById('cc-notas').value='';
+  const ncEl=document.getElementById('cc-notas-cli'); if(ncEl) ncEl.value='';
   cvs=[];renderVendasTabela();
   setTimeout(()=>{al.style.display='none'},5000);
 }
@@ -1050,6 +1078,14 @@ function renderConsultas(){
           <button class="btn" onclick="cancelEditCons()">Cancelar</button>
         </div>
       </div>`;
+      // valor indicativo por sessão se for Pack
+      const packInfo = (() => {
+        if(c.tipo !== 'Pack') return null;
+        const pk = DB.packs.find(p=>p.clienteId===c.clienteId&&(p.estado==='Ativo'||p.estado==='Concluído'));
+        if(!pk||!pk.incluidas) return null;
+        return { valorUnit: pk.valor/pk.incluidas, pack: pk };
+      })();
+
       return `<div class="card">
         <div class="flex-b" style="margin-bottom:8px">
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -1061,7 +1097,14 @@ function renderConsultas(){
           <div style="color:#999;font-size:11px">${c.data}</div>
         </div>
         <div class="row c3" style="margin-bottom:0">
-          <div><div class="lb">Serviço</div><strong>${fmt(c.valor)}</strong></div>
+          <div>
+            <div class="lb">Serviço</div>
+            ${packInfo
+              ? `<strong style="color:#bbb">${fmt(c.valor)}</strong>
+                 <div style="font-size:10px;color:#8b6f4e;margin-top:2px">≈ ${fmt(packInfo.valorUnit)}/sessão
+                 <span style="color:#bbb">(${packInfo.pack.tipo} · indicativo)</span></div>`
+              : `<strong>${fmt(c.valor)}</strong>`}
+          </div>
           <div><div class="lb">Produtos</div><strong>${fmt(c.totalProd)}</strong></div>
           <div><div class="lb">Lucro prod.</div><strong class="green">${fmt(c.lucroProd)}</strong></div>
         </div>
@@ -1153,7 +1196,7 @@ function renderVRTabela(){
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <div style="display:flex;flex-direction:column;gap:2px">
             <span style="font-size:10px;color:#888">PVP (€)</span>
-            <input id="vri-pvp-${v.prodId}" type="number" value="${v.pvp}" min="0" step="0.01"
+            <input id="vri-pvp-${v.prodId}" type="number" value="${parseFloat(v.pvp||0).toFixed(2)}" min="0" step="0.01"
               oninput="syncVR();atualizarTotaisVR()"
               style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px"/>
           </div>
@@ -1205,7 +1248,7 @@ function selCliVR(id,nome){
 }
 function ddProdVR(v){
   const dd=document.getElementById('dd-vr-prod');
-  const m=DB.produtos.filter(p=>p.ativo!==false&&(p.nome.toLowerCase().includes(v.toLowerCase())||(p.cnp||'').includes(v)));
+  const m=DB.produtos.filter(p=>p.ativo!==false&&matchProd(p,v));
   dd.innerHTML=m.map(p=>`<div class="ddi" onclick="addVR('${p.id}')">
     <strong>${p.nome}</strong>
     <span style="color:#999;font-size:11px"> — stock: ${p.stock} · PVP: ${fmt(p.pvp)} · custo: ${fmt(p.custo)}</span>
@@ -1582,6 +1625,13 @@ function abrirFicha(cliId){
       <div class="met" style="border:1px solid #d4a97a;background:#fffbf5"><div class="lb">Valor total</div><div class="vl brown">${fmt(totalGeral)}</div></div>
     </div>
 
+    <!-- notas clínicas -->
+    ${cl.notasClinicas ? `
+    <div class="card" style="margin-bottom:1rem;background:#fffbf5;border-color:#d4a97a">
+      <div style="font-size:11px;font-weight:600;color:#8b6f4e;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px">Notas clínicas</div>
+      <div style="font-size:13px;white-space:pre-wrap;line-height:1.6;color:#444">${cl.notasClinicas.replace(/</g,'&lt;')}</div>
+    </div>` : ''}
+
     <!-- packs activos -->
     ${packs.filter(p=>p.estado==='Ativo').length ? `
     <div style="background:#f0fff0;border:1px solid #c3e6cb;border-radius:8px;padding:10px 14px;margin-bottom:1rem;font-size:12px">
@@ -1817,7 +1867,7 @@ function renderProdutos(){
     {col:'stockMin', fn:p=>p.stockMin??0},
   ];
   let ps = DB.produtos;
-  if(fP) ps=ps.filter(p=>p.nome.toLowerCase().includes(fP.toLowerCase())||p.cat.toLowerCase().includes(fP.toLowerCase())||((p.cnp||'').includes(fP)));
+  if(fP) ps=ps.filter(p=>matchProd(p,fP));
   if(fM) ps=ps.filter(p=>p.marca===fM);
   const {col} = getSort('produtos');
   ps = col ? sortArr(ps,'produtos',defs) : ps;
@@ -1847,8 +1897,8 @@ function renderProdutos(){
           <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px">
             <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços — edita qualquer campo</div>
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
-              <div><label>Custo (€)</label><input id="ep-custo" type="number" value="${p.custo}" step="0.01" oninput="calcProdFromCusto('ep')"/></div>
-              <div><label>PVP (€)</label><input id="ep-pvp" type="number" value="${p.pvp}" step="0.01" oninput="calcProdFromPvp('ep')"/></div>
+              <div><label>Custo (€)</label><input id="ep-custo" type="number" value="${parseFloat(p.custo||0).toFixed(2)}" step="0.01" oninput="calcProdFromCusto('ep')"/></div>
+              <div><label>PVP (€)</label><input id="ep-pvp" type="number" value="${parseFloat(p.pvp||0).toFixed(2)}" step="0.01" oninput="calcProdFromPvp('ep')"/></div>
               <div><label>Margem (€)</label><input id="ep-meur" type="number" value="${margE}" step="0.01" oninput="calcProdFromMargEur('ep')"/></div>
               <div><label>Margem (%)</label><input id="ep-mpct" type="number" value="${margP}" step="0.5" oninput="calcProdFromMargPct('ep')"/></div>
             </div>
@@ -2089,10 +2139,7 @@ function renderEntradas(){
   document.getElementById('pg-entradas').innerHTML=`
     <div class="flex-b">
       <h2 style="margin:0">Entradas de stock</h2>
-      <div style="display:flex;gap:8px">
-        <button class="btn pri" onclick="showEncomenda()">📦 Nova encomenda</button>
-        <button class="btn" onclick="showAddE()">+ Entrada individual</button>
-      </div>
+      <button class="btn pri" onclick="showEncomenda()">📦 Nova encomenda</button>
     </div>
 
     <!-- FORMULÁRIO ENCOMENDA COMPLETA -->
@@ -2101,7 +2148,7 @@ function renderEntradas(){
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:1rem">
         <div><label>Data</label><input id="enc-data" type="date" value="${today()}"/></div>
         <div><label>Fornecedor</label>
-          <select id="enc-forn" onchange="toggleOutroForn('enc')">
+          <select id="enc-forn" onchange="toggleOutroForn('enc');setConsigDefaultEnc()">
             <option value="">-- selecionar --</option>${fornOptions()}
           </select>
           <input id="enc-forn-outro" placeholder="Nome do fornecedor" style="display:none;margin-top:4px"/>
@@ -2130,50 +2177,6 @@ function renderEntradas(){
       </div>
     </div>
 
-    <div id="add-e-f" style="display:none" class="card">
-      <h3>Nova entrada individual</h3>
-      <div class="row c2">
-        <div><label>Produto</label>
-          <div class="dd-wrap">
-            <input id="ne-p" placeholder="Pesquisar produto... (ou escreve para criar novo)" oninput="ddProdE(this.value)" autocomplete="off"/>
-            <input type="hidden" id="ne-p-id"/>
-            <div class="dropdown" id="dd-ep" style="display:none"></div>
-          </div>
-          <div id="ne-criar-prod" style="display:none"></div>
-        </div>
-        <div><label>Quantidade</label><input id="ne-q" type="number" placeholder="0" min="1"/></div>
-      </div>
-      <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px">
-        <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços — edita qualquer campo e os outros atualizam automaticamente</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
-          <div><label>Custo unitário (€)</label><input id="ne-c" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromCusto('ne')"/></div>
-          <div><label>PVP (€)</label><input id="ne-pvp" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromPvp('ne')"/></div>
-          <div><label>Margem (€)</label><input id="ne-meur" type="number" placeholder="0.00" step="0.01" oninput="calcProdFromMargEur('ne')"/></div>
-          <div><label>Margem (%)</label><input id="ne-mpct" type="number" placeholder="0" step="0.5" min="0" max="100" oninput="calcProdFromMargPct('ne')"/></div>
-        </div>
-        <div id="ne-preview" style="font-size:11px;margin-top:6px;min-height:14px;color:#888"></div>
-        <div style="font-size:10px;color:#bbb;margin-top:3px">Se o PVP ou custo mudaram, a ficha do produto é atualizada automaticamente ao guardar.</div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
-        <div><label>Data</label><input id="ne-d" type="date" value="${today()}"/></div>
-        <div><label>Fornecedor <span style="font-weight:400;color:#aaa">(onde compraste)</span></label>
-          <select id="ne-f" onchange="toggleOutroForn('ne')">
-            <option value="">-- selecionar --</option>${fornOptions()}
-          </select>
-          <input id="ne-forn-outro" placeholder="Nome do fornecedor" style="display:none;margin-top:4px"/>
-        </div>
-        <div><label>Consignação nesta compra?</label>
-          <select id="ne-consig">
-            <option value="false">Não — compra própria</option>
-            <option value="true">Sim — consignação</option>
-          </select>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn pri" onclick="addE()">Guardar e atualizar stock</button>
-        <button class="btn" onclick="showAddE()">Cancelar</button>
-      </div>
-    </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr>${thSort('entradas','data','Data')}${thSort('entradas','nome','Produto')}<th>CNP</th>${thSort('entradas','qty','Qty')}${thSort('entradas','custo','Custo unit.')}${thSort('entradas','pvp','PVP')}${thSort('entradas','margem','Margem')}<th>Total</th>${thSort('entradas','fornecedor','Fornecedor')}<th>Fatura/Guia</th><th>Consig.</th><th>Ações</th></tr></thead>
@@ -2214,8 +2217,8 @@ function renderEntradas(){
                     <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px">
                       <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços</div>
                       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
-                        <div><label>Custo (€)</label><input id="ee-c" type="number" value="${e.custo}" step="0.01" oninput="calcProdFromCusto('ee')"/></div>
-                        <div><label>PVP (€)</label><input id="ee-pvp" type="number" value="${e.pvp||''}" step="0.01" oninput="calcProdFromPvp('ee')"/></div>
+                        <div><label>Custo (€)</label><input id="ee-c" type="number" value="${parseFloat(e.custo||0).toFixed(2)}" step="0.01" oninput="calcProdFromCusto('ee')"/></div>
+                        <div><label>PVP (€)</label><input id="ee-pvp" type="number" value="${e.pvp?parseFloat(e.pvp).toFixed(2):''}" step="0.01" oninput="calcProdFromPvp('ee')"/></div>
                         <div><label>Margem (€)</label><input id="ee-meur" type="number" value="${e.pvp&&e.custo?(e.pvp-e.custo).toFixed(2):''}" step="0.01" oninput="calcProdFromMargEur('ee')"/></div>
                         <div><label>Margem (%)</label><input id="ee-mpct" type="number" value="${e.pvp&&e.custo?Math.round((e.pvp-e.custo)/e.pvp*100):''}" step="0.5" oninput="calcProdFromMargPct('ee')"/></div>
                       </div>
@@ -2277,17 +2280,12 @@ function saveEditE(id){
   if(p){ if(e.custo>0)p.custo=e.custo; if(e.pvp>0)p.pvp=Math.max(p.pvp||0,e.pvp); }
   editingEntradaId=null; save(); renderEntradas();
 }
-function showAddE(){
-  document.getElementById('enc-form').style.display='none';
-  const f=document.getElementById('add-e-f');
-  f.style.display=f.style.display==='none'?'block':'none';
-}
+function showAddE(){ showEncomenda(); } // redireciona para encomenda
 function showEncomenda(){
-  document.getElementById('add-e-f').style.display='none';
   const f=document.getElementById('enc-form');
   const open=f.style.display==='none';
   f.style.display=open?'block':'none';
-  if(open){ encLinhas=[]; renderEncLinhas(); }
+  if(open){ encLinhas=[]; delete f.dataset.editEncId; renderEncLinhas(); }
 }
 
 // ─── ENCOMENDA MULTI-PRODUTO ──────────────────────────────────────────────────
@@ -2297,7 +2295,7 @@ function ddProdEnc(v){
   const dd=document.getElementById('dd-enc-prod');
   if(!v||v.length<1){dd.style.display='none';return;}
   const termo=v.toLowerCase();
-  const m=DB.produtos.filter(p=>p.ativo!==false&&(p.nome.toLowerCase().includes(termo)||(p.cnp||'').includes(v)));
+  const m=DB.produtos.filter(p=>p.ativo!==false&&matchProd(p,v));
   const criar=`<div class="ddi" onclick="mostrarCriarProdEnc()" style="color:#8b6f4e;font-weight:600;border-top:1px solid #eee">
     + Criar novo produto "${v.replace(/"/g,'&quot;')}"
   </div>`;
@@ -2410,19 +2408,20 @@ function renderEncLinhas(){
    el.innerHTML=`<table>
      <thead><tr>
        <th>Produto</th>
-       <th style="width:65px" title="Unidades a pagar">Qty</th>
-       <th style="width:65px;background:#f0fff0;color:#1a6b1a" title="Unidades bónus — custo 0">Bónus</th>
-       <th style="width:85px">Custo unit.</th>
-       <th style="width:85px">PVP</th>
-       <th style="width:80px">Margem</th>
-       <th style="width:75px">Total custo</th>
-       <th style="width:55px">Consig.</th>
-       <th style="width:30px"></th>
+       <th style="width:58px" title="Unidades a pagar">Qty</th>
+       <th style="width:58px;background:#f0fff0;color:#1a6b1a" title="Unidades bónus — custo 0">Bónus</th>
+       <th style="width:82px">Custo (€)</th>
+       <th style="width:82px">PVP (€)</th>
+       <th style="width:72px">Marg. €</th>
+       <th style="width:68px">Marg. %</th>
+       <th style="width:72px">Total custo</th>
+       <th style="width:50px">Consig.</th>
+       <th style="width:28px"></th>
      </tr></thead>
      <tbody>${[...encLinhas].reverse().map((l,ri)=>{
        const i=encLinhas.length-1-ri;
        const marg=l.pvp-l.custo;
-       const margPct=l.pvp>0?Math.round(marg/l.pvp*100):0;
+       const margPct=l.pvp>0?Math.round((marg/l.pvp)*100*10)/10:0;
        const qtyBonus=l.qtyBonus||0;
        return `<tr id="enc-row-${i}" style="${qtyBonus>0?'background:#f8fff8':''}">
          <td>
@@ -2430,21 +2429,26 @@ function renderEncLinhas(){
            ${l.marca?`<div style="font-size:10px;color:#888">${l.marca}</div>`:''}
            ${qtyBonus>0?`<span class="badge bg-g" style="font-size:9px">+${qtyBonus} bónus</span>`:''}
          </td>
-         <td><input type="number" id="enc-qty-${i}" value="${l.qty}" min="0" style="width:58px"
-           onblur="syncEncLinha(${i});atualizarTotaisEnc()"
+         <td><input type="number" id="enc-qty-${i}" value="${l.qty}" min="0" style="width:52px"
+           onblur="syncEncLinha(${i},'qty');atualizarTotaisEnc()"
            onkeydown="if(event.key==='Enter')this.blur()"/></td>
-         <td style="background:#f0fff0"><input type="number" id="enc-bonus-${i}" value="${qtyBonus}" min="0" style="width:58px;background:#f0fff0"
-           onblur="syncEncLinha(${i});atualizarTotaisEnc()"
+         <td style="background:#f0fff0"><input type="number" id="enc-bonus-${i}" value="${qtyBonus}" min="0" style="width:52px;background:#f0fff0"
+           onblur="syncEncLinha(${i},'bonus');atualizarTotaisEnc()"
            onkeydown="if(event.key==='Enter')this.blur()"/></td>
-         <td><input type="number" id="enc-custo-${i}" value="${l.custo}" step="0.01" min="0" style="width:78px"
-           onblur="syncEncLinha(${i});atualizarTotaisEnc()"
+         <td><input type="number" id="enc-custo-${i}" value="${parseFloat(l.custo).toFixed(2)}" step="0.01" min="0" style="width:76px"
+           onblur="syncEncLinha(${i},'custo');atualizarTotaisEnc()"
            onkeydown="if(event.key==='Enter')this.blur()"/></td>
-         <td><input type="number" id="enc-pvp-${i}" value="${l.pvp}" step="0.01" style="width:78px"
-           onblur="syncEncLinha(${i});atualizarTotaisEnc()"
+         <td><input type="number" id="enc-pvp-${i}" value="${parseFloat(l.pvp).toFixed(2)}" step="0.01" style="width:76px"
+           onblur="syncEncLinha(${i},'pvp');atualizarTotaisEnc()"
            onkeydown="if(event.key==='Enter')this.blur()"/></td>
-         <td class="green" id="enc-marg-${i}" style="font-size:12px"><strong>${fmt(marg)}</strong><br><span style="color:#888;font-size:10px">(${margPct}%)</span></td>
+         <td><input type="number" id="enc-meur-${i}" value="${marg.toFixed(2)}" step="0.01" style="width:66px"
+           onblur="syncEncLinha(${i},'meur');atualizarTotaisEnc()"
+           onkeydown="if(event.key==='Enter')this.blur()"/></td>
+         <td><input type="number" id="enc-mpct-${i}" value="${margPct}" step="0.5" min="0" max="100" style="width:60px"
+           onblur="syncEncLinha(${i},'mpct');atualizarTotaisEnc()"
+           onkeydown="if(event.key==='Enter')this.blur()"/></td>
          <td id="enc-total-${i}"><strong>${fmt(l.custo*l.qty)}</strong></td>
-         <td><select style="width:50px" onchange="encLinhas[${i}].consig=this.value==='true';atualizarTotaisEnc()">
+         <td><select style="width:46px" onchange="encLinhas[${i}].consig=this.value==='true';atualizarTotaisEnc()">
            <option value="false" ${!l.consig?'selected':''}>Não</option>
            <option value="true" ${l.consig?'selected':''}>Sim</option>
          </select></td>
@@ -2456,30 +2460,62 @@ function renderEncLinhas(){
    atualizarTotaisEnc();
 }
 
-function syncEncLinha(i){
+function syncEncLinha(i, campo){
   if(i<0||i>=encLinhas.length) return;
-  const qty   = document.getElementById('enc-qty-'+i)?.value;
-  const bonus = document.getElementById('enc-bonus-'+i)?.value;
-  const custo = document.getElementById('enc-custo-'+i)?.value;
-  const pvp   = document.getElementById('enc-pvp-'+i)?.value;
-  if(qty   !==undefined && qty  !=='') encLinhas[i].qty      = Math.max(0, parseFloat(qty)||0);
-  if(bonus !==undefined && bonus!=='') encLinhas[i].qtyBonus = Math.max(0, parseFloat(bonus)||0);
-  if(custo !==undefined && custo!=='') encLinhas[i].custo    = Math.max(0, parseFloat(custo)||0);
-  if(pvp   !==undefined && pvp  !=='') encLinhas[i].pvp      = Math.max(0, parseFloat(pvp)||0);
+  const l = encLinhas[i];
+  const v = n => {
+    const el = document.getElementById(`enc-${n}-${i}`);
+    return el ? parseFloat(el.value) : NaN;
+  };
+  const set = (n, val) => {
+    const el = document.getElementById(`enc-${n}-${i}`);
+    if(el) el.value = typeof val==='number' ? (n==='mpct'?Math.round(val*10)/10:parseFloat(val.toFixed(4))) : val;
+  };
+
+  if(campo==='qty')   { l.qty      = Math.max(0, isNaN(v('qty'))  ? l.qty   : v('qty'));   return; }
+  if(campo==='bonus') { l.qtyBonus = Math.max(0, isNaN(v('bonus'))? l.qtyBonus||0: v('bonus')); return; }
+
+  const custo = v('custo'), pvp = v('pvp'), meur = v('meur'), mpct = v('mpct');
+
+  if(campo==='custo'){
+    l.custo = Math.max(0, isNaN(custo)?l.custo:custo);
+    if(l.pvp>0){ set('meur', l.pvp-l.custo); set('mpct', (l.pvp-l.custo)/l.pvp*100); }
+  } else if(campo==='pvp'){
+    l.pvp = Math.max(0, isNaN(pvp)?l.pvp:pvp);
+    if(l.pvp>0){ set('meur', l.pvp-l.custo); set('mpct', (l.pvp-l.custo)/l.pvp*100); }
+    else { set('meur',0); set('mpct',0); }
+  } else if(campo==='meur'){
+    // marg€ + custo → pvp; ou marg€ + pvp → custo
+    if(!isNaN(meur)){
+      if(!isNaN(custo) && l.custo>=0){
+        l.pvp = l.custo + meur; set('pvp', l.pvp);
+        if(l.pvp>0) set('mpct', meur/l.pvp*100);
+      } else if(!isNaN(pvp) && l.pvp>0){
+        l.custo = l.pvp - meur; set('custo', Math.max(0,l.custo));
+        set('mpct', l.pvp>0?meur/l.pvp*100:0);
+      }
+    }
+  } else if(campo==='mpct'){
+    // % + pvp → custo; ou % + custo → pvp
+    if(!isNaN(mpct)){
+      if(!isNaN(pvp) && l.pvp>0){
+        l.custo = l.pvp*(1-mpct/100); set('custo', Math.max(0,l.custo));
+        set('meur', l.pvp-l.custo);
+      } else if(!isNaN(custo) && l.custo>=0 && mpct<100){
+        l.pvp = l.custo/(1-mpct/100); set('pvp', l.pvp);
+        set('meur', l.pvp-l.custo);
+      }
+    }
+  }
 }
 
 function atualizarTotaisEnc(){
-  encLinhas.forEach((_,i)=>syncEncLinha(i));
+  // não re-sync aqui — os campos são editáveis e o sync já foi feito no onblur
   encLinhas.forEach((l,i)=>{
-    const marg=l.pvp-l.custo;
-    const margPct=l.pvp>0?Math.round(marg/l.pvp*100):0;
-    const qtyBonus=l.qtyBonus||0;
-    const elM=document.getElementById('enc-marg-'+i);
     const elT=document.getElementById('enc-total-'+i);
     const elR=document.getElementById('enc-row-'+i);
-    if(elM) elM.innerHTML=`<strong>${fmt(marg)}</strong><br><span style="color:#888;font-size:10px">(${margPct}%)</span>`;
     if(elT) elT.innerHTML=`<strong>${fmt(l.custo*l.qty)}</strong>`;
-    if(elR) elR.style.background=qtyBonus>0?'#f8fff8':'';
+    if(elR) elR.style.background=(l.qtyBonus||0)>0?'#f8fff8':'';
   });
   const portes=parseFloat(document.getElementById('enc-portes')?.value)||0;
   const tCusto=encLinhas.reduce((s,l)=>s+l.custo*l.qty,0);
@@ -2513,7 +2549,6 @@ function abrirEditEncomenda(encId){
     _editId:e.id // para saber que é edição
   }));
   // fechar outros formulários
-  document.getElementById('add-e-f').style.display='none';
   const f=document.getElementById('enc-form');
   f.style.display='block';
   // preencher cabeçalho
@@ -2585,7 +2620,7 @@ function guardarEncomenda(){
 function ddProdE(v){
   const dd=document.getElementById('dd-ep');
   if(!v||v.length<1){dd.style.display='none';return;}
-  const m=DB.produtos.filter(p=>p.nome.toLowerCase().includes(v.toLowerCase())||(p.cnp||'').includes(v));
+  const m=DB.produtos.filter(p=>matchProd(p,v));
   const criar=`<div class="ddi" onclick="mostrarCriarProdInline()" style="color:#8b6f4e;font-weight:600;border-top:1px solid #eee">
     + Criar novo produto "${v}"
   </div>`;
@@ -2782,7 +2817,7 @@ function renderConsumo(){
     </div>`;
 }
 function showAddCI(){const f=document.getElementById('add-ci-f');f.style.display=f.style.display==='none'?'block':'none';}
-function ddProdCI(v){const dd=document.getElementById('dd-ci');const m=DB.produtos.filter(p=>p.nome.toLowerCase().includes(v.toLowerCase()));dd.innerHTML=m.map(p=>`<div class="ddi" onclick="selProdCI('${p.id}','${p.nome.replace(/'/g,"\\'")}')"><strong>${p.nome}</strong></div>`).join('');dd.style.display=m.length?'block':'none';}
+function ddProdCI(v){const dd=document.getElementById('dd-ci');const m=DB.produtos.filter(p=>matchProd(p,v));dd.innerHTML=m.map(p=>`<div class="ddi" onclick="selProdCI('${p.id}','${p.nome.replace(/'/g,"\\'")}')"><strong>${p.nome}</strong></div>`).join('');dd.style.display=m.length?'block':'none';}
 function selProdCI(id,nome){document.getElementById('ci-p').value=nome;document.getElementById('ci-p-id').value=id;document.getElementById('dd-ci').style.display='none';}
 function addCI(){
   const pid=document.getElementById('ci-p-id').value;
@@ -3610,17 +3645,38 @@ document.getElementById('help-modal').addEventListener('click', e=>{ if(e.target
 // ─── FORNECEDORES ────────────────────────────────────────────────────────────
 let editingFornId = null;
 
+function setConsigDefaultEnc(){
+  const sel = document.getElementById('enc-forn');
+  if(!sel) return;
+  const nome = sel.value;
+  const forn = (DB.fornecedores||[]).find(f=>f.nome===nome);
+  // aplica consigDefault a todas as linhas existentes da encomenda
+  if(forn && forn.consigDefault){
+    encLinhas.forEach(l=>l.consig=true);
+    renderEncLinhas();
+  }
+}
+
 function renderFornecedores(){
   if(!DB.fornecedores) DB.fornecedores=[];
+  if(!DB.marcas) DB.marcas=[];
+  // enriquecer marcas: incluir as dos produtos que ainda não estão na lista editável
+  const marcasExtra = [...new Set(DB.produtos.map(p=>p.marca).filter(Boolean))]
+    .filter(m=>!DB.marcas.includes(m));
+  const todasMarcas = [...new Set([...DB.marcas,...marcasExtra])].sort();
   const tipos=['Distribuidor','Consignação','Grossista','Outro'];
 
   const rowHtml = f => {
     if(editingFornId===f.id) return `<tr style="background:#fffbf5">
       <td><input id="ef-n" value="${f.nome.replace(/"/g,'&quot;')}" style="min-width:140px"/></td>
       <td><select id="ef-t">${tipos.map(t=>`<option ${f.tipo===t?'selected':''}>${t}</option>`).join('')}</select></td>
-      <td><input id="ef-c" value="${f.contacto||''}" style="width:120px"/></td>
-      <td><input id="ef-e" value="${f.email||''}" style="width:160px"/></td>
-      <td><input id="ef-no" value="${f.notas||''}" style="min-width:140px"/></td>
+      <td><input id="ef-c" value="${f.contacto||''}" style="width:110px"/></td>
+      <td><input id="ef-e" value="${f.email||''}" style="width:150px"/></td>
+      <td><select id="ef-consig">
+        <option value="false" ${!f.consigDefault?'selected':''}>Não</option>
+        <option value="true" ${f.consigDefault?'selected':''}>Sim (padrão)</option>
+      </select></td>
+      <td><input id="ef-no" value="${f.notas||''}" style="min-width:120px"/></td>
       <td style="white-space:nowrap">
         <button class="btn pri sm" onclick="saveEditF('${f.id}')">Guardar</button>
         <button class="btn sm" onclick="cancelEditF()" style="margin-top:2px">Cancelar</button>
@@ -3631,6 +3687,7 @@ function renderFornecedores(){
       <td><span class="badge ${f.tipo==='Consignação'?'bg-a':f.tipo==='Distribuidor'?'bg-b':'bg-gray'}">${f.tipo}</span></td>
       <td style="color:#666">${f.contacto||'—'}</td>
       <td style="color:#666">${f.email||'—'}</td>
+      <td>${f.consigDefault?'<span class="badge bg-a">Consig. padrão</span>':'<span style="color:#bbb;font-size:11px">—</span>'}</td>
       <td style="color:#888;font-size:11px">${f.notas||'—'}</td>
       <td style="white-space:nowrap">
         <button class="btn sm" onclick="startEditF('${f.id}')">Editar</button>
@@ -3640,33 +3697,110 @@ function renderFornecedores(){
   };
 
   document.getElementById('pg-fornecedores').innerHTML=`
-    <div class="flex-b"><h2 style="margin:0">Fornecedores</h2><button class="btn" onclick="showAddF()">+ Novo fornecedor</button></div>
-    <p style="color:#888;font-size:12px;margin-bottom:1rem">Os nomes aqui registados aparecem nas listas de marcas dos produtos e entradas de stock.</p>
+    <h2>Fornecedores e Marcas</h2>
+
+    <!-- FORNECEDORES -->
+    <div class="flex-b" style="margin-bottom:8px">
+      <h3 style="margin:0">Fornecedores</h3>
+      <button class="btn" onclick="showAddF()">+ Novo fornecedor</button>
+    </div>
     <div id="add-f-form" style="display:none" class="card">
       <h3>Novo fornecedor</h3>
-      <div class="row c3">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
         <div><label>Nome</label><input id="nf-n"/></div>
         <div><label>Tipo</label><select id="nf-t"><option>Distribuidor</option><option>Consignação</option><option>Grossista</option><option>Outro</option></select></div>
         <div><label>Contacto</label><input id="nf-c" placeholder="Nome da pessoa"/></div>
       </div>
-      <div class="row c2">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
         <div><label>Email</label><input id="nf-e" type="email" placeholder="email@exemplo.com"/></div>
+        <div><label>Consignação por defeito?</label><select id="nf-consig"><option value="false">Não</option><option value="true">Sim</option></select></div>
         <div><label>Notas</label><input id="nf-no" placeholder="Condições, prazos, etc."/></div>
       </div>
-      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addForn()">Guardar</button><button class="btn" onclick="showAddF()">Cancelar</button></div>
+      <div style="display:flex;gap:8px"><button class="btn pri" onclick="addForn()">Guardar</button><button class="btn" onclick="showAddF()">Cancelar</button></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;margin-bottom:2rem">
+      <table>
+        <thead><tr><th>Nome</th><th>Tipo</th><th>Contacto</th><th>Email</th><th>Consig. padrão</th><th>Notas</th><th>Ações</th></tr></thead>
+        <tbody>${DB.fornecedores.map(f=>rowHtml(f)).join('')}</tbody>
+      </table>
+    </div>
+
+    <!-- MARCAS -->
+    <div class="flex-b" style="margin-bottom:8px">
+      <h3 style="margin:0">Marcas</h3>
+      <button class="btn" onclick="showAddMarca()">+ Nova marca</button>
+    </div>
+    <div id="add-m-form" style="display:none" class="card">
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <div style="flex:1"><label>Nome da marca</label><input id="nm-n" placeholder="ex: SVR, ISDIN, La Roche-Posay..."/></div>
+        <button class="btn pri" onclick="addMarca()">Guardar</button>
+        <button class="btn" onclick="showAddMarca()">Cancelar</button>
+      </div>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Nome</th><th>Tipo</th><th>Contacto</th><th>Email</th><th>Notas</th><th>Ações</th></tr></thead>
-        <tbody>${DB.fornecedores.map(f=>rowHtml(f)).join('')}</tbody>
+        <thead><tr><th>Marca</th><th>Produtos associados</th><th>Ações</th></tr></thead>
+        <tbody>${todasMarcas.length ? todasMarcas.map(m=>{
+          const nProd=DB.produtos.filter(p=>p.marca===m).length;
+          const isEditing=editingMarca===m;
+          if(isEditing) return `<tr style="background:#fffbf5">
+            <td><input id="em-nome" value="${m.replace(/"/g,'&quot;')}" style="min-width:180px"/></td>
+            <td style="color:#888;font-size:11px">${nProd} produto${nProd!==1?'s':''}</td>
+            <td style="white-space:nowrap">
+              <button class="btn pri sm" onclick="saveEditMarca('${m.replace(/'/g,"\\'")}')">Guardar</button>
+              <button class="btn sm" onclick="cancelEditMarca()" style="margin-top:2px">Cancelar</button>
+            </td>
+          </tr>`;
+          return `<tr>
+            <td><strong>${m}</strong></td>
+            <td style="color:#888;font-size:11px">${nProd} produto${nProd!==1?'s':''}</td>
+            <td style="white-space:nowrap">
+              <button class="btn sm" onclick="startEditMarca('${m.replace(/'/g,"\\'")}')">Editar</button>
+              <button class="btn dan sm" onclick="delMarca('${m.replace(/'/g,"\\'")}')">Apagar</button>
+            </td>
+          </tr>`;
+        }).join('') : '<tr><td colspan="3" style="text-align:center;padding:2rem;color:#999">Sem marcas registadas</td></tr>'}
+        </tbody>
       </table>
     </div>`;
 }
+
+let editingMarca = null;
+function showAddMarca(){const f=document.getElementById('add-m-form');f.style.display=f.style.display==='none'?'block':'none';setTimeout(()=>document.getElementById('nm-n')?.focus(),50);}
+function addMarca(){
+  const n=document.getElementById('nm-n')?.value.trim(); if(!n)return;
+  if(!DB.marcas) DB.marcas=[];
+  if(!DB.marcas.includes(n)) DB.marcas.push(n);
+  save(); showAddMarca(); renderFornecedores();
+}
+function startEditMarca(m){ editingMarca=m; renderFornecedores(); setTimeout(()=>document.getElementById('em-nome')?.focus(),50); }
+function cancelEditMarca(){ editingMarca=null; renderFornecedores(); }
+function saveEditMarca(oldNome){
+  const newNome=document.getElementById('em-nome')?.value.trim(); if(!newNome)return;
+  if(!DB.marcas) DB.marcas=[];
+  // atualizar na lista de marcas
+  const idx=DB.marcas.indexOf(oldNome);
+  if(idx>=0) DB.marcas[idx]=newNome; else DB.marcas.push(newNome);
+  // atualizar em todos os produtos
+  DB.produtos.forEach(p=>{ if(p.marca===oldNome) p.marca=newNome; });
+  editingMarca=null; save(); renderFornecedores();
+}
+function delMarca(nome){
+  confirmDel(`Apagar marca "${nome}"? Os produtos continuam mas ficam sem marca.`, ()=>{
+    if(DB.marcas) DB.marcas=DB.marcas.filter(m=>m!==nome);
+    // não apagar dos produtos — só da lista
+    save(); renderFornecedores();
+  });
+}
+
 function showAddF(){const f=document.getElementById('add-f-form');f.style.display=f.style.display==='none'?'block':'none';}
 function addForn(){
   const n=document.getElementById('nf-n').value.trim();if(!n)return;
   if(!DB.ids.f)DB.ids.f=1;
-  DB.fornecedores.push({id:'f'+DB.ids.f++,nome:n,tipo:document.getElementById('nf-t').value,contacto:document.getElementById('nf-c').value,email:document.getElementById('nf-e').value,notas:document.getElementById('nf-no').value});
+  DB.fornecedores.push({id:'f'+DB.ids.f++,nome:n,tipo:document.getElementById('nf-t').value,
+    contacto:document.getElementById('nf-c').value,email:document.getElementById('nf-e').value,
+    consigDefault:document.getElementById('nf-consig').value==='true',
+    notas:document.getElementById('nf-no').value});
   save();showAddF();renderFornecedores();
 }
 function startEditF(id){editingFornId=id;renderFornecedores();setTimeout(()=>document.getElementById('ef-n')?.focus(),50);}
@@ -3677,6 +3811,7 @@ function saveEditF(id){
   f.tipo=document.getElementById('ef-t').value;
   f.contacto=document.getElementById('ef-c').value;
   f.email=document.getElementById('ef-e').value;
+  f.consigDefault=document.getElementById('ef-consig').value==='true';
   f.notas=document.getElementById('ef-no').value;
   editingFornId=null;save();renderFornecedores();
 }
@@ -3697,9 +3832,9 @@ function fornOptions(sel=''){
 }
 // marcas = texto livre dos produtos, excluindo nomes de fornecedores
 function getMarcas(){
-  // marcas = texto livre — inclui todas, mesmo que coincidam com nome de fornecedor
-  // (Dermagius pode ser marca E fornecedor ao mesmo tempo)
-  return [...new Set(DB.produtos.map(p=>p.marca).filter(Boolean))].sort();
+  if(!DB.marcas) DB.marcas=[];
+  // combinar lista editável com marcas existentes nos produtos
+  return [...new Set([...DB.marcas,...DB.produtos.map(p=>p.marca).filter(Boolean)])].sort();
 }
 function marcaOptions(sel=''){return getMarcas().map(m=>`<option ${m===sel?'selected':''}>${m}</option>`).join('');}
 
