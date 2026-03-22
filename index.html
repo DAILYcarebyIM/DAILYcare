@@ -1073,7 +1073,43 @@ function renderConsultas(){
           <div><label>Faturado?</label><select id="ec-fat"><option value="false" ${!c.faturado?'selected':''}>Não faturado</option><option value="true" ${c.faturado?'selected':''}>Faturado</option></select></div>
           <div><label>Notas</label><input id="ec-notas" value="${c.notas||''}"/></div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
+
+        <!-- produtos da consulta -->
+        <div style="border-top:1px solid #eee;margin-top:12px;padding-top:12px">
+          <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:8px">Produtos desta consulta</div>
+          <div class="dd-wrap" style="margin-bottom:8px">
+            <input id="ec-ps" placeholder="Pesquisar produto para adicionar..." oninput="ddProdEC(this.value)" autocomplete="off"/>
+            <div class="dropdown" id="dd-ec-prod" style="display:none"></div>
+          </div>
+          <div id="ec-vendas">${c.vendas.length ? c.vendas.map((v,i)=>{
+            const ce=Math.max(0,(v.custoOriginal||v.custo)*(1-(v.descExtra||0)/100));
+            const lu=(v.pvp-ce)*v.qty;
+            const mt=v.pvp>0?Math.round((v.pvp-ce)/v.pvp*100):0;
+            return `<div class="vrow" style="align-items:flex-start;padding:8px 0;border-bottom:1px solid #f5f5f0" id="ecv-row-${i}">
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:600;margin-bottom:4px">${v.nome}${v.consig?' <span class="badge bg-a" style="font-size:9px">consig.</span>':''}</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+                  <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:10px;color:#888">PVP</span>
+                    <input id="ecv-pvp-${i}" type="number" value="${v.pvp.toFixed(2)}" step="0.01" style="width:72px;font-size:12px"
+                      onblur="syncECV()" onkeydown="if(event.key==='Enter')this.blur()"/></div>
+                  <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:10px;color:#888">Qty</span>
+                    <input id="ecv-qty-${i}" type="number" value="${v.qty}" min="1" style="width:52px;font-size:12px"
+                      onblur="syncECV()" onkeydown="if(event.key==='Enter')this.blur()"/></div>
+                  <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:10px;color:#888">Desc. forn. %</span>
+                    <input id="ecv-desc-${i}" type="number" value="${v.descExtra||0}" step="0.5" min="0" max="100" style="width:66px;font-size:12px"
+                      onblur="syncECV()" onkeydown="if(event.key==='Enter')this.blur()"/></div>
+                  <div style="background:#f0fff0;border-radius:4px;padding:3px 7px;border:1px solid #c3e6cb">
+                    <span style="font-size:10px;color:#888">Lucro (${mt}%)</span><br>
+                    <span style="font-size:12px;font-weight:600;color:#1a6b1a">${fmt(lu)}</span>
+                  </div>
+                </div>
+              </div>
+              <button class="btn dan sm" onclick="remECV(${i})" style="margin-left:8px;margin-top:4px">× rem.</button>
+            </div>`;
+          }).join('') : '<div style="color:#999;font-size:12px;padding:4px 0">Sem produtos.</div>'}</div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:12px">
           <button class="btn pri" onclick="saveEditCons('${c.id}')">Guardar alterações</button>
           <button class="btn" onclick="cancelEditCons()">Cancelar</button>
         </div>
@@ -1117,17 +1153,101 @@ function renderConsultas(){
       </div>`;
     }).join('')}`;
 }
-function startEditCons(id){ editingConsId=id; renderConsultas(); }
+function startEditCons(id){
+  editingConsId=id;
+  renderConsultas();
+  setTimeout(()=>document.getElementById('ec-data')?.focus(),50);
+}
 function cancelEditCons(){ editingConsId=null; renderConsultas(); }
+
+// sync dos inputs dos produtos na edição de consulta
+function syncECV(){
+  const c=DB.consultas.find(x=>x.id===editingConsId); if(!c) return;
+  c.vendas.forEach((v,i)=>{
+    const pvp=parseFloat(document.getElementById('ecv-pvp-'+i)?.value);
+    const qty=parseInt(document.getElementById('ecv-qty-'+i)?.value);
+    const desc=parseFloat(document.getElementById('ecv-desc-'+i)?.value);
+    if(!isNaN(pvp)) v.pvp=Math.max(0,pvp);
+    if(!isNaN(qty)) v.qty=Math.max(1,qty);
+    if(!isNaN(desc)) v.descExtra=Math.max(0,Math.min(100,desc));
+    v.custo=Math.max(0,(v.custoOriginal||v.custo)*(1-(v.descExtra||0)/100));
+  });
+}
+function remECV(idx){
+  const c=DB.consultas.find(x=>x.id===editingConsId); if(!c) return;
+  syncECV();
+  // repor stock do produto removido
+  const v=c.vendas[idx];
+  const p=DB.produtos.find(x=>x.id===v.prodId);
+  if(p) p.stock+=v.qty;
+  c.vendas.splice(idx,1);
+  c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*v.qty,0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty,0);
+  renderConsultas();
+}
+function ddProdEC(v){
+  const dd=document.getElementById('dd-ec-prod');
+  if(!v){ dd.style.display='none'; return; }
+  const m=DB.produtos.filter(p=>p.ativo!==false&&matchProd(p,v));
+  dd.innerHTML=m.map(p=>`<div class="ddi" onclick="addProdEC('${p.id}')">
+    <strong>${p.nome}</strong>
+    <span style="color:#999;font-size:11px"> — stock: ${p.stock} · PVP: ${fmt(p.pvp)}</span>
+  </div>`).join('');
+  dd.style.display=m.length?'block':'none';
+}
+function addProdEC(pid){
+  const c=DB.consultas.find(x=>x.id===editingConsId); if(!c) return;
+  const p=DB.produtos.find(x=>x.id===pid); if(!p) return;
+  syncECV();
+  const ex=c.vendas.find(v=>v.prodId===pid);
+  if(ex){ ex.qty++; }
+  else {
+    const margPct=p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100):0;
+    c.vendas.push({prodId:pid,nome:p.nome,pvp:p.pvp,custoOriginal:p.custo,custo:p.custo,
+      qty:1,marca:p.marca||'',consig:p.consig||false,margemBase:margPct,descExtra:0,faturado:false});
+    p.stock-=1; // baixar stock ao adicionar
+  }
+  c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*v.qty,0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty,0);
+  document.getElementById('ec-ps').value='';
+  document.getElementById('dd-ec-prod').style.display='none';
+  renderConsultas();
+}
+
 function saveEditCons(id){
   const c=DB.consultas.find(x=>x.id===id); if(!c) return;
+  syncECV(); // sync produto inputs antes de guardar
+
+  // corrigir stock: reverter qtys antigas, aplicar novas
+  const vendasAntigas=c.vendas.map(v=>({...v})); // cópia antes de alterar
+
   c.data=document.getElementById('ec-data').value;
   c.tipo=document.getElementById('ec-tipo').value;
   c.valor=parseFloat(document.getElementById('ec-val').value)||0;
   c.estado=document.getElementById('ec-est').value;
   c.faturado=document.getElementById('ec-fat').value==='true';
   c.notas=document.getElementById('ec-notas').value;
+
+  // recalcular totais com os dados atualizados
+  c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*v.qty,0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty,0);
+
   editingConsId=null; save(); renderConsultas();
+}
+
+function delConsulta(id){
+  const c=DB.consultas.find(x=>x.id===id); if(!c) return;
+  const nProd=c.vendas?.length||0;
+  const msgProd=nProd>0?`\nO stock de ${nProd} produto${nProd>1?'s':''} será reposto.`:'';
+  confirmDel(`Apagar consulta de "${cNome(c.clienteId)}" (${c.data})?${msgProd}`, ()=>{
+    // repor stock dos produtos vendidos
+    (c.vendas||[]).forEach(v=>{
+      const p=DB.produtos.find(x=>x.id===v.prodId);
+      if(p) p.stock+=v.qty;
+    });
+    DB.consultas=DB.consultas.filter(x=>x.id!==id);
+    save(); renderConsultas();
+  });
 }
 
 // ─── VENDAS PRODUTOS ─────────────────────────────────────────────────────────
@@ -3760,7 +3880,7 @@ function closeDelModal(){ document.getElementById('del-modal').style.display='no
 document.getElementById('del-confirm-btn').onclick = ()=>{ if(delCallback)delCallback(); closeDelModal(); };
 document.getElementById('del-modal').addEventListener('click', e=>{ if(e.target===e.currentTarget)closeDelModal(); });
 
-function delConsulta(id){ const c=DB.consultas.find(x=>x.id===id); confirmDel(`Apagar consulta de "${cNome(c.clienteId)}" (${c.data})?\nNota: o stock NÃO será reposto.`, ()=>{ DB.consultas=DB.consultas.filter(x=>x.id!==id); save(); renderConsultas(); }); }
+// delConsulta defined in renderConsultas section above
 function delCliente(id){ confirmDel(`Apagar cliente "${cNome(id)}"?`, ()=>{ DB.clientes=DB.clientes.filter(x=>x.id!==id); save(); renderClientes(); }); }
 function delPack(id){ const p=DB.packs.find(x=>x.id===id); confirmDel(`Apagar pack "${p.tipo}" de "${cNome(p.clienteId)}"?`, ()=>{ DB.packs=DB.packs.filter(x=>x.id!==id); save(); renderPacks(); }); }
 function delProduto(id){ const p=DB.produtos.find(x=>x.id===id); confirmDel(`Apagar produto "${p.nome}"?`, ()=>{ DB.produtos=DB.produtos.filter(x=>x.id!==id); save(); renderProdutos(); }); }
