@@ -410,9 +410,12 @@ async function load(){
 const fmt = n => (Math.round(n*100)/100).toFixed(2)+'€';
 // pesquisa por todas as palavras em qualquer ordem
 // ex: "antiox timewise" encontra "TimeWise Hidratante Antioxidante"
+function normalizar(s){
+  return (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+}
 function matchWords(texto, query){
-  const t = texto.toLowerCase();
-  return query.toLowerCase().split(/\s+/).filter(Boolean).every(w=>t.includes(w));
+  const t = normalizar(texto);
+  return normalizar(query).split(/\s+/).filter(Boolean).every(w=>t.includes(w));
 }
 function matchProd(p, v){
   return matchWords(p.nome+(p.marca?' '+p.marca:'')+(p.cat?' '+p.cat:'')+(p.cnp?' '+p.cnp:''), v);
@@ -3224,6 +3227,10 @@ function renderWorkshops(){
       const pagos=w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro');
       const porPagar=w.participantes.filter(p=>p.estado!=='Pago'&&p.estado!=='Pago Dinheiro');
 
+      const despesas  = w.despesas||[];
+      const tDespesas = despesas.reduce((s,d)=>s+d.valor,0);
+      const lucroReal = total - tDespesas;
+
       if(editingWorkshopId===w.id) return `<div class="card" style="border-color:#d4a97a">
         <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:10px">A editar: ${w.nome}</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
@@ -3252,12 +3259,15 @@ function renderWorkshops(){
           <div style="text-align:right">
             <div style="font-weight:700;font-size:16px">${fmt(total)}</div>
             <div style="font-size:11px;color:#999">${w.participantes.length} participantes &nbsp;·&nbsp; <span class="green">${pagos.length} pagos</span>${porPagar.length?` &nbsp;·&nbsp; <span class="amber">${porPagar.length} por pagar</span>`:''}</div>
+            ${tDespesas>0?`<div style="font-size:11px;color:#c0392b;margin-top:2px">Despesas: -${fmt(tDespesas)} &nbsp;·&nbsp; <strong class="green">Lucro: ${fmt(lucroReal)}</strong></div>`:''}
             <div style="margin-top:4px;display:flex;gap:4px;justify-content:flex-end;flex-wrap:wrap">
               ${w.faturado?'<span class="badge bg-b">Faturado</span>':'<span class="badge bg-gray">Não faturado</span>'}
               <button class="btn sm" onclick="toggleFaturadoW('${w.id}')" style="font-size:10px;padding:2px 8px">${w.faturado?'Desmarcar faturado':'Marcar faturado'}</button>
             </div>
           </div>
         </div>
+
+        <!-- participantes -->
         <table style="margin-bottom:10px">
           <thead><tr><th>Nome</th><th>Valor</th><th>Estado</th><th></th></tr></thead>
           <tbody>${w.participantes.map((p,i)=>`<tr id="wpart-${w.id}-${i}">
@@ -3286,16 +3296,101 @@ function renderWorkshops(){
             </td>
           </tr>`).join('')}</tbody>
         </table>
+
+        <!-- despesas do workshop -->
+        <div style="border-top:1px solid #eee;padding-top:10px;margin-bottom:10px">
+          <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:6px">Despesas do evento
+            <span style="font-weight:400;color:#aaa;font-size:10px"> (materiais, produtos usados, etc.)</span>
+          </div>
+          ${despesas.length ? `<table style="margin-bottom:8px">
+            <thead><tr><th>Descrição</th><th>Valor</th><th style="width:60px">Stock?</th><th></th></tr></thead>
+            <tbody>${despesas.map((d,di)=>`<tr>
+              <td style="font-size:12px">${d.desc}${d.prodNome?` <span style="color:#888;font-size:10px">(${d.prodNome})</span>`:''}</td>
+              <td class="red" style="font-size:12px"><strong>-${fmt(d.valor)}</strong></td>
+              <td style="font-size:10px;color:#888">${d.prodId?'Baixado':'—'}</td>
+              <td><button class="btn dan sm" onclick="delDespesaW('${w.id}',${di})">×</button></td>
+            </tr>`).join('')}
+            <tr style="background:#fafaf7">
+              <td style="font-size:11px;color:#888"><strong>Total despesas</strong></td>
+              <td class="red"><strong>-${fmt(tDespesas)}</strong></td>
+              <td></td><td></td>
+            </tr>
+            </tbody>
+          </table>` : '<div style="color:#bbb;font-size:11px;margin-bottom:8px">Sem despesas registadas.</div>'}
+          <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">
+            <div>
+              <label style="font-size:10px">Descrição</label>
+              <div class="dd-wrap">
+                <input id="wd-desc-${w.id}" placeholder="ex: SVR Fotoprotector ×3, brinde..." style="max-width:200px"
+                  oninput="ddProdWD('${w.id}',this.value)" autocomplete="off"/>
+                <div class="dropdown" id="dd-wd-${w.id}" style="display:none"></div>
+              </div>
+            </div>
+            <div><label style="font-size:10px">Valor (€)</label><input id="wd-val-${w.id}" type="number" placeholder="0.00" step="0.01" style="width:80px"/></div>
+            <input type="hidden" id="wd-pid-${w.id}" value=""/>
+            <button class="btn sm" onclick="addDespesaW('${w.id}')">+ Adicionar despesa</button>
+          </div>
+        </div>
+
         <div style="display:flex;gap:6px;align-items:flex-end;flex-wrap:wrap">
           <div><label style="font-size:10px">Nome</label><input id="wp-${w.id}" placeholder="Nome da participante" style="max-width:180px"/></div>
           <div><label style="font-size:10px">Valor (€)</label><input id="wv-${w.id}" type="number" placeholder="${w.preco}" style="width:80px"/></div>
           <div><label style="font-size:10px">Estado</label><select id="ws-${w.id}" style="max-width:140px"><option>Pago</option><option>Pago Dinheiro</option><option>Por pagar</option></select></div>
-          <button class="btn sm" onclick="addPart('${w.id}')">+ Adicionar</button>
+          <button class="btn sm" onclick="addPart('${w.id}')">+ Adicionar participante</button>
           <button class="btn sm" onclick="startEditW('${w.id}')" style="margin-left:4px">Editar workshop</button>
           <button class="btn dan sm" onclick="delWorkshop('${w.id}')" style="margin-left:auto">Apagar evento</button>
         </div>
       </div>`;
     }).join('')}`;
+}
+function ddProdWD(wid, v){
+  const dd=document.getElementById('dd-wd-'+wid);
+  if(!v||v.length<2){ dd.style.display='none'; return; }
+  const m=DB.produtos.filter(p=>p.ativo!==false&&matchProd(p,v));
+  dd.innerHTML=m.map(p=>`<div class="ddi" onclick="selProdWD('${wid}','${p.id}','${p.nome.replace(/'/g,"\\'")}',${p.custo.toFixed(2)})">
+    <strong>${p.nome}</strong>
+    <span style="color:#999;font-size:11px"> — custo: ${fmt(p.custo)} · stock: ${p.stock}</span>
+  </div>`).join('');
+  dd.style.display=m.length?'block':'none';
+}
+function selProdWD(wid, pid, nome, custo){
+  document.getElementById('wd-desc-'+wid).value=nome;
+  document.getElementById('wd-pid-'+wid).value=pid;
+  document.getElementById('wd-val-'+wid).value=custo.toFixed(2);
+  document.getElementById('dd-wd-'+wid).style.display='none';
+}
+function addDespesaW(wid){
+  const w=DB.workshops.find(x=>x.id===wid); if(!w) return;
+  const desc=document.getElementById('wd-desc-'+wid)?.value.trim();
+  const val=parseFloat(document.getElementById('wd-val-'+wid)?.value)||0;
+  const pid=document.getElementById('wd-pid-'+wid)?.value||'';
+  if(!desc||val<=0){ alert('Preenche a descrição e o valor.'); return; }
+  if(!w.despesas) w.despesas=[];
+  const prod=pid?DB.produtos.find(x=>x.id===pid):null;
+  // perguntar se quer baixar stock se for produto
+  let qty=1;
+  if(prod){
+    const qStr=window.prompt(`Quantas unidades de "${prod.nome}" foram usadas? (stock atual: ${prod.stock})`, '1');
+    if(qStr===null) return; // cancelou
+    qty=parseInt(qStr)||1;
+    if(qty>0){ prod.stock-=qty; }
+  }
+  w.despesas.push({desc, valor:val*(prod?qty:1), prodId:pid||null, prodNome:prod?prod.nome:null, qty:prod?qty:null});
+  document.getElementById('wd-desc-'+wid).value='';
+  document.getElementById('wd-val-'+wid).value='';
+  document.getElementById('wd-pid-'+wid).value='';
+  save(); renderWorkshops();
+}
+function delDespesaW(wid, idx){
+  const w=DB.workshops.find(x=>x.id===wid); if(!w||!w.despesas) return;
+  const d=w.despesas[idx];
+  // repor stock se tinha produto associado
+  if(d.prodId&&d.qty){
+    const p=DB.produtos.find(x=>x.id===d.prodId);
+    if(p) p.stock+=d.qty;
+  }
+  w.despesas.splice(idx,1);
+  save(); renderWorkshops();
 }
 let editingWorkshopId = null;
 function startEditW(id){ editingWorkshopId=id; renderWorkshops(); setTimeout(()=>document.getElementById('ew-n')?.focus(),50); }
@@ -4080,6 +4175,7 @@ function setConsigDefaultEnc(){
   }
 }
 
+let editingMarca = null;
 function renderFornecedores(){
   if(!DB.fornecedores) DB.fornecedores=[];
   if(!DB.marcas) DB.marcas=[];
@@ -4188,7 +4284,6 @@ function renderFornecedores(){
     </div>`;
 }
 
-let editingMarca = null;
 function showAddMarca(){const f=document.getElementById('add-m-form');f.style.display=f.style.display==='none'?'block':'none';setTimeout(()=>document.getElementById('nm-n')?.focus(),50);}
 function addMarca(){
   const n=document.getElementById('nm-n')?.value.trim(); if(!n)return;
