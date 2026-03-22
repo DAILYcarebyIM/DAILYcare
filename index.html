@@ -1841,126 +1841,23 @@ function renderPacks(){
     </div>`;
 }
 function showAddPk(){const f=document.getElementById('add-pk-f');f.style.display=f.style.display==='none'?'block':'none';}
-function ddCliPk(v){ ddCliGenerico(v,'dd-pk','pk-cli','pk-cli-id'); }
-function selCliPk(id,nome){document.getElementById('pk-cli').value=nome;document.getElementById('pk-cli-id').value=id;document.getElementById('dd-pk').style.display='none';}
-function addPk(){
-  const cId=document.getElementById('pk-cli-id').value;if(!cId)return;
-  const tipo=document.getElementById('pk-tipo').value;
-  const inc=parseInt(tipo.split(' ')[1]);
-  DB.packs.push({id:'pk'+DB.ids.pk++,clienteId:cId,tipo,incluidas:inc,usadas:0,valor:parseFloat(document.getElementById('pk-val').value)||0,faturado:document.getElementById('pk-fat').value==='true',data:document.getElementById('pk-data').value,estado:'Ativo'});
-  save();showAddPk();renderPacks();
-}
-
-// ─── PRODUTOS ────────────────────────────────────────────────────────────────
-let editingProdId = null;
-
 function renderProdutos(){
-  const defs=[
-    {col:'nome',     fn:p=>p.nome},
-    {col:'marca',    fn:p=>p.marca||''},
-    {col:'fornecedor',fn:p=>p.fornecedor||''},
-    {col:'cat',      fn:p=>p.cat||''},
-    {col:'custo',    fn:p=>p.custo},
-    {col:'pvp',      fn:p=>p.pvp},
-    {col:'margem',   fn:p=>p.pvp-p.custo},
-    {col:'stock',    fn:p=>p.stock},
-    {col:'stockMin', fn:p=>p.stockMin??0},
-  ];
-  let ps = DB.produtos;
-  if(fP) ps=ps.filter(p=>matchProd(p,fP));
-  if(fM) ps=ps.filter(p=>p.marca===fM);
-  const {col} = getSort('produtos');
-  ps = col ? sortArr(ps,'produtos',defs) : ps;
   const cats=['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro'];
   const todasCats = [...new Set([...cats, ...DB.produtos.map(p=>p.cat).filter(Boolean)])].sort();
 
-  const rowHtml = p => {
-    const ativo = p.ativo !== false;
-    if(editingProdId===p.id) {
-      const margE = p.pvp&&p.custo ? (p.pvp-p.custo).toFixed(2) : '';
-      const margP = p.pvp&&p.custo ? Math.round((p.pvp-p.custo)/p.pvp*100) : '';
-      return `<tr style="background:#fffbf5;vertical-align:top">
-        <td colspan="12" style="padding:12px">
-          <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:10px">A editar: ${p.nome}</div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:8px">
-            <div><label>Nome</label><input id="ep-n" value="${p.nome.replace(/"/g,'&quot;')}"/></div>
-            <div><label>CNP</label><input id="ep-cnp" value="${p.cnp||''}" placeholder="Código nacional" style="font-family:monospace"/></div>
-            <div><label>Marca</label><input id="ep-m" value="${(p.marca||'').replace(/"/g,'&quot;')}" placeholder="ex: SVR, ISDIN" list="ep-marcas-list"/><datalist id="ep-marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></div>
-            <div><label>Fornecedor</label>
-              <select id="ep-forn" onchange="toggleOutroForn('ep')">
-                <option value="">--</option>${fornOptions(p.fornecedor||'')}
-              </select>
-              <input id="ep-forn-outro" placeholder="Outro fornecedor" style="display:${p.fornecedor&&!getFornecedores().includes(p.fornecedor)?'block':'none'};margin-top:3px" value="${p.fornecedor&&!getFornecedores().includes(p.fornecedor)?p.fornecedor:''}"/>
-            </div>
-            <div><label>Categoria</label><input id="ep-cat" value="${p.cat||''}" list="ep-cats-list"/><datalist id="ep-cats-list">${todasCats.map(c=>`<option value="${c}">`).join('')}</datalist></div>
-          </div>
-          <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px">
-            <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços — edita qualquer campo</div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
-              <div><label>Custo (€)</label><input id="ep-custo" type="number" value="${parseFloat(p.custo||0).toFixed(2)}" step="0.01" oninput="calcProdFromCusto('ep')"/></div>
-              <div><label>PVP (€)</label><input id="ep-pvp" type="number" value="${parseFloat(p.pvp||0).toFixed(2)}" step="0.01" oninput="calcProdFromPvp('ep')"/></div>
-              <div><label>Margem (€)</label><input id="ep-meur" type="number" value="${margE}" step="0.01" oninput="calcProdFromMargEur('ep')"/></div>
-              <div><label>Margem (%)</label><input id="ep-mpct" type="number" value="${margP}" step="0.5" oninput="calcProdFromMargPct('ep')"/></div>
-            </div>
-            <div id="ep-preview" style="font-size:11px;margin-top:6px;min-height:14px;color:#888"></div>
-          </div>
-          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:10px">
-            <div><label>Stock atual</label><input id="ep-stock" type="number" value="${p.stock}"/></div>
-            <div><label>Stock mínimo</label><input id="ep-smin" type="number" value="${p.stockMin??1}"/></div>
-            <div><label>Consignação</label><select id="ep-cons"><option value="false" ${!p.consig?'selected':''}>Não</option><option value="true" ${p.consig?'selected':''}>Sim</option></select></div>
-            <div><label>Estado</label>
-              <select id="ep-ativo">
-                <option value="true" ${ativo?'selected':''}>Ativo</option>
-                <option value="false" ${!ativo?'selected':''}>Inativo</option>
-              </select>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px">
-            <button class="btn pri" onclick="saveEditP('${p.id}')">Guardar alterações</button>
-            <button class="btn" onclick="cancelEditP()">Cancelar</button>
-          </div>
-        </td>
-      </tr>`;
-    }
-    return `<tr style="${ativo?'':'opacity:0.5;background:#fafaf7'}">
-      <td>
-        <div style="font-weight:600">${p.nome}</div>
-        <div style="margin-top:2px;display:flex;gap:4px;flex-wrap:wrap">
-          ${p.consig?'<span class="badge bg-a">consig.</span>':''}
-          ${!ativo?'<span class="badge bg-gray">inativo</span>':''}
-        </div>
-      </td>
-      <td style="font-family:monospace;font-size:11px;color:#8b6f4e">${p.cnp||'—'}</td>
-      <td><span class="tag">${p.marca||'—'}</span></td>
-      <td><span class="tag" style="color:#7a4f28;background:#f3e8da">${p.fornecedor||'—'}</span></td>
-      <td><span class="tag">${p.cat||'—'}</span></td>
-      <td>${fmt(p.custo)}</td>
-      <td>${fmt(p.pvp)}</td>
-      <td><strong>${fmt(p.pvp-p.custo)}</strong></td>
-      <td>${p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100)+'%':'—'}</td>
-      <td>
-        <span class="badge ${p.stock<=0&&(p.stockMin??0)>0?'bg-r':(p.stockMin??0)>0&&p.stock<=(p.stockMin??0)?'bg-a':'bg-g'}">${p.stock}</span>
-        <span style="font-size:10px;color:#999;display:block;margin-top:1px">mín: ${p.stockMin??0}</span>
-      </td>
-      <td style="white-space:nowrap">
-        <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28" onclick="abrirHistoricoProd('${p.id}')">Histórico</button>
-        <button class="btn sm" onclick="startEditP('${p.id}')" style="margin-top:2px">Editar</button>
-        <button class="btn dan sm" onclick="delProduto('${p.id}')" style="margin-top:2px">Apagar</button>
-      </td>
-    </tr>`;
-  };
-
-  document.getElementById('pg-produtos').innerHTML=`
-    <div class="flex-b"><h2 style="margin:0">Produtos <span style="font-size:12px;color:#888;font-weight:400">(${DB.produtos.filter(p=>p.ativo!==false).length} ativos, ${DB.produtos.filter(p=>p.ativo===false).length} inativos)</span></h2><button class="btn" onclick="showAddP()">+ Adicionar produto</button></div>
+  const pg = document.getElementById('pg-produtos');
+  const jaExiste = pg.querySelector('#prod-tabela-wrap');
+  if(!jaExiste){
+    pg.innerHTML=`
+    <div class="flex-b"><h2 style="margin:0">Produtos <span id="prod-count" style="font-size:12px;color:#888;font-weight:400"></span></h2><button class="btn" onclick="showAddP()">+ Adicionar produto</button></div>
     <div id="add-p-f" style="display:none" class="card">
       <h3>Novo produto</h3>
       <div class="row c4">
         <div><label>Nome do produto</label><input id="np-n"/></div>
-        <div><label>Marca <span style="font-weight:400;color:#aaa">(ex: SVR, ISDIN)</span></label><input id="np-m" placeholder="Escreve a marca" list="marcas-list"/><datalist id="marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></div>
-        <div><label>Fornecedor <span style="font-weight:400;color:#aaa">(onde compras)</span></label>
+        <div><label>Marca</label><input id="np-m" placeholder="Escreve a marca" list="marcas-list"/><datalist id="marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></div>
+        <div><label>Fornecedor</label>
           <select id="np-forn" onchange="toggleOutroForn('np')">
-            <option value="">-- selecionar --</option>
-            ${fornOptions()}
+            <option value="">-- selecionar --</option>${fornOptions()}
           </select>
           <input id="np-forn-outro" placeholder="Nome do fornecedor" style="display:none;margin-top:4px"/>
         </div>
@@ -1984,23 +1881,120 @@ function renderProdutos(){
       </div>
       <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addP()">Guardar</button><button class="btn" onclick="showAddP()">Cancelar</button></div>
     </div>
-    <div class="card" style="padding:0;overflow:hidden">
+    <div id="prod-tabela-wrap" class="card" style="padding:0;overflow:hidden">
       <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap;align-items:center">
-        <input placeholder="Filtrar por nome, cat. ou CNP..." oninput="fP=this.value;renderProdutos()" style="max-width:220px" value="${fP}"/>
-        <select onchange="fM=this.value;renderProdutos()" style="max-width:200px">
+        <input id="prod-filtro" placeholder="Filtrar por nome, marca, cat. ou CNP..." oninput="fP=this.value;renderProdutosTabela()" style="max-width:260px" value="${fP}"/>
+        <select id="prod-filtro-marca" onchange="fM=this.value;renderProdutosTabela()" style="max-width:200px">
           <option value="">Todas as marcas</option>
           ${getMarcas().map(m=>`<option ${fM===m?'selected':''}>${m}</option>`).join('')}
         </select>
       </div>
-      <table>
-        <thead><tr>${thSort('produtos','nome','Produto')}<th>CNP</th>${thSort('produtos','marca','Marca')}${thSort('produtos','fornecedor','Fornecedor')}${thSort('produtos','cat','Cat.')}${thSort('produtos','custo','Custo')}${thSort('produtos','pvp','PVP')}${thSort('produtos','margem','Margem €')}<th>Margem %</th>${thSort('produtos','stock','Stock')}<th>Ações</th></tr></thead>
-        <tbody>${ps.map(p=>rowHtml(p)).join('')}</tbody>
-      </table>
+      <div id="prod-tbody-wrap"></div>
     </div>`;
+  }
+  // atualizar contador
+  const countEl = document.getElementById('prod-count');
+  if(countEl) countEl.textContent=`(${DB.produtos.filter(p=>p.ativo!==false).length} ativos, ${DB.produtos.filter(p=>p.ativo===false).length} inativos)`;
+  // atualizar filtro de marcas sem destruir o input
+  const marcaSel = document.getElementById('prod-filtro-marca');
+  if(marcaSel){
+    const curMarca=marcaSel.value;
+    marcaSel.innerHTML=`<option value="">Todas as marcas</option>${getMarcas().map(m=>`<option ${m===curMarca?'selected':''}>${m}</option>`).join('')}`;
+  }
+  renderProdutosTabela();
 }
 
-function startEditP(id){ editingProdId=id; renderProdutos(); setTimeout(()=>document.getElementById('ep-n')?.focus(),50); }
-function cancelEditP(){ editingProdId=null; renderProdutos(); }
+function renderProdutosTabela(){
+  const wrap = document.getElementById('prod-tbody-wrap'); if(!wrap) return;
+  const cats=['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro'];
+  const todasCats = [...new Set([...cats, ...DB.produtos.map(p=>p.cat).filter(Boolean)])].sort();
+  const defs=[
+    {col:'nome',fn:p=>p.nome},{col:'marca',fn:p=>p.marca||''},{col:'fornecedor',fn:p=>p.fornecedor||''},
+    {col:'cat',fn:p=>p.cat||''},{col:'custo',fn:p=>p.custo},{col:'pvp',fn:p=>p.pvp},
+    {col:'margem',fn:p=>p.pvp-p.custo},{col:'stock',fn:p=>p.stock},{col:'stockMin',fn:p=>p.stockMin??0},
+  ];
+  let ps = DB.produtos;
+  if(fP) ps=ps.filter(p=>matchProd(p,fP));
+  if(fM) ps=ps.filter(p=>p.marca===fM);
+  const {col} = getSort('produtos');
+  ps = col ? sortArr(ps,'produtos',defs) : ps;
+
+  const rowHtml = p => {
+    const ativo = p.ativo !== false;
+    if(editingProdId===p.id) {
+      const margE = p.pvp&&p.custo ? (p.pvp-p.custo).toFixed(2) : '';
+      const margP = p.pvp&&p.custo ? Math.round((p.pvp-p.custo)/p.pvp*100) : '';
+      return `<tr style="background:#fffbf5;vertical-align:top">
+        <td colspan="11" style="padding:12px">
+          <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:10px">A editar: ${p.nome}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-bottom:8px">
+            <div><label>Nome</label><input id="ep-n" value="${p.nome.replace(/"/g,'&quot;')}"/></div>
+            <div><label>CNP</label><input id="ep-cnp" value="${p.cnp||''}" placeholder="Código nacional" style="font-family:monospace"/></div>
+            <div><label>Marca</label><input id="ep-m" value="${(p.marca||'').replace(/"/g,'&quot;')}" list="ep-marcas-list"/><datalist id="ep-marcas-list">${getMarcas().map(m=>`<option value="${m}">`).join('')}</datalist></div>
+            <div><label>Fornecedor</label>
+              <select id="ep-forn" onchange="toggleOutroForn('ep')">
+                <option value="">--</option>${fornOptions(p.fornecedor||'')}
+              </select>
+              <input id="ep-forn-outro" placeholder="Outro" style="display:${p.fornecedor&&!getFornecedores().includes(p.fornecedor)?'block':'none'};margin-top:3px" value="${p.fornecedor&&!getFornecedores().includes(p.fornecedor)?p.fornecedor:''}"/>
+            </div>
+            <div><label>Categoria</label><input id="ep-cat" value="${p.cat||''}" list="ep-cats-list"/><datalist id="ep-cats-list">${todasCats.map(c=>`<option value="${c}">`).join('')}</datalist></div>
+          </div>
+          <div style="background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px">
+            <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:8px">Preços</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+              <div><label>Custo (€)</label><input id="ep-custo" type="number" value="${parseFloat(p.custo||0).toFixed(2)}" step="0.01" oninput="calcProdFromCusto('ep')"/></div>
+              <div><label>PVP (€)</label><input id="ep-pvp" type="number" value="${parseFloat(p.pvp||0).toFixed(2)}" step="0.01" oninput="calcProdFromPvp('ep')"/></div>
+              <div><label>Margem (€)</label><input id="ep-meur" type="number" value="${margE}" step="0.01" oninput="calcProdFromMargEur('ep')"/></div>
+              <div><label>Margem (%)</label><input id="ep-mpct" type="number" value="${margP}" step="0.5" oninput="calcProdFromMargPct('ep')"/></div>
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+            <div><label>Stock mínimo</label><input id="ep-smin" type="number" value="${p.stockMin??0}"/></div>
+            <div><label>Consignação</label><select id="ep-consig"><option value="false" ${!p.consig?'selected':''}>Não</option><option value="true" ${p.consig?'selected':''}>Sim</option></select></div>
+            <div><label>Ativo</label><select id="ep-ativo"><option value="true" ${ativo?'selected':''}>Ativo</option><option value="false" ${!ativo?'selected':''}>Inativo</option></select></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn pri" onclick="saveEditP('${p.id}')">Guardar</button>
+            <button class="btn" onclick="cancelEditP()">Cancelar</button>
+          </div>
+        </td>
+      </tr>`;
+    }
+    return `<tr style="${!ativo?'opacity:0.5':''}">
+      <td><div style="font-weight:600">${p.nome}</div>${!ativo?'<span class="badge bg-gray" style="font-size:9px">inativo</span>':''}</td>
+      <td style="font-family:monospace;font-size:11px;color:#8b6f4e">${p.cnp||'—'}</td>
+      <td><span class="tag">${p.marca||'—'}</span></td>
+      <td style="font-size:11px">${p.fornecedor||'—'}</td>
+      <td style="font-size:11px">${p.cat||'—'}</td>
+      <td>${fmt(p.custo)}</td><td>${fmt(p.pvp)}</td>
+      <td>
+        <strong>${fmt(p.pvp-p.custo)}</strong>
+        ${(()=>{const cm=custoMedioProd(p.id);if(cm!==null&&Math.abs(cm-p.custo)>0.01){const mm=p.pvp-cm;return `<div style="font-size:10px;color:#8b6f4e;margin-top:1px" title="Margem média real (custo médio ponderado de todas as entradas)">≈${fmt(mm)} médio</div>`;}return '';})()}
+      </td>
+      <td>
+        ${p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100)+'%':'—'}
+        ${(()=>{const cm=custoMedioProd(p.id);if(cm!==null&&p.pvp>0&&Math.abs(cm-p.custo)>0.01){return `<div style="font-size:10px;color:#8b6f4e;margin-top:1px" title="Margem % média real">≈${Math.round((p.pvp-cm)/p.pvp*100)}% médio</div>`;}return '';})()}
+      </td>
+      <td>
+        <span class="badge ${p.stock<=0&&(p.stockMin??0)>0?'bg-r':(p.stockMin??0)>0&&p.stock<=(p.stockMin??0)?'bg-a':'bg-g'}">${p.stock}</span>
+        <span style="font-size:10px;color:#999;display:block;margin-top:1px">mín: ${p.stockMin??0}</span>
+      </td>
+      <td style="white-space:nowrap">
+        <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28" onclick="abrirHistoricoProd('${p.id}')">Histórico</button>
+        <button class="btn sm" onclick="startEditP('${p.id}')" style="margin-top:2px">Editar</button>
+        <button class="btn dan sm" onclick="delProduto('${p.id}')" style="margin-top:2px">Apagar</button>
+      </td>
+    </tr>`;
+  };
+
+  wrap.innerHTML=`<table>
+    <thead><tr>${thSort('produtos','nome','Produto')}<th>CNP</th>${thSort('produtos','marca','Marca')}${thSort('produtos','fornecedor','Fornecedor')}${thSort('produtos','cat','Cat.')}${thSort('produtos','custo','Custo')}${thSort('produtos','pvp','PVP')}${thSort('produtos','margem','Margem €')}<th>Margem %</th>${thSort('produtos','stock','Stock')}<th>Ações</th></tr></thead>
+    <tbody>${ps.length?ps.map(p=>rowHtml(p)).join(''):'<tr><td colspan="11" style="text-align:center;padding:2rem;color:#999">Sem produtos encontrados</td></tr>'}</tbody>
+  </table>`;
+}
+
+function startEditP(id){ editingProdId=id; renderProdutosTabela(); setTimeout(()=>document.getElementById('ep-n')?.focus(),50); }
+function cancelEditP(){ editingProdId=null; renderProdutosTabela(); }
 function saveEditP(id){
   const p=DB.produtos.find(x=>x.id===id); if(!p) return;
   p.nome=document.getElementById('ep-n').value.trim()||p.nome;
@@ -3362,43 +3356,201 @@ function renderGastos(){
       <td><input id="eg-dt" type="date" value="${g.data}" style="width:130px"/></td>
       <td><input id="eg-d" value="${g.desc.replace(/"/g,'&quot;')}" style="min-width:160px"/></td>
       <td><select id="eg-c">${cats.map(c=>`<option ${g.cat===c?'selected':''}>${c}</option>`).join('')}</select></td>
-      <td><input id="eg-v" type="number" value="${g.valor}" style="width:90px"/></td>
+      <td><input id="eg-v" type="number" value="${g.valor}" style="width:90px" step="0.01"/></td>
+      <td><input id="eg-forn" value="${(g.fornecedor||'').replace(/"/g,'&quot;')}" placeholder="Fornecedor" style="width:130px"/></td>
       <td style="white-space:nowrap">
         <button class="btn pri sm" onclick="saveEditG('${g.id}')">Guardar</button>
         <button class="btn sm" onclick="cancelEditG()" style="margin-top:2px">Cancelar</button>
       </td>
     </tr>`;
+    // linha de agrupamento de encomenda — mostra os itens
+    const linhasHtml = (g.linhas||[]).length ? `
+      <tr style="background:#fafaf7">
+        <td colspan="6" style="padding:0 12px 8px 12px">
+          <div style="font-size:11px;color:#888">${g.linhas.map(l=>`${l.nome} ×${l.qty} — ${fmt(l.custo*l.qty)}`).join(' &nbsp;|&nbsp; ')}
+          ${g.portes>0?` &nbsp;|&nbsp; Portes: ${fmt(g.portes)}`:''}</div>
+        </td>
+      </tr>` : '';
     return `<tr>
-      <td>${g.data}</td><td>${g.desc}</td>
+      <td>${g.data}</td>
+      <td>
+        <strong>${g.desc}</strong>
+        ${g.fatura?`<div style="font-size:10px;color:#8b6f4e;font-family:monospace">${g.fatura}</div>`:''}
+      </td>
       <td><span class="tag">${g.cat}</span></td>
       <td class="red"><strong>${fmt(g.valor)}</strong></td>
+      <td style="font-size:11px;color:#888">${g.fornecedor||'—'}</td>
       <td style="white-space:nowrap">
         <button class="btn sm" onclick="startEditG('${g.id}')">Editar</button>
         <button class="btn dan sm" onclick="delGasto('${g.id}')" style="margin-top:2px">Apagar</button>
       </td>
-    </tr>`;
+    </tr>${linhasHtml}`;
   };
 
   document.getElementById('pg-gastos').innerHTML=`
-    <div class="flex-b"><h2 style="margin:0">Gastos do negócio</h2><button class="btn" onclick="showAddG()">+ Adicionar gasto</button></div>
+    <div class="flex-b" style="margin-bottom:1rem">
+      <h2 style="margin:0">Gastos do negócio</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" onclick="showGastoEncomenda()">📦 Registar encomenda</button>
+        <button class="btn" onclick="showAddG()">+ Gasto manual</button>
+      </div>
+    </div>
     <div class="metrics" style="margin-bottom:1rem">
       <div class="met"><div class="lb">Total gastos</div><div class="vl red">${fmt(total)}</div></div>
       ${Object.entries(porCat).map(([cat,val])=>`<div class="met"><div class="lb">${cat}</div><div class="vl" style="font-size:15px">${fmt(val)}</div></div>`).join('')}
     </div>
+
+    <!-- ENCOMENDA COMO GASTO -->
+    <div id="gasto-enc-form" style="display:none" class="card">
+      <h3>Registar encomenda como gasto</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:8px;margin-bottom:1rem">
+        <div><label>Data</label><input id="ge-data" type="date" value="${today()}"/></div>
+        <div><label>Fornecedor</label>
+          <select id="ge-forn" onchange="toggleOutroForn('ge')">
+            <option value="">-- selecionar --</option>${fornOptions()}
+          </select>
+          <input id="ge-forn-outro" placeholder="Nome do fornecedor" style="display:none;margin-top:4px"/>
+        </div>
+        <div><label>Nº fatura / guia</label><input id="ge-fatura" placeholder="ex: FT 2024/123"/></div>
+        <div><label>Portes de envio (€)</label><input id="ge-portes" type="number" placeholder="0.00" step="0.01" min="0" oninput="atualizarTotaisGE()"/></div>
+        <div><label>Categoria</label><select id="ge-cat">${cats.map(c=>`<option ${c==='Produtos'?'selected':''}>${c}</option>`).join('')}</select></div>
+      </div>
+
+      <div style="margin-bottom:8px">
+        <label>Adicionar produto</label>
+        <div class="dd-wrap">
+          <input id="ge-ps" placeholder="Pesquisar produto por nome ou CNP..." oninput="ddProdGE(this.value)" autocomplete="off"/>
+          <div class="dropdown" id="dd-ge-prod" style="display:none"></div>
+        </div>
+      </div>
+      <div id="ge-linhas" style="margin-bottom:8px"><div style="color:#999;font-size:12px;padding:4px 0">Adiciona produtos acima ou guarda sem produtos para um gasto simples.</div></div>
+      <div id="ge-totais" style="display:none;background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px"></div>
+
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" onclick="guardarGastoEncomenda()">Guardar gasto</button>
+        <button class="btn" onclick="showGastoEncomenda()">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- GASTO MANUAL -->
     <div id="add-g-f" style="display:none" class="card">
-      <h3>Novo gasto</h3>
-      <div class="row c3"><div><label>Descrição</label><input id="ng-d"/></div><div><label>Valor (€)</label><input id="ng-v" type="number" placeholder="0"/></div><div><label>Data</label><input id="ng-dt" type="date" value="${today()}"/></div></div>
-      <div><label>Categoria</label><select id="ng-c"><option>Produtos</option><option>Material</option><option>Marketing</option><option>Software</option><option>Formação</option><option>Deslocação</option><option>Outro</option></select></div>
+      <h3>Novo gasto manual</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+        <div><label>Descrição</label><input id="ng-d"/></div>
+        <div><label>Valor (€)</label><input id="ng-v" type="number" placeholder="0" step="0.01"/></div>
+        <div><label>Data</label><input id="ng-dt" type="date" value="${today()}"/></div>
+        <div><label>Fornecedor</label><input id="ng-forn" placeholder="Opcional"/></div>
+      </div>
+      <div><label>Categoria</label><select id="ng-c">${cats.map(c=>`<option>${c}</option>`).join('')}</select></div>
       <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addG()">Guardar</button><button class="btn" onclick="showAddG()">Cancelar</button></div>
     </div>
+
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Fornecedor</th><th>Ações</th></tr></thead>
         <tbody>${[...DB.gastos].sort((a,b)=>b.data.localeCompare(a.data)).map(g=>rowHtml(g)).join('')}
         </tbody>
       </table>
     </div>`;
 }
+
+// ─── GASTO ENCOMENDA ──────────────────────────────────────────────────────────
+let geLinhas = [];
+
+function showGastoEncomenda(){
+  document.getElementById('add-g-f').style.display='none';
+  const f=document.getElementById('gasto-enc-form');
+  const open=f.style.display==='none';
+  f.style.display=open?'block':'none';
+  if(open){ geLinhas=[]; renderGELinhas(); }
+}
+function showAddG(){
+  document.getElementById('gasto-enc-form').style.display='none';
+  const f=document.getElementById('add-g-f');
+  f.style.display=f.style.display==='none'?'block':'none';
+}
+
+function ddProdGE(v){
+  const dd=document.getElementById('dd-ge-prod');
+  if(!v){ dd.style.display='none'; return; }
+  const m=DB.produtos.filter(p=>p.ativo!==false&&matchProd(p,v));
+  dd.innerHTML=m.map(p=>`<div class="ddi" onclick="addLinhaGE('${p.id}')">
+    <strong>${p.nome}</strong>
+    <span style="color:#999;font-size:11px"> — custo: ${fmt(p.custo)} · PVP: ${fmt(p.pvp)}${p.cnp?' · CNP: '+p.cnp:''}</span>
+  </div>`).join('');
+  dd.style.display=m.length?'block':'none';
+}
+
+function addLinhaGE(pid){
+  const p=DB.produtos.find(x=>x.id===pid); if(!p) return;
+  geLinhas.push({prodId:pid, nome:p.nome, qty:1, custo:p.custo, marca:p.marca||''});
+  document.getElementById('ge-ps').value='';
+  document.getElementById('dd-ge-prod').style.display='none';
+  renderGELinhas();
+}
+
+function renderGELinhas(){
+  const el=document.getElementById('ge-linhas'); if(!el) return;
+  if(!geLinhas.length){
+    el.innerHTML='<div style="color:#999;font-size:12px;padding:4px 0">Adiciona produtos acima ou guarda sem produtos para um gasto simples.</div>';
+    const t=document.getElementById('ge-totais'); if(t) t.style.display='none';
+    return;
+  }
+  el.innerHTML=`<table>
+    <thead><tr><th>Produto</th><th style="width:70px">Qty</th><th style="width:90px">Custo unit.</th><th style="width:80px">Total</th><th style="width:28px"></th></tr></thead>
+    <tbody>${geLinhas.map((l,i)=>`<tr>
+      <td><strong>${l.nome}</strong>${l.marca?`<div style="font-size:10px;color:#888">${l.marca}</div>`:''}</td>
+      <td><input type="number" value="${l.qty}" min="1" style="width:62px"
+        onblur="geLinhas[${i}].qty=Math.max(1,parseInt(this.value)||1);atualizarTotaisGE()"
+        onkeydown="if(event.key==='Enter')this.blur()"/></td>
+      <td><input type="number" value="${l.custo.toFixed(2)}" step="0.01" min="0" style="width:82px"
+        onblur="geLinhas[${i}].custo=Math.max(0,parseFloat(this.value)||0);atualizarTotaisGE()"
+        onkeydown="if(event.key==='Enter')this.blur()"/></td>
+      <td id="ge-total-${i}"><strong>${fmt(l.custo*l.qty)}</strong></td>
+      <td><button class="btn dan sm" onclick="geLinhas.splice(${i},1);renderGELinhas()">×</button></td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+  atualizarTotaisGE();
+}
+
+function atualizarTotaisGE(){
+  const portes=parseFloat(document.getElementById('ge-portes')?.value)||0;
+  const sub=geLinhas.reduce((s,l)=>s+l.custo*l.qty,0);
+  const total=sub+portes;
+  geLinhas.forEach((l,i)=>{ const el=document.getElementById('ge-total-'+i); if(el) el.innerHTML=`<strong>${fmt(l.custo*l.qty)}</strong>`; });
+  const t=document.getElementById('ge-totais');
+  if(t&&geLinhas.length){
+    t.style.display='block';
+    t.innerHTML=`<div style="display:flex;gap:16px;flex-wrap:wrap">
+      <div><span style="color:#888;font-size:10px">Subtotal</span> <strong>${fmt(sub)}</strong></div>
+      ${portes>0?`<div><span style="color:#888;font-size:10px">Portes</span> <strong>${fmt(portes)}</strong></div>`:''}
+      <div><span style="color:#888;font-size:10px">Total</span> <strong style="color:#c0392b">${fmt(total)}</strong></div>
+    </div>`;
+  }
+}
+
+function guardarGastoEncomenda(){
+  const data   = document.getElementById('ge-data').value;
+  const forn   = getFornVal('ge');
+  const fatura = document.getElementById('ge-fatura').value.trim();
+  const portes = parseFloat(document.getElementById('ge-portes')?.value)||0;
+  const cat    = document.getElementById('ge-cat').value;
+  if(!forn&&!geLinhas.length){ alert('Indica pelo menos o fornecedor ou adiciona um produto.'); return; }
+  const sub = geLinhas.reduce((s,l)=>s+l.custo*l.qty,0);
+  const total = sub+portes;
+  const desc = forn ? `Encomenda ${forn}${fatura?' — '+fatura:''}` : `Gasto ${cat}${fatura?' — '+fatura:''}`;
+  if(!DB.ids.g) DB.ids.g=1;
+  DB.gastos.push({
+    id:'g'+DB.ids.g++, data, desc, cat, valor:total,
+    fornecedor:forn, fatura, portes,
+    linhas:geLinhas.map(l=>({...l}))
+  });
+  save();
+  geLinhas=[];
+  document.getElementById('gasto-enc-form').style.display='none';
+  renderGastos();
+}
+
 function startEditG(id){ editingGastoId=id; renderGastos(); setTimeout(()=>document.getElementById('eg-d')?.focus(),50); }
 function cancelEditG(){ editingGastoId=null; renderGastos(); }
 function saveEditG(id){
@@ -3407,13 +3559,20 @@ function saveEditG(id){
   g.desc=document.getElementById('eg-d').value.trim()||g.desc;
   g.cat=document.getElementById('eg-c').value;
   g.valor=parseFloat(document.getElementById('eg-v').value)||0;
+  g.fornecedor=document.getElementById('eg-forn')?.value.trim()||'';
   editingGastoId=null; save(); renderGastos();
 }
-function showAddG(){const f=document.getElementById('add-g-f');f.style.display=f.style.display==='none'?'block':'none';}
 function addG(){
-  const d=document.getElementById('ng-d').value.trim();if(!d)return;
-  DB.gastos.push({id:'g'+DB.ids.g++,data:document.getElementById('ng-dt').value,desc:d,valor:parseFloat(document.getElementById('ng-v').value)||0,cat:document.getElementById('ng-c').value});
-  save();showAddG();renderGastos();
+  const d=document.getElementById('ng-d').value.trim(); if(!d)return;
+  DB.gastos.push({
+    id:'g'+DB.ids.g++,
+    data:document.getElementById('ng-dt').value,
+    desc:d,
+    valor:parseFloat(document.getElementById('ng-v').value)||0,
+    cat:document.getElementById('ng-c').value,
+    fornecedor:document.getElementById('ng-forn')?.value.trim()||''
+  });
+  save(); showAddG(); renderGastos();
 }
 
 // ─── LISTA ENCOMENDAS ────────────────────────────────────────────────────────
@@ -3820,7 +3979,14 @@ function delForn(id){
   confirmDel(`Apagar fornecedor "${f.nome}"?`,()=>{DB.fornecedores=DB.fornecedores.filter(x=>x.id!==id);save();renderFornecedores();});
 }
 
-// lista de fornecedores (onde se compra) — com opção "Outro"
+// custo médio ponderado real — baseado nas entradas de stock (inclui bónus a 0)
+function custoMedioProd(prodId){
+  const entradas = DB.entradas.filter(e=>e.prodId===prodId);
+  if(!entradas.length) return null; // sem entradas → usar custo da ficha
+  const totalUnidades = entradas.reduce((s,e)=>s+e.qty+(e.qtyBonus||0),0);
+  const totalCusto    = entradas.reduce((s,e)=>s+e.custo*e.qty,0); // bónus entram a 0
+  return totalUnidades>0 ? totalCusto/totalUnidades : null;
+}
 function getFornecedores(){
   const base=['Mary Kay','Dermagius','Farmácia Fonte da Moura'];
   const extra=(DB.fornecedores||[]).map(f=>f.nome);
