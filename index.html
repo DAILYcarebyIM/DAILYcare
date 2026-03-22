@@ -370,8 +370,10 @@ async function load(){
       if(local){
         try{
           const localDB = JSON.parse(local);
-          if(localDB.consultas && localDB.consultas.length > (DB.consultas||[]).length){
-            if(confirm(`Encontrei dados no teu browser (${localDB.consultas.length} consultas) mais recentes do que a nuvem (${DB.consultas.length}).\n\nUsar dados do browser?`)){
+          const cloudScore = (DB.consultas||[]).length + (DB.produtos||[]).length;
+          const localScore = (localDB.consultas||[]).length + (localDB.produtos||[]).length;
+          if(localDB.consultas && localScore > cloudScore){
+            if(confirm(`Encontrei dados no teu browser (${localDB.consultas.length} consultas, ${(localDB.produtos||[]).length} produtos) mais recentes do que a nuvem (${DB.consultas.length} consultas, ${(DB.produtos||[]).length} produtos).\n\nUsar dados do browser?`)){
               DB = localDB; migrarCampos(); await saveToCloud();
             }
           }
@@ -2026,6 +2028,12 @@ function renderProdutos(){
   const pg = document.getElementById('pg-produtos');
   pg.innerHTML=`
     <div class="flex-b"><h2 style="margin:0">Produtos <span id="prod-count" style="font-size:12px;color:#888;font-weight:400">(${DB.produtos.filter(p=>p.ativo!==false).length} ativos, ${DB.produtos.filter(p=>p.ativo===false).length} inativos)</span></h2><button class="btn" onclick="showAddP()">+ Adicionar produto</button></div>
+    <div id="prod-debug" style="background:#fffbf5;border:1px solid #d4a97a;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:11px;color:#8b6f4e">
+      DB.produtos: <strong>${DB.produtos.length}</strong> registos |
+      Ativos: <strong>${DB.produtos.filter(p=>p.ativo!==false).length}</strong> |
+      Primeiro: <strong>${DB.produtos[0]?.nome||'—'}</strong>
+      <button class="btn sm" onclick="document.getElementById('prod-debug').style.display='none'" style="float:right;font-size:10px">×</button>
+    </div>
     <div id="add-p-f" style="display:none" class="card">
       <h3>Novo produto</h3>
       <div class="row c4">
@@ -4103,7 +4111,16 @@ document.getElementById('del-modal').addEventListener('click', e=>{ if(e.target=
 function delCliente(id){ confirmDel(`Apagar cliente "${cNome(id)}"?`, ()=>{ DB.clientes=DB.clientes.filter(x=>x.id!==id); save(); renderClientes(); }); }
 function delPack(id){ const p=DB.packs.find(x=>x.id===id); confirmDel(`Apagar pack "${p.tipo}" de "${cNome(p.clienteId)}"?`, ()=>{ DB.packs=DB.packs.filter(x=>x.id!==id); save(); renderPacks(); }); }
 function delProduto(id){ const p=DB.produtos.find(x=>x.id===id); confirmDel(`Apagar produto "${p.nome}"?`, ()=>{ DB.produtos=DB.produtos.filter(x=>x.id!==id); save(); renderProdutos(); }); }
-function delEntrada(id){ const e=DB.entradas.find(x=>x.id===id); confirmDel(`Apagar esta entrada de stock?\nNota: o stock NÃO será ajustado.`, ()=>{ DB.entradas=DB.entradas.filter(x=>x.id!==id); save(); renderEntradas(); }); }
+function delEntrada(id){
+  const e=DB.entradas.find(x=>x.id===id); if(!e) return;
+  const total=e.qty+(e.qtyBonus||0);
+  confirmDel(`Apagar esta entrada de "${e.prodNome}"?\nO stock será reduzido em ${total} unidade${total!==1?'s':''}.`, ()=>{
+    const p=DB.produtos.find(x=>x.id===e.prodId);
+    if(p) p.stock-=total;
+    DB.entradas=DB.entradas.filter(x=>x.id!==id);
+    save(); renderEntradas();
+  });
+}
 function delConsumo(id){
   const c=DB.consumo.find(x=>x.id===id); if(!c) return;
   confirmDel(`Apagar este consumo interno?\nO stock de "${c.prodNome}" será reposto (${c.qty} un.).`, ()=>{
