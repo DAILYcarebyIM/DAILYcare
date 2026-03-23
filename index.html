@@ -285,9 +285,27 @@ function diagProdutos(){
     `Online: ${sbOnline?'Sim':'Não'}\n\n` +
     `Se localStorage tem mais produtos, clica "Forçar sync do browser → nuvem"`
   );
-  // atualizar contador no debug bar
   const el=document.getElementById('ls-prod-count');
   if(el) el.textContent=localProd;
+}
+
+async function carregarDaNouvem(){
+  const btn = event.target;
+  btn.textContent='A carregar…'; btn.disabled=true;
+  try{
+    const r = await fetch(SB_URL+'/rest/v1/dailycare_data?id=eq.main&select=data', { headers: SB_HDR });
+    const txt = await r.text();
+    if(!r.ok){ alert('Erro HTTP '+r.status+':\n'+txt); btn.textContent='⬇ Carregar da nuvem'; btn.disabled=false; return; }
+    const rows = JSON.parse(txt);
+    if(!rows.length){ alert('Sem dados na nuvem (tabela vazia).'); btn.textContent='⬇ Carregar da nuvem'; btn.disabled=false; return; }
+    const data = rows[0].data;
+    if(!data||!data.produtos){ alert('Dados na nuvem sem campo produtos.\nChaves: '+Object.keys(data||{}).join(', ')); btn.textContent='⬇ Carregar da nuvem'; btn.disabled=false; return; }
+    DB = data; migrarCampos(); sbOnline=true;
+    localStorage.setItem('dailycare_data_v1', JSON.stringify(DB));
+    alert(`✓ Carregado! ${DB.produtos.length} produtos, ${DB.consultas.length} consultas.`);
+    renderProdutos();
+  }catch(e){ alert('Erro de rede:\n'+e.message+'\n\nVerifica se tens ligação à internet.'); }
+  btn.textContent='⬇ Carregar da nuvem'; btn.disabled=false;
 }
 
 async function forceSyncFromLocal(){
@@ -501,6 +519,8 @@ document.addEventListener('keydown', e=>{
 
 let cvs = [];
 let fP='', fM='';
+let fVendasTexto='', fVendasData='', fVendasDe='', fVendasAte='';
+let fEntradasTexto='', fEntradasData='';
 
 // ─── ORDENAÇÃO DE TABELAS ─────────────────────────────────────────────────────
 const sortState = {};
@@ -1508,17 +1528,28 @@ function guardarVendaRapida(){
 }
 
 function renderVendas(){
-  const all = DB.consultas.flatMap(c=>c.vendas.map(v=>({...v,data:c.data,cliente:cNome(c.clienteId),tipo:c.tipo})));
-  const sorted = [...all].sort((a,b)=>b.data.localeCompare(a.data));
-  const tPVP   = sorted.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
-  const tLucro = sorted.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0);
+  // aplicar filtros
+  let consultas = DB.consultas.filter(c=>c.vendas&&c.vendas.length>0);
+  if(fVendasData) consultas=consultas.filter(c=>c.data===fVendasData);
+  if(fVendasDe)   consultas=consultas.filter(c=>c.data>=fVendasDe);
+  if(fVendasAte)  consultas=consultas.filter(c=>c.data<=fVendasAte);
+  if(fVendasTexto){
+    const t=normalizar(fVendasTexto);
+    consultas=consultas.filter(c=>
+      normalizar(cNome(c.clienteId)).includes(t)||
+      c.vendas.some(v=>normalizar(v.nome).includes(t))
+    );
+  }
+  const tPVP   = consultas.reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+v.pvp*(v.qty||1),0),0);
+  const tLucro = consultas.reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+(v.pvp-v.custo)*(v.qty||1),0),0);
+  const tPVPAll   = DB.consultas.filter(c=>c.vendas?.length>0).reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+v.pvp*(v.qty||1),0),0);
+  const tLucroAll = DB.consultas.filter(c=>c.vendas?.length>0).reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+(v.pvp-v.custo)*(v.qty||1),0),0);
+  const temFiltro = fVendasTexto||fVendasData||fVendasDe||fVendasAte;
 
   document.getElementById('pg-vendas').innerHTML=`
     <div class="flex-b"><h2 style="margin:0">Vendas de produtos</h2>
       <button class="btn pri" onclick="showVendaRapida()">+ Registar venda</button>
     </div>
-
-    <!-- formulário venda rápida -->
     <div id="vr-form" style="display:none" class="card">
       <h3>Venda direta</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:1rem">
@@ -1537,8 +1568,6 @@ function renderVendas(){
           <select id="vr-fat"><option value="false">Não faturado</option><option value="true">Faturado</option></select>
         </div>
       </div>
-
-      <!-- pesquisa produto -->
       <div style="margin-bottom:8px">
         <label>Adicionar produto</label>
         <div class="dd-wrap">
@@ -1546,8 +1575,6 @@ function renderVendas(){
           <div class="dropdown" id="dd-vr-prod" style="display:none"></div>
         </div>
       </div>
-
-      <!-- linhas de produto -->
       <div id="vr-items" style="margin-bottom:8px"></div>
       <div id="vr-total-line" style="font-size:13px;font-weight:600;color:#8b6f4e;margin-bottom:10px;padding:8px;background:#f8f8f5;border-radius:6px"></div>
       <div style="display:flex;gap:8px">
@@ -1555,43 +1582,47 @@ function renderVendas(){
         <button class="btn" onclick="showVendaRapida()">Cancelar</button>
       </div>
     </div>
-
     <div class="metrics" style="margin-bottom:1rem">
-      <div class="met"><div class="lb">Total PVP</div><div class="vl">${fmt(tPVP)}</div></div>
-      <div class="met"><div class="lb">Lucro total</div><div class="vl green">${fmt(tLucro)}</div></div>
-      <div class="met"><div class="lb">Nº linhas vendidas</div><div class="vl">${sorted.length}</div></div>
+      <div class="met"><div class="lb">${temFiltro?'PVP (período)':'Total PVP'}</div><div class="vl">${fmt(tPVP)}</div></div>
+      <div class="met"><div class="lb">${temFiltro?'Lucro (período)':'Lucro total'}</div><div class="vl green">${fmt(tLucro)}</div></div>
+      <div class="met"><div class="lb">Nº vendas</div><div class="vl">${consultas.length}</div></div>
+      ${temFiltro?`<div class="met" style="border-color:#d4a97a"><div class="lb" style="color:#8b6f4e">PVP total geral</div><div class="vl">${fmt(tPVPAll)}</div></div>
+      <div class="met" style="border-color:#d4a97a"><div class="lb" style="color:#8b6f4e">Lucro total geral</div><div class="vl green">${fmt(tLucroAll)}</div></div>`:''}
     </div>
     <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap;align-items:center">
+        <input placeholder="Cliente ou produto..." value="${fVendasTexto}" oninput="fVendasTexto=this.value;renderVendas()" style="max-width:180px"/>
+        <input type="date" value="${fVendasData}" onchange="fVendasDe=\'\';fVendasAte=\'\';fVendasData=this.value;renderVendas()" title="Dia exacto" style="width:130px"/>
+        <span style="font-size:11px;color:#888">período:</span>
+        <input type="date" value="${fVendasDe}" onchange="fVendasData=\'\';fVendasDe=this.value;renderVendas()" title="De" style="width:130px"/>
+        <span style="font-size:11px;color:#888">→</span>
+        <input type="date" value="${fVendasAte}" onchange="fVendasData=\'\';fVendasAte=this.value;renderVendas()" title="Até" style="width:130px"/>
+        ${temFiltro?`<button class="btn sm" onclick="fVendasTexto=\'\';fVendasData=\'\';fVendasDe=\'\';fVendasAte=\'\';renderVendas()">× Limpar</button>`:''}
+      </div>
       <table>
         <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Estado</th><th></th></tr></thead>
         <tbody>${(()=>{
-          const consultas = DB.consultas.filter(c=>c.vendas&&c.vendas.length>0);
-          if(!consultas.length) return '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem vendas registadas</td></tr>';
+          if(!consultas.length) return '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem resultados</td></tr>';
           const defs=[
-            {col:'data',    fn:c=>c.data},
-            {col:'cliente', fn:c=>cNome(c.clienteId)},
-            {col:'pvp',     fn:c=>c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0)},
-            {col:'lucro',   fn:c=>c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0)},
+            {col:'data',fn:c=>c.data},{col:'cliente',fn:c=>cNome(c.clienteId)},
+            {col:'pvp',fn:c=>c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0)},
+            {col:'lucro',fn:c=>c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0)},
             {col:'produtos',fn:c=>c.vendas.length},
           ];
-          const {col} = getSort('vendas');
-          const lista = col ? sortArr(consultas,'vendas',defs) : [...consultas].sort((a,b)=>b.data.localeCompare(a.data));
-          if(!consultas.length) return '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem vendas registadas</td></tr>';
-          return consultas.map(c=>{
-            const tp = c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
-            const tl = c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0);
-            const nomes = c.vendas.map(v=>`${v.nome}${v.qty>1?' ×'+v.qty:''}`).join(', ');
+          const {col}=getSort('vendas');
+          const lista=col?sortArr(consultas,'vendas',defs):[...consultas].sort((a,b)=>b.data.localeCompare(a.data));
+          return lista.map(c=>{
+            const tp=c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
+            const tl=c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0);
+            const nomes=c.vendas.map(v=>`${v.nome}${v.qty>1?' ×'+v.qty:''}` ).join(', ');
             return `<tr>
-              <td>${c.data}</td>
-              <td>${cNome(c.clienteId)}</td>
+              <td>${c.data}</td><td>${cNome(c.clienteId)}</td>
               <td><span class="badge ${c.tipo==='Venda direta'?'bg-b':'bg-gray'}" style="font-size:10px">${c.tipo||'Consulta'}</span></td>
-              <td style="font-size:11px;color:#888;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nomes}">${nomes}</td>
+              <td style="font-size:11px;color:#888;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nomes}">${nomes}</td>
               <td><strong>${fmt(tp)}</strong></td>
               <td class="green"><strong>${fmt(tl)}</strong></td>
               <td><span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado||'—'}</span></td>
-              <td>
-                <button class="btn sm" onclick="toggleVendaDetalhe('${c.id}',this)" style="font-size:10px">▼ Detalhes</button>
-              </td>
+              <td><button class="btn sm" onclick="toggleVendaDetalhe('${c.id}',this)" style="font-size:10px">▼ Detalhes</button></td>
             </tr>
             <tr id="vd-${c.id}" style="display:none;background:#fafaf7">
               <td colspan="8" style="padding:0">
@@ -1599,8 +1630,7 @@ function renderVendas(){
                   <thead><tr style="background:#f0f0ec"><th style="padding:6px 12px">Produto</th><th>Qty</th><th>PVP unit.</th><th>PVP total</th><th>Custo ef.</th><th>Lucro</th><th>Desc.%</th><th>Consig.</th></tr></thead>
                   <tbody>${c.vendas.map(v=>`<tr style="background:#fafaf7">
                     <td style="padding:6px 12px"><strong>${v.nome}</strong></td>
-                    <td>${v.qty||1}</td>
-                    <td>${fmt(v.pvp)}</td>
+                    <td>${v.qty||1}</td><td>${fmt(v.pvp)}</td>
                     <td>${fmt(v.pvp*(v.qty||1))}</td>
                     <td class="amber">${fmt(v.custo*(v.qty||1))}</td>
                     <td class="green"><strong>${fmt((v.pvp-v.custo)*(v.qty||1))}</strong></td>
@@ -1611,10 +1641,8 @@ function renderVendas(){
                     <td style="padding:6px 12px">Total</td><td></td><td></td>
                     <td>${fmt(tp)}</td>
                     <td class="amber">${fmt(c.vendas.reduce((s,v)=>s+v.custo*(v.qty||1),0))}</td>
-                    <td class="green">${fmt(tl)}</td>
-                    <td></td><td></td>
-                  </tr>
-                  </tbody>
+                    <td class="green">${fmt(tl)}</td><td></td><td></td>
+                  </tr></tbody>
                 </table>
               </td>
             </tr>`;
@@ -1923,6 +1951,21 @@ function abrirFicha(cliId){
 
   modal.style.display='flex';
 }
+function corrigirStock(prodId, stockCerto){
+  const p=DB.produtos.find(x=>x.id===prodId); if(!p) return;
+  p.stock=stockCerto;
+  save(); abrirHistoricoProd(prodId);
+}
+function editarStockManual(prodId){
+  const p=DB.produtos.find(x=>x.id===prodId); if(!p) return;
+  const novo=window.prompt(`Stock atual: ${p.stock}\nIntroduz o novo valor de stock:`, p.stock);
+  if(novo===null) return;
+  const val=parseInt(novo);
+  if(isNaN(val)){ alert('Valor inválido.'); return; }
+  p.stock=val;
+  save(); abrirHistoricoProd(prodId);
+}
+
 function closeFicha(){ document.getElementById('ficha-modal').style.display='none'; }
 
 function abrirHistoricoProd(prodId){
@@ -1933,13 +1976,15 @@ function abrirHistoricoProd(prodId){
   const vendas   = DB.consultas.flatMap(c=>c.vendas.filter(v=>v.prodId===prodId).map(v=>({...v,data:c.data,cliente:cNome(c.clienteId)})))
                                .sort((a,b)=>b.data.localeCompare(a.data));
 
-  const totalComprado = entradas.reduce((s,e)=>s+e.qty,0);
+  const totalComprado = entradas.reduce((s,e)=>s+e.qty+(e.qtyBonus||0),0);
   const totalVendido  = vendas.reduce((s,v)=>s+(v.qty||1),0);
+  const consumoInterno= DB.consumo.filter(c=>c.prodId===prodId).reduce((s,c)=>s+c.qty,0);
+  const stockCalculado= totalComprado - totalVendido - consumoInterno;
+  const stockDif      = p.stock - stockCalculado;
   const totalGasto    = entradas.reduce((s,e)=>s+e.custo*e.qty,0);
   const totalRecebido = vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
   const totalLucro    = vendas.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0);
 
-  // evolução do preço de custo ao longo do tempo
   const custosUnicos = [...new Set(entradas.map(e=>e.custo))];
   const variacaoCusto = custosUnicos.length>1;
 
@@ -1958,7 +2003,22 @@ function abrirHistoricoProd(prodId){
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:8px;margin-bottom:1rem">
-      <div class="met"><div class="lb">Stock atual</div><div class="vl ${p.stock<=0?'red':p.stock<=p.stockMin?'amber':'green'}">${p.stock}</div></div>
+      <div class="met" style="border:1px solid #d4a97a;background:#fffbf5">
+        <div class="lb">Stock atual (guardado)</div>
+        <div class="vl ${p.stock<=0?'red':p.stock<=(p.stockMin??0)?'amber':'green'}">${p.stock}
+          <button onclick="editarStockManual('${prodId}')" style="font-size:10px;background:none;border:none;color:#8b6f4e;cursor:pointer;padding:0 4px" title="Editar stock manualmente">✏</button>
+        </div>
+      </div>
+      <div class="met ${Math.abs(stockDif)>0?'':''}">
+        <div class="lb">Stock calculado</div>
+        <div class="vl ${stockCalculado<=0?'red':stockCalculado<=(p.stockMin??0)?'amber':'green'}">${stockCalculado}</div>
+        <div style="font-size:9px;color:#888">${totalComprado} comprado − ${totalVendido} vendido − ${consumoInterno} consumo</div>
+      </div>
+      ${Math.abs(stockDif)>0?`<div class="met" style="border:1px solid #f5c6cb;background:#fff5f5">
+        <div class="lb">⚠ Diferença</div>
+        <div class="vl red">${stockDif>0?'+':''}${stockDif}</div>
+        <button class="btn sm" onclick="corrigirStock('${prodId}',${stockCalculado})" style="font-size:10px;margin-top:4px;background:#fff0f0;border-color:#f5c6cb">Corrigir para ${stockCalculado}</button>
+      </div>`:''}
       <div class="met"><div class="lb">Total comprado</div><div class="vl">${totalComprado} un.</div></div>
       <div class="met"><div class="lb">Total vendido</div><div class="vl">${totalVendido} un.</div></div>
       <div class="met"><div class="lb">Gasto em compras</div><div class="vl red">${fmt(totalGasto)}</div></div>
@@ -2054,13 +2114,46 @@ function renderPacks(){
     </div>`;
 }
 function showAddPk(){const f=document.getElementById('add-pk-f');f.style.display=f.style.display==='none'?'block':'none';}
+function recalcularStock(){
+  if(!confirm('Recalcular o stock de todos os produtos?\n\nO stock será calculado: Entradas + Bónus - Vendas - Consumo interno - Despesas workshops\n\nSó faz sentido se suspeitas que há inconsistências.')) return;
+  DB.produtos.forEach(p=>{
+    // entradas
+    const entradas = DB.entradas.filter(e=>e.prodId===p.id);
+    const totalEntrado = entradas.reduce((s,e)=>s+(e.qty||0)+(e.qtyBonus||0),0);
+    // vendas
+    const totalVendido = DB.consultas.flatMap(c=>c.vendas).filter(v=>v.prodId===p.id).reduce((s,v)=>s+(v.qty||1),0);
+    // consumo interno
+    const totalConsumo = DB.consumo.filter(c=>c.prodId===p.id).reduce((s,c)=>s+(c.qty||0),0);
+    // despesas workshops
+    const totalWorkshop = DB.workshops.flatMap(w=>w.despesas||[]).filter(d=>d.prodId===p.id).reduce((s,d)=>s+(d.qty||0),0);
+    p.stock = totalEntrado - totalVendido - totalConsumo - totalWorkshop;
+  });
+  save(); renderProdutos();
+  alert('✓ Stock recalculado para todos os produtos.');
+}
+
+function editarStockDirecto(pid){
+  const p=DB.produtos.find(x=>x.id===pid); if(!p) return;
+  const novo=window.prompt(`Stock actual de "${p.nome}": ${p.stock}\n\nNovo valor:`, p.stock);
+  if(novo===null) return;
+  const val=parseInt(novo);
+  if(isNaN(val)){ alert('Valor inválido.'); return; }
+  p.stock=val; save(); renderProdutosTabela();
+}
+
+let editingProdId = null;
 function renderProdutos(){
   const cats=['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro'];
   const todasCats = [...new Set([...cats, ...DB.produtos.map(p=>p.cat).filter(Boolean)])].sort();
 
   const pg = document.getElementById('pg-produtos');
   pg.innerHTML=`
-    <div class="flex-b"><h2 style="margin:0">Produtos <span id="prod-count" style="font-size:12px;color:#888;font-weight:400">(${DB.produtos.filter(p=>p.ativo!==false).length} ativos, ${DB.produtos.filter(p=>p.ativo===false).length} inativos)</span></h2><button class="btn" onclick="showAddP()">+ Adicionar produto</button></div>
+    <div class="flex-b"><h2 style="margin:0">Produtos <span id="prod-count" style="font-size:12px;color:#888;font-weight:400">(${DB.produtos.filter(p=>p.ativo!==false).length} ativos, ${DB.produtos.filter(p=>p.ativo===false).length} inativos)</span></h2>
+      <div style="display:flex;gap:6px">
+        <button class="btn sm" onclick="recalcularStock()" style="background:#fff3cd;border-color:#ffc107;color:#856404" title="Recalcular stock a partir de entradas e vendas">🔄 Recalcular stock</button>
+        <button class="btn" onclick="showAddP()">+ Adicionar produto</button>
+      </div>
+    </div>
     <div id="prod-debug" style="background:#fffbf5;border:1px solid #d4a97a;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:11px;color:#555">
       <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
         <span>DB.produtos: <strong>${DB.produtos.length}</strong></span>
@@ -2069,8 +2162,9 @@ function renderProdutos(){
         <span>localStorage: <strong id="ls-prod-count">…</strong></span>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
-        <button class="btn sm" onclick="diagProdutos()">🔍 Diagnóstico completo</button>
-        <button class="btn sm" onclick="forceSyncFromLocal()" style="background:#f0fff0;border-color:#c3e6cb">⬆ Forçar sync do browser → nuvem</button>
+        <button class="btn sm" onclick="diagProdutos()">🔍 Diagnóstico</button>
+        <button class="btn sm" onclick="carregarDaNouvem()" style="background:#e8f4ff;border-color:#90c0f0">⬇ Carregar da nuvem</button>
+        <button class="btn sm" onclick="forceSyncFromLocal()" style="background:#f0fff0;border-color:#c3e6cb">⬆ Forçar sync browser→nuvem</button>
         <button class="btn sm" onclick="document.getElementById('prod-debug').style.display='none'">× Fechar</button>
       </div>
     </div>
@@ -2199,6 +2293,7 @@ function renderProdutosTabela(){
       </td>
       <td style="white-space:nowrap">
         <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28" onclick="abrirHistoricoProd('${p.id}')">Histórico</button>
+        <button class="btn sm" onclick="editarStockDirecto('${p.id}')" style="margin-top:2px" title="Editar stock directamente">📦 Stock</button>
         <button class="btn sm" onclick="startEditP('${p.id}')" style="margin-top:2px">Editar</button>
         <button class="btn dan sm" onclick="delProduto('${p.id}')" style="margin-top:2px">Apagar</button>
       </td>
@@ -2390,6 +2485,11 @@ function renderEntradas(){
     </div>
 
     <div class="card" style="padding:0;overflow:hidden">
+      <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap">
+        <input placeholder="Filtrar por produto, fornecedor ou fatura..." value="${fEntradasTexto}" oninput="fEntradasTexto=this.value;renderEntradas()" style="max-width:280px"/>
+        <input type="date" value="${fEntradasData}" onchange="fEntradasData=this.value;renderEntradas()" title="Filtrar por data" style="width:140px"/>
+        ${fEntradasTexto||fEntradasData?`<button class="btn sm" onclick="fEntradasTexto='';fEntradasData='';renderEntradas()">× Limpar</button>`:''}
+      </div>
       <table>
         <thead><tr>${thSort('entradas','data','Data')}${thSort('entradas','nome','Produto')}<th>CNP</th>${thSort('entradas','qty','Qty')}${thSort('entradas','custo','Custo unit.')}${thSort('entradas','pvp','PVP')}${thSort('entradas','margem','Margem')}<th>Total</th>${thSort('entradas','fornecedor','Fornecedor')}<th>Fatura/Guia</th><th>Consig.</th><th>Ações</th></tr></thead>
         <tbody>${(()=>{
@@ -2404,7 +2504,19 @@ function renderEntradas(){
             {col:'fornecedor',fn:e=>e.fornecedor||''},
           ];
           const {col} = getSort('entradas');
-          const lista = col ? sortArr(DB.entradas,'entradas',defs) : [...DB.entradas].sort((a,b)=>b.data.localeCompare(a.data));
+          let lista = col ? sortArr(DB.entradas,'entradas',defs) : [...DB.entradas].sort((a,b)=>b.data.localeCompare(a.data));
+          // aplicar filtros
+          if(fEntradasData) lista=lista.filter(e=>e.data===fEntradasData);
+          if(fEntradasTexto){
+            const t=normalizar(fEntradasTexto);
+            lista=lista.filter(e=>
+              normalizar(e.prodNome||'').includes(t) ||
+              normalizar(e.fornecedor||'').includes(t) ||
+              normalizar(e.fatura||'').includes(t) ||
+              normalizar(e.encomendaId||'').includes(t)
+            );
+          }
+          if(!lista.length) return '<tr><td colspan="12" style="text-align:center;padding:2rem;color:#999">Sem resultados</td></tr>';
           return lista.map(e=>{
               if(editingEntradaId===e.id){
                 return `<tr style="background:#fffbf5;vertical-align:top">
