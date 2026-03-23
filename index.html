@@ -272,6 +272,39 @@ function save(){
   saveTimer = setTimeout(saveToCloud, 1500);
 }
 
+function diagProdutos(){
+  const local = localStorage.getItem('dailycare_data_v1');
+  let localProd = 0, localProdNomes = '—';
+  if(local){ try{ const d=JSON.parse(local); localProd=(d.produtos||[]).length; localProdNomes=(d.produtos||[]).slice(0,3).map(p=>p.nome).join(', '); }catch(e){} }
+  alert(
+    `=== DIAGNÓSTICO PRODUTOS ===\n\n` +
+    `Em memória (DB): ${DB.produtos.length} produtos\n` +
+    `Primeiro: ${DB.produtos[0]?.nome||'—'}\n\n` +
+    `No localStorage: ${localProd} produtos\n` +
+    `Primeiros 3: ${localProdNomes}\n\n` +
+    `Online: ${sbOnline?'Sim':'Não'}\n\n` +
+    `Se localStorage tem mais produtos, clica "Forçar sync do browser → nuvem"`
+  );
+  // atualizar contador no debug bar
+  const el=document.getElementById('ls-prod-count');
+  if(el) el.textContent=localProd;
+}
+
+async function forceSyncFromLocal(){
+  const local = localStorage.getItem('dailycare_data_v1');
+  if(!local){ alert('Sem dados no localStorage.'); return; }
+  try{
+    const localDB = JSON.parse(local);
+    const np = (localDB.produtos||[]).length;
+    if(!confirm(`Vais sobrescrever a nuvem com os dados do browser.\nProdutos no browser: ${np}\n\nConfirmas?`)) return;
+    DB = localDB;
+    migrarCampos();
+    await saveToCloud();
+    alert(`✓ Sync feito! ${np} produtos enviados para a nuvem.`);
+    renderProdutos();
+  }catch(e){ alert('Erro: '+e.message); }
+}
+
 async function saveToCloud(){
   try{
     const body = JSON.stringify({id:'main', data:DB, updated_at: new Date().toISOString()});
@@ -2028,11 +2061,18 @@ function renderProdutos(){
   const pg = document.getElementById('pg-produtos');
   pg.innerHTML=`
     <div class="flex-b"><h2 style="margin:0">Produtos <span id="prod-count" style="font-size:12px;color:#888;font-weight:400">(${DB.produtos.filter(p=>p.ativo!==false).length} ativos, ${DB.produtos.filter(p=>p.ativo===false).length} inativos)</span></h2><button class="btn" onclick="showAddP()">+ Adicionar produto</button></div>
-    <div id="prod-debug" style="background:#fffbf5;border:1px solid #d4a97a;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:11px;color:#8b6f4e">
-      DB.produtos: <strong>${DB.produtos.length}</strong> registos |
-      Ativos: <strong>${DB.produtos.filter(p=>p.ativo!==false).length}</strong> |
-      Primeiro: <strong>${DB.produtos[0]?.nome||'—'}</strong>
-      <button class="btn sm" onclick="document.getElementById('prod-debug').style.display='none'" style="float:right;font-size:10px">×</button>
+    <div id="prod-debug" style="background:#fffbf5;border:1px solid #d4a97a;border-radius:8px;padding:10px 12px;margin-bottom:8px;font-size:11px;color:#555">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:6px">
+        <span>DB.produtos: <strong>${DB.produtos.length}</strong></span>
+        <span>Ativos: <strong>${DB.produtos.filter(p=>p.ativo!==false).length}</strong></span>
+        <span>Primeiro: <strong>${DB.produtos[0]?.nome||'—'}</strong></span>
+        <span>localStorage: <strong id="ls-prod-count">…</strong></span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn sm" onclick="diagProdutos()">🔍 Diagnóstico completo</button>
+        <button class="btn sm" onclick="forceSyncFromLocal()" style="background:#f0fff0;border-color:#c3e6cb">⬆ Forçar sync do browser → nuvem</button>
+        <button class="btn sm" onclick="document.getElementById('prod-debug').style.display='none'">× Fechar</button>
+      </div>
     </div>
     <div id="add-p-f" style="display:none" class="card">
       <h3>Novo produto</h3>
@@ -2076,6 +2116,10 @@ function renderProdutos(){
       <div id="prod-tbody-wrap"></div>
     </div>`;
 
+  setTimeout(()=>{
+    const el=document.getElementById('ls-prod-count');
+    if(el){ try{ const d=JSON.parse(localStorage.getItem('dailycare_data_v1')||'{}'); el.textContent=(d.produtos||[]).length; }catch(e){ el.textContent='?'; } }
+  },0);
   setTimeout(renderProdutosTabela, 0);
 }
 
