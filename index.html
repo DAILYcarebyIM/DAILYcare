@@ -403,6 +403,26 @@ function migrarCampos(){
       p.marca = ''; // limpar — utilizador edita depois
     }
   });
+  // migrar vendas antigas: garantir descConsig=10 (fixo) em consignação,
+  // e inicializar descForn/descCliente/pvpBase/pvpCobrado se em falta
+  (DB.consultas||[]).forEach(c=>{
+    (c.vendas||[]).forEach(v=>{
+      if(v.consig){
+        v.descConsig = 10; // sempre 10% fixo — corrige valores antigos errados
+      }
+      if(v.descForn   === undefined) v.descForn    = 0;
+      if(v.descCliente=== undefined) v.descCliente = 0;
+      if(!v.pvpBase)  v.pvpBase  = v.pvp;
+      // recalcular custo com fórmula correcta: pvpBase × (1 - (10 + descForn) / 100)
+      if(v.consig){
+        v.custo = Math.max(0, (v.pvpBase||v.pvp) * (1 - (10 + (v.descForn||0)) / 100));
+      }
+      // pvpCobrado: se não estava guardado, recalcular
+      if(!v.pvpCobrado || v.pvpCobrado === v.pvp){
+        v.pvpCobrado = Math.max(0, (v.pvpBase||v.pvp) * (1 - (v.descCliente||0) / 100));
+      }
+    });
+  });
 }
 
 async function load(){
