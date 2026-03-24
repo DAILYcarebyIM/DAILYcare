@@ -352,7 +352,7 @@ async function syncConsignacaoPublica(){
         return {
           data:c.data, cnp:prod?.cnp||'', produto:v.nome, cliente:cNome(c.clienteId),
           qty:v.qty||1, pvp:v.pvp, custo_base:v.custoOriginal||v.custo,
-          desconto_pct:v.descExtra||0, custo_efetivo:v.custo,
+          desconto_pct:v.descExtra||0, desc_forn:v.descForn||0, desc_cliente:v.descCliente||0, custo_efetivo:v.custo, pvp_cobrado:v.pvpCobrado||v.pvp,
           lucro_dailycare:+(v.pvp-v.custo).toFixed(2),
           estado:pagas.includes(idx)?'Pago':'Por pagar'
         };
@@ -982,7 +982,7 @@ function addV(pid){
     // margemPct = margem habitual em %
     const margemPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     const descConsigCV = p.consig&&p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
-    cvs.push({prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp, custoOriginal:p.custo, custo:p.custo, qty:1, marca:p.marca, consig:p.consig||false, margemBase:margemPct, descExtra:0, descConsig:descConsigCV});
+    cvs.push({prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp, custoOriginal:p.custo, custo:p.custo, qty:1, marca:p.marca, consig:p.consig||false, margemBase:margemPct, descExtra:0, descConsig:descConsigCV, descForn:0, descCliente:0});
   }
   document.getElementById('ps-inp').value='';
   document.getElementById('dd-prod').style.display='none';
@@ -993,21 +993,40 @@ function remV(pid){ cvs=cvs.filter(v=>v.prodId!==pid); renderVendasTabela(); }
 // lê os inputs actuais do DOM e actualiza o array cvs — chamado antes de qualquer recalculo
 function syncInputs(){
   cvs.forEach(v=>{
-    const pvpEl  = document.getElementById('vi-pvp-'+v.prodId);
-    const qtyEl  = document.getElementById('vi-qty-'+v.prodId);
-    const descEl = document.getElementById('vi-desc-'+v.prodId);
+    const pvpEl    = document.getElementById('vi-pvp-'+v.prodId);
+    const qtyEl    = document.getElementById('vi-qty-'+v.prodId);
+    const descEl   = document.getElementById('vi-desc-'+v.prodId);
+    const fornEl   = document.getElementById('vi-dforn-'+v.prodId);
+    const cliEl    = document.getElementById('vi-dcli-'+v.prodId);
     if(pvpEl)  v.pvp        = parseFloat(pvpEl.value)||v.pvp;
     if(qtyEl)  v.qty        = parseInt(qtyEl.value)||1;
     if(descEl){ v.descExtra = parseFloat(descEl.value)||0; }
-    // custo efectivo = custoOriginal × (1 - descExtra/100)
-    v.custo = Math.max(0, (v.pvpBase||v.custoOriginal) * (1 - ((v.descConsig||0)+(v.descExtra||0))/100));
+    if(fornEl){ v.descForn  = parseFloat(fornEl.value)||0; }
+    if(cliEl) { v.descCliente = parseFloat(cliEl.value)||0; }
+    v.custo = calcCustoFarm(v);
   });
 }
 
+// Calcula custo efectivo e PVP cobrado ao cliente
+// Para consignação: custoFarm = pvpBase × (1 - (descConsig + descForn) / 100)
+// Para não-consig:  custoFarm = custoOriginal × (1 - descForn / 100)
+// pvpCobrado = pvpBase × (1 - descCliente / 100)
+function calcCustoFarm(v){
+  const descTotal = (v.descConsig||0) + (v.descForn||0);
+  if(v.consig){
+    return Math.max(0, (v.pvpBase||v.custoOriginal) * (1 - descTotal/100));
+  } else {
+    return Math.max(0, (v.custoOriginal||0) * (1 - (v.descForn||0)/100));
+  }
+}
+function calcPvpCobrado(v){
+  return Math.max(0, (v.pvpBase||v.pvp) * (1 - (v.descCliente||0)/100));
+}
+
 function calcTotais(){
-  const tp  = cvs.reduce((s,v)=>s+v.pvp*v.qty, 0);
-  const tDesc = cvs.reduce((s,v)=>s+(v.custoOriginal-v.custo)*v.qty, 0);
-  const tl  = cvs.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty, 0);
+  const tp  = cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty, 0);
+  const tDesc = cvs.reduce((s,v)=>s+(v.custoOriginal-calcCustoFarm(v))*v.qty, 0);
+  const tl  = cvs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty, 0);
   const sv  = parseFloat(document.getElementById('cc-val')?.value)||0;
   const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
   return {tp, tDesc, tl, sv, portes, total: tp+sv, totalComPortes: tp+sv+portes};
@@ -1024,14 +1043,15 @@ function renderVendasTabela(){
   }
 
   el.innerHTML = cvs.map(v=>{
-    const custoEfetivo = Math.max(0,(v.pvpBase||v.custoOriginal)*(1-((v.descConsig||0)+(v.descExtra||0))/100));
-    const lucroUnit = (v.pvp - custoEfetivo)*v.qty;
-    const margemTot = v.pvp>0 ? Math.round((v.pvp-custoEfetivo)/v.pvp*100) : 0;
-    const poupanca  = (v.custoOriginal - custoEfetivo)*v.qty;
+    const custoEfetivo = calcCustoFarm(v);
+    const pvpCobrado   = calcPvpCobrado(v);
+    const lucroUnit    = (pvpCobrado - custoEfetivo)*v.qty;
+    const margemTot    = pvpCobrado>0 ? Math.round((pvpCobrado-custoEfetivo)/pvpCobrado*100) : 0;
+    const poupanca     = (v.custoOriginal - custoEfetivo)*v.qty;
     return `<div class="vrow" style="align-items:flex-start;padding:10px 0">
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;margin-bottom:4px">${v.nome} ${v.consig?'<span class="badge bg-a">consig.</span>':''}</div>
-        <div style="font-size:11px;color:#888;margin-bottom:6px">${v.marca} &nbsp;·&nbsp; custo base: ${fmt(v.custoOriginal)} &nbsp;·&nbsp; margem base: ${v.margemBase}%</div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">${v.marca} &nbsp;·&nbsp; custo base: ${fmt(v.custoOriginal)} &nbsp;·&nbsp; margem base: ${v.margemBase}%${v.descCliente>0?` &nbsp;·&nbsp; <span style="color:#c05050">PVP cliente: ${fmt(pvpCobrado)}</span>`:''}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <div style="display:flex;flex-direction:column;gap:2px">
             <span style="font-size:10px;color:#888">PVP (€)</span>
@@ -1045,17 +1065,28 @@ function renderVendasTabela(){
               oninput="syncInputs();atualizarTotais()"
               style="width:55px;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px"/>
           </div>
+          ${v.consig ? `
           <div style="display:flex;flex-direction:column;gap:2px">
-            <span style="font-size:10px;color:#888">${v.consig&&v.descConsig>0?`Desc. extra (consig. base: ${v.descConsig}%)`:'Desc. forn. extra (%)'}</span>
-            <input id="vi-desc-${v.prodId}" type="number" value="${v.descExtra||0}" min="0" max="100" step="0.5"
+            <span style="font-size:10px;color:#888">▲ Desc. forn. (meu) %</span>
+            <input id="vi-dforn-${v.prodId}" type="number" value="${v.descForn||0}" min="0" max="100" step="0.5"
               oninput="syncInputs();atualizarTotais()"
-              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px"/>
-            ${v.consig&&v.descConsig>0&&v.descExtra>0?`<span style="font-size:9px;color:#856404">total: ${v.descConsig+v.descExtra}%</span>`:''}
+              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #a8d5a8;border-radius:6px;background:#f6fff6"/>
+            <span style="font-size:9px;color:#6b8e6b">farm.: ${((v.descConsig||0)+(v.descForn||0))}% total</span>
           </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:10px;color:#888">▼ Desc. cliente %</span>
+            <input id="vi-dcli-${v.prodId}" type="number" value="${v.descCliente||0}" min="0" max="100" step="0.5"
+              oninput="syncInputs();atualizarTotais()"
+              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #d4a0a0;border-radius:6px;background:#fff8f8"/>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
+            <span style="font-size:10px;color:#888">💰 Farm. paga</span>
+            <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
+          </div>` : `
           <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
             <span style="font-size:10px;color:#888">Custo efectivo</span>
             <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
-          </div>
+          </div>`}
           <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
             <span style="font-size:10px;color:#888">Lucro (${margemTot}%)</span>
             <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vi-lucro-${v.prodId}">${fmt(lucroUnit)}</span>
@@ -1064,7 +1095,7 @@ function renderVendasTabela(){
         </div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:12px;padding-top:4px">
-        <span style="font-weight:700;font-size:14px" id="vi-total-${v.prodId}">${fmt(v.pvp*v.qty)}</span>
+        <span style="font-weight:700;font-size:14px" id="vi-total-${v.prodId}">${fmt(pvpCobrado*v.qty)}</span>
         <button class="btn dan sm" onclick="syncInputs();remV('${v.prodId}')">× remover</button>
       </div>
     </div>`;
@@ -1078,15 +1109,16 @@ function atualizarTotais(){
   syncInputs();
   // actualizar custo/lucro por linha sem reescrever o input
   cvs.forEach(v=>{
-    const ce = Math.max(0,(v.pvpBase||v.custoOriginal)*(1-((v.descConsig||0)+(v.descExtra||0))/100));
-    const lu = (v.pvp-ce)*v.qty;
-    const mt = v.pvp>0?Math.round((v.pvp-ce)/v.pvp*100):0;
+    const ce  = calcCustoFarm(v);
+    const pvc = calcPvpCobrado(v);
+    const lu  = (pvc-ce)*v.qty;
+    const mt  = pvc>0?Math.round((pvc-ce)/pvc*100):0;
     const el_c = document.getElementById('vi-custo-'+v.prodId);
     const el_l = document.getElementById('vi-lucro-'+v.prodId);
     const el_t = document.getElementById('vi-total-'+v.prodId);
     if(el_c) el_c.textContent=fmt(ce);
     if(el_l){ el_l.textContent=fmt(lu); el_l.parentElement.querySelector('span:first-child').textContent=`Lucro (${mt}%)`; }
-    if(el_t) el_t.textContent=fmt(v.pvp*v.qty);
+    if(el_t) el_t.textContent=fmt(pvc*v.qty);
   });
   const {tp,tDesc,tl,sv,portes,total,totalComPortes} = calcTotais();
   const vtp=document.getElementById('vt-p'), vtd=document.getElementById('vt-d'), vtl=document.getElementById('vt-l'), vtt=document.getElementById('vt-t'), vtp2=document.getElementById('vt-portes');
@@ -1116,9 +1148,9 @@ function gravarConsulta(){
   const faturado = document.getElementById('cc-fat').value==='true';
   const notas = document.getElementById('cc-notas').value;
   const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
-  const vendasComFat = cvs.map(v=>({...v, faturado}));
-  const tp = cvs.reduce((s,v)=>s+v.pvp*v.qty,0);
-  const tl = cvs.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty,0);
+  const vendasComFat = cvs.map(v=>({...v, faturado, descForn:v.descForn||0, descCliente:v.descCliente||0, pvpCobrado:calcPvpCobrado(v)}));
+  const tp = cvs.reduce((s,v)=>s+(v.pvpCobrado||calcPvpCobrado(v))*v.qty,0);
+  const tl = cvs.reduce((s,v)=>s+((v.pvpCobrado||calcPvpCobrado(v))-v.custo)*v.qty,0);
   const id = 'c'+DB.ids.c++;
   DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,estado,notas,portes,vendas:vendasComFat,totalProd:tp,lucroProd:tl});
   cvs.forEach(v=>{const p=DB.produtos.find(x=>x.id===v.prodId);if(p)p.stock-=v.qty;});
@@ -1241,9 +1273,10 @@ function renderConsultasLista(){
             <div class="dropdown" id="dd-ec-prod" style="display:none"></div>
           </div>
           <div id="ec-vendas">${c.vendas.length ? c.vendas.map((v,i)=>{
-            const ce=Math.max(0,(v.pvpBase||v.custoOriginal)*(1-((v.descConsig||0)+(v.descExtra||0))/100));
-            const lu=(v.pvp-ce)*v.qty;
-            const mt=v.pvp>0?Math.round((v.pvp-ce)/v.pvp*100):0;
+            const ce =calcCustoFarm(v);
+            const pvc=calcPvpCobrado(v);
+            const lu =(pvc-ce)*v.qty;
+            const mt =pvc>0?Math.round((pvc-ce)/pvc*100):0;
             return `<div class="vrow" style="align-items:flex-start;padding:8px 0;border-bottom:1px solid #f5f5f0" id="ecv-row-${i}">
               <div style="flex:1;min-width:0">
                 <div style="font-weight:600;margin-bottom:4px">${v.nome}${v.consig?' <span class="badge bg-a" style="font-size:9px">consig.</span>':''}</div>
@@ -1254,9 +1287,18 @@ function renderConsultasLista(){
                   <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:10px;color:#888">Qty</span>
                     <input id="ecv-qty-${i}" type="number" value="${v.qty}" min="1" style="width:52px;font-size:12px"
                       onblur="syncECV()" onkeydown="if(event.key==='Enter')this.blur()"/></div>
-                  <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:10px;color:#888">Desc. forn. %</span>
-                    <input id="ecv-desc-${i}" type="number" value="${v.descExtra||0}" step="0.5" min="0" max="100" style="width:66px;font-size:12px"
-                      onblur="syncECV()" onkeydown="if(event.key==='Enter')this.blur()"/></div>
+                  ${v.consig ? `
+                  <div style="display:flex;flex-direction:column;gap:1px">
+                    <span style="font-size:10px;color:#888">▲ Desc. forn. (meu) %</span>
+                    <input id="ecv-dforn-${i}" type="number" value="${v.descForn||0}" step="0.5" min="0" max="100" style="width:66px;font-size:12px;border:1px solid #a8d5a8;background:#f6fff6"
+                      onblur="syncECV()" onkeydown="if(event.key==='Enter')this.blur()"/>
+                    <span style="font-size:9px;color:#6b8e6b">farm.: ${((v.descConsig||0)+(v.descForn||0))}% total</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:1px">
+                    <span style="font-size:10px;color:#888">▼ Desc. cliente %</span>
+                    <input id="ecv-dcli-${i}" type="number" value="${v.descCliente||0}" step="0.5" min="0" max="100" style="width:66px;font-size:12px;border:1px solid #d4a0a0;background:#fff8f8"
+                      onblur="syncECV()" onkeydown="if(event.key==='Enter')this.blur()"/>
+                  </div>` : ''}
                   <div style="background:#f0fff0;border-radius:4px;padding:3px 7px;border:1px solid #c3e6cb">
                     <span style="font-size:10px;color:#888">Lucro (${mt}%)</span><br>
                     <span style="font-size:12px;font-weight:600;color:#1a6b1a">${fmt(lu)}</span>
@@ -1303,7 +1345,7 @@ function renderConsultasLista(){
           <div><div class="lb">Produtos</div><strong>${fmt(c.totalProd)}</strong></div>
           <div><div class="lb">Lucro prod.</div><strong class="green">${fmt(c.lucroProd)}</strong></div>
         </div>
-        ${c.vendas.length?`<div class="divider"></div><div style="font-size:11px;color:#888">${c.vendas.map(v=>v.nome+' ×'+v.qty+' — '+fmt(v.pvp*v.qty)).join(' &nbsp;|&nbsp; ')}</div>`:``}
+        ${c.vendas.length?`<div class="divider"></div><div style="font-size:11px;color:#888">${c.vendas.map(v=>v.nome+' ×'+v.qty+' — '+fmt((v.pvpCobrado||v.pvp)*v.qty)+(v.descCliente>0?` <span style="color:#c05050">(-${v.descCliente}% cli.)</span>`:'')+(v.descForn>0?` <span style="color:#5a8a5a">(-${v.descForn}% forn.)</span>`:'')).join(' &nbsp;|&nbsp; ')}</div>`:``}
         ${c.notas?`<div style="font-size:11px;color:#999;margin-top:4px">Notas: ${c.notas}</div>`:''}
         <div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end">
           <button class="btn sm" onclick="startEditCons('${c.id}')">Editar</button>
@@ -1323,13 +1365,17 @@ function cancelEditCons(){ editingConsId=null; renderConsultas(); }
 function syncECV(){
   const c=DB.consultas.find(x=>x.id===editingConsId); if(!c) return;
   c.vendas.forEach((v,i)=>{
-    const pvp=parseFloat(document.getElementById('ecv-pvp-'+i)?.value);
-    const qty=parseInt(document.getElementById('ecv-qty-'+i)?.value);
+    const pvp =parseFloat(document.getElementById('ecv-pvp-'+i)?.value);
+    const qty =parseInt(document.getElementById('ecv-qty-'+i)?.value);
     const desc=parseFloat(document.getElementById('ecv-desc-'+i)?.value);
-    if(!isNaN(pvp)) v.pvp=Math.max(0,pvp);
-    if(!isNaN(qty)) v.qty=Math.max(1,qty);
+    const forn=parseFloat(document.getElementById('ecv-dforn-'+i)?.value);
+    const cli =parseFloat(document.getElementById('ecv-dcli-'+i)?.value);
+    if(!isNaN(pvp))  v.pvp=Math.max(0,pvp);
+    if(!isNaN(qty))  v.qty=Math.max(1,qty);
     if(!isNaN(desc)) v.descExtra=Math.max(0,Math.min(100,desc));
-    v.custo = Math.max(0, (v.pvpBase||v.custoOriginal) * (1 - ((v.descConsig||0)+(v.descExtra||0))/100));
+    if(!isNaN(forn)) v.descForn=Math.max(0,Math.min(100,forn));
+    if(!isNaN(cli))  v.descCliente=Math.max(0,Math.min(100,cli));
+    v.custo = calcCustoFarm(v);
   });
 }
 function remECV(idx){
@@ -1364,7 +1410,7 @@ function addProdEC(pid){
     const margPct=p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100):0;
     const descConsigEC = p.consig&&p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     c.vendas.push({prodId:pid,nome:p.nome,pvp:p.pvp,pvpBase:p.pvp,custoOriginal:p.custo,custo:p.custo,descConsig:descConsigEC,
-      qty:1,marca:p.marca||'',consig:p.consig||false,margemBase:margPct,descExtra:0,faturado:false});
+      qty:1,marca:p.marca||'',consig:p.consig||false,margemBase:margPct,descExtra:0,descForn:0,descCliente:0,faturado:false});
     p.stock-=1; // baixar stock ao adicionar
   }
   c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*v.qty,0);
@@ -1423,7 +1469,7 @@ function addVR(pid){
     const margemPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     const descConsigVR = p.consig&&p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     vrs.push({prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp, custoOriginal:p.custo, custo:p.custo, descConsig:descConsigVR,
-              qty:1, marca:p.marca||'', consig:p.consig||false, margemBase:margemPct, descExtra:0});
+              qty:1, marca:p.marca||'', consig:p.consig||false, margemBase:margemPct, descExtra:0, descForn:0, descCliente:0});
   }
   document.getElementById('vr-ps-inp').value='';
   document.getElementById('dd-vr-prod').style.display='none';
@@ -1436,28 +1482,33 @@ function syncVR(){
     const pvpEl  = document.getElementById('vri-pvp-'+v.prodId);
     const qtyEl  = document.getElementById('vri-qty-'+v.prodId);
     const descEl = document.getElementById('vri-desc-'+v.prodId);
-    if(pvpEl)  v.pvp      = parseFloat(pvpEl.value)||v.pvp;
-    if(qtyEl)  v.qty      = parseInt(qtyEl.value)||1;
-    if(descEl) v.descExtra= parseFloat(descEl.value)||0;
-    v.custo = Math.max(0, (v.pvpBase||v.custoOriginal) * (1 - ((v.descConsig||0)+(v.descExtra||0))/100));
+    const fornEl = document.getElementById('vri-dforn-'+v.prodId);
+    const cliEl  = document.getElementById('vri-dcli-'+v.prodId);
+    if(pvpEl)  v.pvp       = parseFloat(pvpEl.value)||v.pvp;
+    if(qtyEl)  v.qty       = parseInt(qtyEl.value)||1;
+    if(descEl) v.descExtra = parseFloat(descEl.value)||0;
+    if(fornEl) v.descForn  = parseFloat(fornEl.value)||0;
+    if(cliEl)  v.descCliente = parseFloat(cliEl.value)||0;
+    v.custo = calcCustoFarm(v);
   });
 }
 
 function atualizarTotaisVR(){
   syncVR();
   vrs.forEach(v=>{
-    const ce=Math.max(0,(v.pvpBase||v.custoOriginal)*(1-((v.descConsig||0)+(v.descExtra||0))/100));
-    const lu=(v.pvp-ce)*v.qty;
-    const mt=v.pvp>0?Math.round((v.pvp-ce)/v.pvp*100):0;
+    const ce =calcCustoFarm(v);
+    const pvc=calcPvpCobrado(v);
+    const lu =(pvc-ce)*v.qty;
+    const mt =pvc>0?Math.round((pvc-ce)/pvc*100):0;
     const ec=document.getElementById('vri-custo-'+v.prodId);
     const el=document.getElementById('vri-lucro-'+v.prodId);
     const et=document.getElementById('vri-total-'+v.prodId);
     if(ec) ec.textContent=fmt(ce);
     if(el){ el.textContent=fmt(lu); el.parentElement.querySelector('span:first-child').textContent=`Lucro (${mt}%)`; }
-    if(et) et.textContent=fmt(v.pvp*v.qty);
+    if(et) et.textContent=fmt(pvc*v.qty);
   });
-  const tp=vrs.reduce((s,v)=>s+v.pvp*v.qty,0);
-  const tl=vrs.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty,0);
+  const tp=vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
+  const tl=vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
   const tot=document.getElementById('vr-total-line');
   const portes=parseFloat(document.getElementById('vr-portes')?.value)||0;
   if(tot) tot.innerHTML=vrs.length?`Total produtos: <strong>${fmt(tp)}</strong> &nbsp;·&nbsp; Lucro: <strong class="green">${fmt(tl)}</strong>${portes>0?` &nbsp;·&nbsp; Portes: <strong>${fmt(portes)}</strong> &nbsp;·&nbsp; <strong style="color:#8b6f4e">Total c/ portes: ${fmt(tp+portes)}</strong>`:''}`:'';
@@ -1467,14 +1518,15 @@ function renderVRTabela(){
   const el=document.getElementById('vr-items'); if(!el) return;
   if(!vrs.length){ el.innerHTML='<p style="color:#999;font-size:12px;padding:4px 0">Sem produtos adicionados.</p>'; atualizarTotaisVR(); return; }
   el.innerHTML=vrs.map(v=>{
-    const ce=Math.max(0,(v.pvpBase||v.custoOriginal)*(1-((v.descConsig||0)+(v.descExtra||0))/100));
-    const lu=(v.pvp-ce)*v.qty;
-    const mt=v.pvp>0?Math.round((v.pvp-ce)/v.pvp*100):0;
-    const poup=(v.custoOriginal-ce)*v.qty;
+    const ce  = calcCustoFarm(v);
+    const pvc = calcPvpCobrado(v);
+    const lu  = (pvc-ce)*v.qty;
+    const mt  = pvc>0?Math.round((pvc-ce)/pvc*100):0;
+    const poup= (v.custoOriginal-ce)*v.qty;
     return `<div class="vrow" style="align-items:flex-start;padding:10px 0;border-bottom:1px solid #f0f0ec">
       <div style="flex:1;min-width:0">
         <div style="font-weight:600;margin-bottom:4px">${v.nome} ${v.consig?'<span class="badge bg-a">consig.</span>':''}</div>
-        <div style="font-size:11px;color:#888;margin-bottom:6px">${v.marca} &nbsp;·&nbsp; custo base: ${fmt(v.custoOriginal)} &nbsp;·&nbsp; margem base: ${v.margemBase}%</div>
+        <div style="font-size:11px;color:#888;margin-bottom:6px">${v.marca} &nbsp;·&nbsp; custo base: ${fmt(v.custoOriginal)} &nbsp;·&nbsp; margem base: ${v.margemBase}%${v.consig&&v.descCliente>0?` &nbsp;·&nbsp; <span style="color:#c05050">PVP cliente: ${fmt(pvc)}</span>`:''}</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
           <div style="display:flex;flex-direction:column;gap:2px">
             <span style="font-size:10px;color:#888">PVP (€)</span>
@@ -1488,17 +1540,28 @@ function renderVRTabela(){
               oninput="syncVR();atualizarTotaisVR()"
               style="width:55px;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px"/>
           </div>
+          ${v.consig ? `
           <div style="display:flex;flex-direction:column;gap:2px">
-            <span style="font-size:10px;color:#888">${v.consig&&v.descConsig>0?`Desc. extra (consig. base: ${v.descConsig}%)`:'Desc. forn. extra (%)'}</span>
-            <input id="vri-desc-${v.prodId}" type="number" value="${v.descExtra||0}" min="0" max="100" step="0.5"
+            <span style="font-size:10px;color:#888">▲ Desc. forn. (meu) %</span>
+            <input id="vri-dforn-${v.prodId}" type="number" value="${v.descForn||0}" min="0" max="100" step="0.5"
               oninput="syncVR();atualizarTotaisVR()"
-              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #ddd;border-radius:6px"/>
-            ${v.consig&&v.descConsig>0&&v.descExtra>0?`<span style="font-size:9px;color:#856404">total: ${v.descConsig+v.descExtra}%</span>`:''}
+              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #a8d5a8;border-radius:6px;background:#f6fff6"/>
+            <span style="font-size:9px;color:#6b8e6b">farm.: ${((v.descConsig||0)+(v.descForn||0))}% total</span>
           </div>
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:10px;color:#888">▼ Desc. cliente %</span>
+            <input id="vri-dcli-${v.prodId}" type="number" value="${v.descCliente||0}" min="0" max="100" step="0.5"
+              oninput="syncVR();atualizarTotaisVR()"
+              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #d4a0a0;border-radius:6px;background:#fff8f8"/>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
+            <span style="font-size:10px;color:#888">💰 Farm. paga</span>
+            <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vri-custo-${v.prodId}">${fmt(ce)}</span>
+          </div>` : `
           <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
             <span style="font-size:10px;color:#888">Custo efectivo</span>
             <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vri-custo-${v.prodId}">${fmt(ce)}</span>
-          </div>
+          </div>`}
           <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
             <span style="font-size:10px;color:#888">Lucro (${mt}%)</span>
             <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vri-lucro-${v.prodId}">${fmt(lu)}</span>
@@ -1548,13 +1611,16 @@ function guardarVendaRapida(){
   const faturado = document.getElementById('vr-fat').value==='true';
   const estado   = document.getElementById('vr-estado').value;
   const portesVR = parseFloat(document.getElementById('vr-portes')?.value)||0;
-  const tp = vrs.reduce((s,v)=>s+v.pvp*v.qty,0);
-  const tl = vrs.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty,0);
+  const tp = vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
+  const tl = vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
   const vendas = vrs.map(v=>({
-    prodId:v.prodId, nome:v.nome, pvp:v.pvp,
+    prodId:v.prodId, nome:v.nome, pvp:v.pvp, pvpBase:v.pvpBase||v.pvp,
     custoOriginal:v.custoOriginal, custo:v.custo,
     qty:v.qty, marca:v.marca, consig:v.consig,
-    descExtra:v.descExtra, faturado
+    descConsig:v.descConsig||0, descExtra:v.descExtra||0,
+    descForn:v.descForn||0, descCliente:v.descCliente||0,
+    pvpCobrado:calcPvpCobrado(v),
+    faturado
   }));
   DB.consultas.push({
     id:'c'+DB.ids.c++,
@@ -3296,7 +3362,7 @@ function renderConsign(){
   const pendentes = allItems.filter(v=>!pagas.has(v.cid));
   const tCusto    = pendentes.reduce((s,v)=>s+v.custo*(v.qty||1),0);
   const tLucro    = allItems.filter(v=>!pagas.has(v.cid)&&v.tipo==='Venda')
-                    .reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0);
+                    .reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
 
   document.getElementById('pg-consignacao').innerHTML=`
     <h2>Consignação — Farmácia Fonte da Moura</h2>
@@ -3326,7 +3392,7 @@ function renderConsign(){
 
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Data</th><th>Tipo</th><th>CNP</th><th>Produto</th><th>Cliente / Motivo</th><th>Qty</th><th>PVP unit.</th><th>PVP total</th><th>Custo base</th><th>Desc.%</th><th>A pagar farm.</th><th>Lucro</th><th></th></tr></thead>
+        <thead><tr><th>Data</th><th>Tipo</th><th>CNP</th><th>Produto</th><th>Cliente / Motivo</th><th>Qty</th><th>PVP unit.</th><th>PVP cobrado</th><th>PVP total</th><th>Custo base</th><th>▲ Forn.</th><th>▼ Cli.</th><th>A pagar farm.</th><th>Lucro</th><th></th></tr></thead>
         <tbody>
           ${allItems.length ? allItems.map(v=>{
             const qty=v.qty||1;
@@ -3343,14 +3409,16 @@ function renderConsign(){
               <td style="font-size:11px;color:#888">${v.cliente}</td>
               <td>${qty}</td>
               <td>${isCI?'<span style="color:#bbb">—</span>':fmt(v.pvp)}</td>
-              <td>${isCI?'<span style="color:#bbb">—</span>':`<strong>${fmt(v.pvpTotal)}</strong>`}</td>
+              <td>${isCI?'<span style="color:#bbb">—</span>':(v.descCliente>0?`<strong style="color:#c05050">${fmt((v.pvpCobrado||v.pvp)*qty)}</strong>`:`<strong>${fmt(v.pvpTotal)}</strong>`)}</td>
+              <td>${isCI?'<span style="color:#bbb">—</span>':fmt(v.pvp*qty)}</td>
               <td class="amber" style="font-size:11px">${fmt(custoBase*qty)}</td>
-              <td>${descPct>0?`<span class="badge bg-g">-${descPct}%</span>`:'—'}</td>
+              <td>${v.descForn>0?`<span class="badge bg-g">+${v.descForn}%</span>`:'—'}</td>
+              <td>${v.descCliente>0?`<span class="badge" style="background:#fde8e8;color:#c05050">-${v.descCliente}%</span>`:'—'}</td>
               <td class="amber"><strong>${fmt(custoEf*qty)}</strong></td>
-              <td class="${isCI?'':'green'}">${isCI?'<span style="color:#bbb">0,00€</span>':fmt((v.pvp-custoEf)*qty)}</td>
+              <td class="${isCI?'':'green'}">${isCI?'<span style="color:#bbb">0,00€</span>':fmt(((v.pvpCobrado||v.pvp)-custoEf)*qty)}</td>
               <td>${pago?'<span class="badge bg-g">Pago</span>':`<button class="btn suc sm" onclick="pagarC('${v.cid}')">Marcar pago</button>`}</td>
             </tr>`;
-          }).join('') : '<tr><td colspan="13" style="text-align:center;padding:2rem;color:#999">Sem itens de consignação</td></tr>'}
+          }).join('') : '<tr><td colspan="15" style="text-align:center;padding:2rem;color:#999">Sem itens de consignação</td></tr>'}
         </tbody>
       </table>
     </div>`;
@@ -3396,13 +3464,16 @@ function exportConsignCompleto(){
   _downloadConsignCSV(rows, `consignacao_completo_${today()}.csv`, 'Histórico completo — DAILYcare');
 }
 function _downloadConsignCSV(rows, filename, titulo){
-  const header = ['Data','CNP','Produto','Cliente','Quantidade','PVP unitário','PVP total','Custo base','Desconto %','A pagar farmácia','Lucro DAILYcare','Estado'];
+  const header = ['Data','CNP','Produto','Cliente','Quantidade','PVP unitário','PVP cobrado','PVP total','Custo base','Desc. forn. (meu)','Desc. cliente','A pagar farmácia','Lucro DAILYcare','Estado'];
   const data = rows.map(v=>{
     const custoBase=v.custoOriginal||v.custo, descPct=v.descExtra||0, custoEf=v.custo, qty=v.qty||1;
+    const pvpCob=(v.pvpCobrado||v.pvp);
     return [v.data, v.cnp||'', v.nome, v.cliente, qty,
-      v.pvp.toFixed(2), (v.pvp*qty).toFixed(2),
-      (custoBase*qty).toFixed(2), descPct>0?`-${descPct}%`:'0%',
-      (custoEf*qty).toFixed(2), ((v.pvp-custoEf)*qty).toFixed(2),
+      v.pvp.toFixed(2), (pvpCob*qty).toFixed(2), (v.pvp*qty).toFixed(2),
+      (custoBase*qty).toFixed(2),
+      v.descForn>0?`+${v.descForn}%`:'0%',
+      v.descCliente>0?`-${v.descCliente}%`:'0%',
+      (custoEf*qty).toFixed(2), ((pvpCob-custoEf)*qty).toFixed(2),
       v.pago?'Pago':'Por pagar'];
   });
   const total = rows.filter(v=>!v.pago).reduce((s,v)=>s+v.custo*(v.qty||1),0);
@@ -3414,7 +3485,7 @@ function _downloadConsignCSV(rows, filename, titulo){
     header,
     ...data,
     [],
-    ['','','','','','','','','TOTAL A PAGAR:',total.toFixed(2),'','']
+    ['','','','','','','','','','','TOTAL A PAGAR:',total.toFixed(2),'','']
   ].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=filename;a.click();
