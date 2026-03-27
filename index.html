@@ -345,7 +345,9 @@ async function saveToCloud(){
 async function syncConsignacaoPublica(){
   try{
     const pagas = new Set(DB.consignacoesPagas||[]);
-    const items = DB.consultas.flatMap(c=>
+
+    // 1. Vendas em consignação
+    const vendas = DB.consultas.flatMap(c=>
       c.vendas.filter(v=>v.consig).map(v=>{
         const prod = DB.produtos.find(p=>p.id===v.prodId);
         const cid  = `v-${c.id}-${v.prodId}`;
@@ -362,7 +364,35 @@ async function syncConsignacaoPublica(){
         };
       })
     );
-    const body = JSON.stringify({id:1, data:items, updated_at:new Date().toISOString()});
+
+    // 2. Stock de produtos em consignação (todos, mesmo sem stock)
+    const stock = DB.produtos
+      .filter(p=>p.consig && p.ativo!==false)
+      .map(p=>({
+        id:p.id, nome:p.nome, cnp:p.cnp||'', marca:p.marca||'',
+        pvp:p.pvp||0, custo:+(p.custo||0).toFixed(2),
+        stock:p.stock||0, stockMin:p.stockMin||0,
+        fornecedor:p.fornecedor||''
+      }));
+
+    // 3. Lista de encomendas pendentes (stock abaixo do mínimo, não encomendados)
+    const encomendados = new Set(DB.encomendados||[]);
+    const aEncomendar = DB.produtos
+      .filter(p=>p.consig && p.ativo!==false && (p.stockMin||0)>0 && p.stock<(p.stockMin||0) && !encomendados.has(p.id))
+      .map(p=>({nome:p.nome, cnp:p.cnp||'', pvp:p.pvp||0, stock:p.stock||0, stockMin:p.stockMin||0, qtyNecessaria:Math.max(0,(p.stockMin||0)-p.stock+1)}));
+    const jaEncomendados = DB.produtos
+      .filter(p=>p.consig && p.ativo!==false && (p.stockMin||0)>0 && p.stock<(p.stockMin||0) && encomendados.has(p.id))
+      .map(p=>({nome:p.nome, cnp:p.cnp||'', pvp:p.pvp||0, stock:p.stock||0, stockMin:p.stockMin||0, qtyNecessaria:Math.max(0,(p.stockMin||0)-p.stock+1)}));
+
+    const body = JSON.stringify({
+      id:1,
+      data: vendas,
+      stock_consignacao: stock,
+      a_encomendar: aEncomendar,
+      ja_encomendado: jaEncomendados,
+      updated_at: new Date().toISOString()
+    });
+
     // PATCH primeiro; se registo não existir (array vazio), fazer POST
     const patchR = await fetch(SB_URL+'/rest/v1/consignacao_publica?id=eq.1', {
       method:'PATCH', headers:{...SB_HDR,'Prefer':'return=representation'}, body
