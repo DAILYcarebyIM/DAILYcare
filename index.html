@@ -621,15 +621,20 @@ function renderDash(){
   const rendRelevante = rendRelvServ+rendRelvProd;
   const ss            = rendRelevante*0.252;
 
-  // stock imobilizado — custo do que está em stock não vendido
-  const prodAtivos = DB.produtos.filter(p=>p.ativo!==false && (p.stock||0)>0);
-  const stockCusto  = prodAtivos.reduce((s,p)=>s+p.custo*(p.stock||0), 0);
-  const stockPVP    = prodAtivos.reduce((s,p)=>s+p.pvp*(p.stock||0), 0);
-  const stockLucroP = stockPVP - stockCusto; // lucro potencial se vender tudo
-  const nProdStock  = prodAtivos.length;
-  // separar consignação vs próprio
-  const stockCustoConsig  = prodAtivos.filter(p=>p.consig).reduce((s,p)=>s+p.custo*(p.stock||0),0);
-  const stockCustoProprio = prodAtivos.filter(p=>!p.consig).reduce((s,p)=>s+p.custo*(p.stock||0),0);
+  // stock imobilizado — só produtos próprios (não consignação)
+  const prodProprios = DB.produtos.filter(p=>p.ativo!==false && !p.consig && (p.stock||0)>0);
+  const stockCusto   = prodProprios.reduce((s,p)=>s+p.custo*(p.stock||0), 0);
+  const stockPVP     = prodProprios.reduce((s,p)=>s+p.pvp*(p.stock||0), 0);
+  const stockLucroP  = stockPVP - stockCusto;
+  const nProdStock   = prodProprios.length;
+  // consignação: lucro mínimo potencial (vender ao PVP com 10% fixo)
+  const prodConsig   = DB.produtos.filter(p=>p.ativo!==false && p.consig && (p.stock||0)>0);
+  const consigLucroMin = prodConsig.reduce((s,p)=>s+(p.pvp*0.9 - p.pvp*(1-0.10))*(p.stock||0), 0);
+  // simplificando: lucro = PVP - custo_farm = PVP - PVP*90% ... não
+  // custo farm = PVP * (1 - 10%) = PVP * 90% → lucro mín = PVP - PVP*90% = PVP*10%
+  const consigLucroMinReal = prodConsig.reduce((s,p)=>s+(p.pvp - p.custo)*(p.stock||0), 0);
+  const consigPVP  = prodConsig.reduce((s,p)=>s+p.pvp*(p.stock||0), 0);
+  const nConsig    = prodConsig.length;
 
   // gráfico — sempre todos os meses
   const meses = {}; DB.consultas.forEach(c=>{const m=c.data.substring(0,7);if(!meses[m])meses[m]=0;meses[m]+=c.valor+c.totalProd;});
@@ -670,7 +675,7 @@ function renderDash(){
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
         <div>
           <h3 style="margin:0;color:#7a4f28">📦 Stock imobilizado</h3>
-          <div style="font-size:11px;color:#888;margin-top:2px">Valor investido em produtos que ainda não foram vendidos</div>
+          <div style="font-size:11px;color:#888;margin-top:2px">Produtos próprios comprados e ainda não vendidos · Consignação não conta (dinheiro da farmácia)</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:11px;color:#888">Custo total em stock</div>
@@ -678,12 +683,12 @@ function renderDash(){
         </div>
       </div>
       <div class="metrics" style="margin-bottom:0">
-        <div class="met"><div class="lb">Custo investido</div><div class="vl" style="color:#7a4f28">${fmt(stockCusto)}</div></div>
-        <div class="met"><div class="lb">PVP potencial</div><div class="vl">${fmt(stockPVP)}</div></div>
-        <div class="met"><div class="lb">Lucro potencial</div><div class="vl green">${fmt(stockLucroP)}</div></div>
-        <div class="met"><div class="lb">Produtos em stock</div><div class="vl">${nProdStock}</div></div>
-        ${stockCustoConsig>0?`<div class="met"><div class="lb">Consignação (farm.)</div><div class="vl amber">${fmt(stockCustoConsig)}</div></div>`:''}
-        ${stockCustoProprio>0?`<div class="met"><div class="lb">Stock próprio</div><div class="vl">${fmt(stockCustoProprio)}</div></div>`:''}
+        <div class="met" style="border-color:#d4a97a"><div class="lb">💰 Dinheiro parado (custo)</div><div class="vl" style="color:#7a4f28">${fmt(stockCusto)}</div><div style="font-size:10px;color:#aaa;margin-top:2px">produtos próprios em stock</div></div>
+        <div class="met"><div class="lb">PVP potencial (próprios)</div><div class="vl">${fmt(stockPVP)}</div></div>
+        <div class="met"><div class="lb">Lucro potencial (próprios)</div><div class="vl green">${fmt(stockLucroP)}</div></div>
+        <div class="met"><div class="lb">Referências em stock</div><div class="vl">${nProdStock}</div></div>
+        ${nConsig>0?`
+        <div class="met" style="border-color:#c3e6cb"><div class="lb">Lucro mín. consignação</div><div class="vl green">${fmt(consigLucroMinReal)}</div><div style="font-size:10px;color:#aaa;margin-top:2px">${nConsig} ref. · PVP ${fmt(consigPVP)}</div></div>`:''}
       </div>
     </div>
 
