@@ -3438,13 +3438,17 @@ function renderConsign(){
       <div class="met"><div class="lb">Unidades</div><div class="vl">${allItems.reduce((s,v)=>s+(v.qty||1),0)}</div></div>
     </div>
 
-    <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap">
+    <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
       <button class="btn" onclick="exportConsignPendente()" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600">
         ↓ Exportar lista pendente
       </button>
       <button class="btn" onclick="exportConsignCompleto()" style="background:#f0f0ec">
         ↓ Exportar histórico completo
       </button>
+      <button class="btn" id="btn-sync-farm" onclick="syncFarmaciaManual(this)" style="background:#e8f4ff;border-color:#90c0f0;color:#1a4f7a;font-weight:600">
+        ☁ Sincronizar com farmácia
+      </button>
+      <span id="sync-farm-status" style="font-size:11px;color:#999"></span>
     </div>
 
     <div class="card" style="padding:0;overflow:hidden">
@@ -3476,6 +3480,22 @@ function renderConsign(){
         </tbody>
       </table>
     </div>`;
+}
+
+async function syncFarmaciaManual(btn){
+  const status = document.getElementById('sync-farm-status');
+  btn.disabled = true; btn.textContent = '☁ A sincronizar…';
+  if(status) status.textContent = '';
+  try{
+    await syncConsignacaoPublica();
+    btn.textContent = '☁ Sincronizar com farmácia';
+    btn.disabled = false;
+    if(status) { status.textContent = '✓ Sincronizado! ' + new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}); status.style.color='#2a7a2a'; }
+  }catch(e){
+    btn.textContent = '☁ Sincronizar com farmácia';
+    btn.disabled = false;
+    if(status) { status.textContent = '✗ Erro: ' + e.message; status.style.color='#c0392b'; }
+  }
 }
 
 function pagarC(cid){
