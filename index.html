@@ -1888,13 +1888,17 @@ function renderClientes(){
     const credito = cl.credito||0;
     if(editingCliId===cl.id) return `<tr style="background:#fffbf5">
       <td colspan="8" style="padding:10px">
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;margin-bottom:8px">
           <div><label>Nome</label><input id="ecl-n" value="${cl.nome.replace(/"/g,'&quot;')}"/></div>
           <div><label>Telefone</label><input id="ecl-t" value="${cl.telefone||''}"/></div>
           <div><label>Email</label><input id="ecl-e" value="${cl.email||''}"/></div>
           <div><label>Notas</label><input id="ecl-no" value="${cl.notas||''}"/></div>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
+        <div style="margin-bottom:8px">
+          <label>Notas clínicas <span style="font-weight:400;color:#aaa;font-size:10px">(historial, alergias, preferências…)</span></label>
+          <textarea id="ecl-nc" rows="4" style="width:100%;resize:vertical;font-size:12px;line-height:1.5;border:1px solid #ddd;border-radius:6px;padding:8px;font-family:inherit;background:#fffbf5">${(cl.notasClinicas||'').replace(/</g,'&lt;').replace(/"/g,'&quot;')}</textarea>
+        </div>
+        <div style="display:flex;gap:8px">
           <button class="btn pri sm" onclick="saveEditCli('${cl.id}')">Guardar</button>
           <button class="btn sm" onclick="cancelEditCli()">Cancelar</button>
         </div>
@@ -2006,6 +2010,7 @@ function saveEditCli(id){
   cl.telefone=document.getElementById('ecl-t').value;
   cl.email=document.getElementById('ecl-e')?.value||cl.email||'';
   cl.notas=document.getElementById('ecl-no').value;
+  cl.notasClinicas=document.getElementById('ecl-nc')?.value||cl.notasClinicas||'';
   editingCliId=null; save(); withScroll(renderClientes);
 }
 function showAddCli(){const f=document.getElementById('add-cli-f');f.style.display=f.style.display==='none'?'block':'none';}
