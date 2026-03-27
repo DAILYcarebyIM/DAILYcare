@@ -385,16 +385,25 @@ async function syncConsignacaoPublica(){
 
     // tudo numa única coluna "data" para evitar problemas com colunas extra
     const payload = { vendas, stock, aEncomendar, jaEncomendados };
-    const body = JSON.stringify({ id:1, data: payload, updated_at: new Date().toISOString() });
+    // sem id no body — é coluna de identidade gerada automaticamente
+    const body = JSON.stringify({ data: payload, updated_at: new Date().toISOString() });
+    const bodyPost = JSON.stringify({ data: payload, updated_at: new Date().toISOString() });
 
-    // upsert via PATCH; se não existir faz POST
-    const patchR = await fetch(SB_URL+'/rest/v1/consignacao_publica?id=eq.1', {
-      method:'PATCH', headers:{...SB_HDR,'Prefer':'return=representation'}, body
+    // PATCH na linha existente (qualquer id)
+    const patchR = await fetch(SB_URL+'/rest/v1/consignacao_publica?select=id&limit=1', {
+      method:'GET', headers:{...SB_HDR}
     });
-    const patchRows = await patchR.json().catch(()=>[]);
-    if(!Array.isArray(patchRows)||patchRows.length===0){
+    const existing = await patchR.json().catch(()=>[]);
+    if(Array.isArray(existing) && existing.length>0){
+      // linha existe — PATCH com o id real
+      const realId = existing[0].id;
+      await fetch(SB_URL+'/rest/v1/consignacao_publica?id=eq.'+realId, {
+        method:'PATCH', headers:{...SB_HDR,'Prefer':'return=minimal'}, body
+      });
+    } else {
+      // não existe — POST para criar
       await fetch(SB_URL+'/rest/v1/consignacao_publica', {
-        method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'}, body
+        method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'}, body:bodyPost
       });
     }
     return true;
