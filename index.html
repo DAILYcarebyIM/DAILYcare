@@ -344,25 +344,35 @@ async function saveToCloud(){
 // tabela separada acessível à farmácia
 async function syncConsignacaoPublica(){
   try{
+    const pagas = new Set(DB.consignacoesPagas||[]);
     const items = DB.consultas.flatMap(c=>
       c.vendas.filter(v=>v.consig).map(v=>{
-        const prod=DB.produtos.find(p=>p.id===v.prodId);
-        const pagas=DB.consignacoesPagas||[];
-        const idx=DB.consultas.flatMap(cc=>cc.vendas.filter(vv=>vv.consig)).indexOf(v);
+        const prod = DB.produtos.find(p=>p.id===v.prodId);
+        const cid  = `v-${c.id}-${v.prodId}`;
+        const pvc  = v.pvpCobrado||v.pvp||0;
         return {
           data:c.data, cnp:prod?.cnp||'', produto:v.nome, cliente:cNome(c.clienteId),
-          qty:v.qty||1, pvp:v.pvp, custo_base:v.custoOriginal||v.custo,
-          desconto_pct:v.descExtra||0, desc_forn:v.descForn||0, desc_cliente:v.descCliente||0, custo_efetivo:v.custo, pvp_cobrado:v.pvpCobrado||v.pvp,
-          lucro_dailycare:+(v.pvp-v.custo).toFixed(2),
-          estado:pagas.includes(idx)?'Pago':'Por pagar'
+          qty:v.qty||1, pvp:v.pvp||0,
+          custo_base:v.custoOriginal||v.custo||0,
+          desc_forn:v.descForn||0, desc_cliente:v.descCliente||0,
+          custo_efetivo:+(v.custo||0).toFixed(2),
+          pvp_cobrado:+pvc.toFixed(2),
+          lucro_dailycare:+(pvc-(v.custo||0)).toFixed(2),
+          estado: pagas.has(cid) ? 'Pago' : 'Por pagar'
         };
       })
     );
     const body = JSON.stringify({id:1, data:items, updated_at:new Date().toISOString()});
-    // upsert
-    await fetch(SB_URL+'/rest/v1/consignacao_publica?id=eq.1', {
-      method:'PATCH', headers:{...SB_HDR,'Prefer':'return=minimal'}, body
+    // PATCH primeiro; se registo não existir (array vazio), fazer POST
+    const patchR = await fetch(SB_URL+'/rest/v1/consignacao_publica?id=eq.1', {
+      method:'PATCH', headers:{...SB_HDR,'Prefer':'return=representation'}, body
     });
+    const patchRows = await patchR.json().catch(()=>[]);
+    if(!Array.isArray(patchRows) || patchRows.length===0){
+      await fetch(SB_URL+'/rest/v1/consignacao_publica', {
+        method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'}, body
+      });
+    }
   }catch(e){}
 }
 
