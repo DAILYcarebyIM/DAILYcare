@@ -346,7 +346,7 @@ async function syncConsignacaoPublica(){
   try{
     const pagas = new Set(DB.consignacoesPagas||[]);
 
-    // 1. Vendas em consignação
+    // vendas
     const vendas = DB.consultas.flatMap(c=>
       c.vendas.filter(v=>v.consig).map(v=>{
         const prod = DB.produtos.find(p=>p.id===v.prodId);
@@ -365,45 +365,40 @@ async function syncConsignacaoPublica(){
       })
     );
 
-    // 2. Stock de produtos em consignação (todos, mesmo sem stock)
+    // stock produtos consignação
     const stock = DB.produtos
       .filter(p=>p.consig && p.ativo!==false)
       .map(p=>({
-        id:p.id, nome:p.nome, cnp:p.cnp||'', marca:p.marca||'',
+        nome:p.nome, cnp:p.cnp||'', marca:p.marca||'',
         pvp:p.pvp||0, custo:+(p.custo||0).toFixed(2),
-        stock:p.stock||0, stockMin:p.stockMin||0,
-        fornecedor:p.fornecedor||''
+        stock:p.stock||0, stockMin:p.stockMin||0
       }));
 
-    // 3. Lista de encomendas pendentes (stock abaixo do mínimo, não encomendados)
+    // encomendas
     const encomendados = new Set(DB.encomendados||[]);
     const aEncomendar = DB.produtos
-      .filter(p=>p.consig && p.ativo!==false && (p.stockMin||0)>0 && p.stock<(p.stockMin||0) && !encomendados.has(p.id))
-      .map(p=>({nome:p.nome, cnp:p.cnp||'', pvp:p.pvp||0, stock:p.stock||0, stockMin:p.stockMin||0, qtyNecessaria:Math.max(0,(p.stockMin||0)-p.stock+1)}));
+      .filter(p=>p.consig&&p.ativo!==false&&(p.stockMin||0)>0&&p.stock<(p.stockMin||0)&&!encomendados.has(p.id))
+      .map(p=>({nome:p.nome,cnp:p.cnp||'',pvp:p.pvp||0,stock:p.stock||0,stockMin:p.stockMin||0,qty:Math.max(0,(p.stockMin||0)-p.stock+1)}));
     const jaEncomendados = DB.produtos
-      .filter(p=>p.consig && p.ativo!==false && (p.stockMin||0)>0 && p.stock<(p.stockMin||0) && encomendados.has(p.id))
-      .map(p=>({nome:p.nome, cnp:p.cnp||'', pvp:p.pvp||0, stock:p.stock||0, stockMin:p.stockMin||0, qtyNecessaria:Math.max(0,(p.stockMin||0)-p.stock+1)}));
+      .filter(p=>p.consig&&p.ativo!==false&&(p.stockMin||0)>0&&p.stock<(p.stockMin||0)&&encomendados.has(p.id))
+      .map(p=>({nome:p.nome,cnp:p.cnp||'',pvp:p.pvp||0,stock:p.stock||0,stockMin:p.stockMin||0,qty:Math.max(0,(p.stockMin||0)-p.stock+1)}));
 
-    const body = JSON.stringify({
-      id:1,
-      data: vendas,
-      stock_consignacao: stock,
-      a_encomendar: aEncomendar,
-      ja_encomendado: jaEncomendados,
-      updated_at: new Date().toISOString()
-    });
+    // tudo numa única coluna "data" para evitar problemas com colunas extra
+    const payload = { vendas, stock, aEncomendar, jaEncomendados };
+    const body = JSON.stringify({ id:1, data: payload, updated_at: new Date().toISOString() });
 
-    // PATCH primeiro; se registo não existir (array vazio), fazer POST
+    // upsert via PATCH; se não existir faz POST
     const patchR = await fetch(SB_URL+'/rest/v1/consignacao_publica?id=eq.1', {
       method:'PATCH', headers:{...SB_HDR,'Prefer':'return=representation'}, body
     });
     const patchRows = await patchR.json().catch(()=>[]);
-    if(!Array.isArray(patchRows) || patchRows.length===0){
+    if(!Array.isArray(patchRows)||patchRows.length===0){
       await fetch(SB_URL+'/rest/v1/consignacao_publica', {
         method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'}, body
       });
     }
-  }catch(e){}
+    return true;
+  }catch(e){ console.error('syncConsignacao:', e); return false; }
 }
 
 async function loadFromCloud(){
@@ -3515,16 +3510,13 @@ function renderConsign(){
 async function syncFarmaciaManual(btn){
   const status = document.getElementById('sync-farm-status');
   btn.disabled = true; btn.textContent = '☁ A sincronizar…';
-  if(status) status.textContent = '';
-  try{
-    await syncConsignacaoPublica();
-    btn.textContent = '☁ Sincronizar com farmácia';
-    btn.disabled = false;
-    if(status) { status.textContent = '✓ Sincronizado! ' + new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}); status.style.color='#2a7a2a'; }
-  }catch(e){
-    btn.textContent = '☁ Sincronizar com farmácia';
-    btn.disabled = false;
-    if(status) { status.textContent = '✗ Erro: ' + e.message; status.style.color='#c0392b'; }
+  if(status){ status.textContent=''; }
+  const ok = await syncConsignacaoPublica();
+  btn.textContent = '☁ Sincronizar com farmácia';
+  btn.disabled = false;
+  if(status){
+    if(ok){ status.textContent='✓ Sincronizado! '+new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'}); status.style.color='#2a7a2a'; }
+    else  { status.textContent='✗ Erro — verifica a consola do browser'; status.style.color='#c0392b'; }
   }
 }
 
