@@ -3463,6 +3463,9 @@ function renderConsign(){
     </div>
 
     <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
+      <button class="btn" onclick="exportParaNumbers()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32;font-weight:600">
+        ↓ Exportar para Numbers
+      </button>
       <button class="btn" onclick="exportConsignPendente()" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600">
         ↓ Exportar lista pendente
       </button>
@@ -3548,6 +3551,84 @@ function _consignRows(apenasItens){
   });
   const all=[...itemsVenda,...itemsCI];
   return apenasItens ? all.filter(v=>!v.pago) : all;
+}
+
+function exportParaNumbers(){
+  if(!DB.consignacoesPagas) DB.consignacoesPagas=[];
+  const pagas = new Set(DB.consignacoesPagas);
+
+  // vendas pendentes
+  const pendentes = DB.consultas.flatMap(c=>
+    c.vendas.filter(v=>v.consig).map(v=>{
+      const prod = DB.produtos.find(p=>p.id===v.prodId);
+      const cid  = `v-${c.id}-${v.prodId}`;
+      return {...v, data:c.data, cnp:prod?.cnp||'', cid, pago:pagas.has(cid)};
+    })
+  ).filter(v=>!v.pago);
+
+  // stock em consignação
+  const stock = DB.produtos.filter(p=>p.consig && p.ativo!==false)
+    .sort((a,b)=>a.nome.localeCompare(b.nome));
+
+  const total = pendentes.reduce((s,v)=>s+v.custo*(v.qty||1),0);
+  const hoje = today();
+
+  // construir CSV com duas secções
+  const rows = [];
+
+  // cabeçalho do documento
+  rows.push([`DAILYcare — Consignação Farmácia Fonte da Moura`]);
+  rows.push([`Exportado em: ${hoje}`]);
+  rows.push([]);
+
+  // SECÇÃO 1: pagamentos pendentes
+  rows.push([`PAGAMENTOS POR LIQUIDAR`]);
+  rows.push(['Data','CNP','Produto','Qty','PVP unit.','Desc. forn.','PVP cobrado','A pagar (€)']);
+  pendentes.sort((a,b)=>b.data.localeCompare(a.data)).forEach(v=>{
+    const pvc = v.pvpCobrado||v.pvp||0;
+    const df  = v.descForn||0;
+    const dc  = v.descCliente||0;
+    const descLabel = df>0 ? `10%+${df}%=${10+df}%` : '10%';
+    rows.push([
+      v.data,
+      v.cnp||'',
+      v.nome,
+      v.qty||1,
+      parseFloat((v.pvp||0).toFixed(2)),
+      descLabel,
+      parseFloat(pvc.toFixed(2)),
+      parseFloat((v.custo*(v.qty||1)).toFixed(2))
+    ]);
+  });
+  rows.push([]);
+  rows.push(['','','','','','','TOTAL A PAGAR:', parseFloat(total.toFixed(2))]);
+  rows.push([]);
+  rows.push([]);
+
+  // SECÇÃO 2: stock em consignação
+  rows.push([`STOCK EM CONSIGNAÇÃO`]);
+  rows.push(['Produto','CNP','Marca','PVP (€)','Custo farm. (€)','Stock atual','Stock mín.','Estado']);
+  stock.forEach(p=>{
+    const st = p.stock||0, mn = p.stockMin||0;
+    const estado = st<=0 ? 'Esgotado' : mn>0&&st<=mn ? 'Stock baixo' : 'OK';
+    rows.push([
+      p.nome,
+      p.cnp||'',
+      p.marca||'',
+      parseFloat((p.pvp||0).toFixed(2)),
+      parseFloat((p.custo||0).toFixed(2)),
+      st, mn, estado
+    ]);
+  });
+
+  // gerar CSV
+  const nl='\n'; const csv = rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join(nl);
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `consignacao_farmacia_${hoje}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 }
 
 function exportConsignPendente(){
