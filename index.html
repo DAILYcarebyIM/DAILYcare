@@ -621,6 +621,16 @@ function renderDash(){
   const rendRelevante = rendRelvServ+rendRelvProd;
   const ss            = rendRelevante*0.252;
 
+  // stock imobilizado — custo do que está em stock não vendido
+  const prodAtivos = DB.produtos.filter(p=>p.ativo!==false && (p.stock||0)>0);
+  const stockCusto  = prodAtivos.reduce((s,p)=>s+p.custo*(p.stock||0), 0);
+  const stockPVP    = prodAtivos.reduce((s,p)=>s+p.pvp*(p.stock||0), 0);
+  const stockLucroP = stockPVP - stockCusto; // lucro potencial se vender tudo
+  const nProdStock  = prodAtivos.length;
+  // separar consignação vs próprio
+  const stockCustoConsig  = prodAtivos.filter(p=>p.consig).reduce((s,p)=>s+p.custo*(p.stock||0),0);
+  const stockCustoProprio = prodAtivos.filter(p=>!p.consig).reduce((s,p)=>s+p.custo*(p.stock||0),0);
+
   // gráfico — sempre todos os meses
   const meses = {}; DB.consultas.forEach(c=>{const m=c.data.substring(0,7);if(!meses[m])meses[m]=0;meses[m]+=c.valor+c.totalProd;});
   const mk = Object.keys(meses).sort(); const maxM = Math.max(...Object.values(meses),1);
@@ -655,6 +665,27 @@ function renderDash(){
       <div class="met"><div class="lb">Ticket médio</div><div class="vl">${fmt(ticket)}</div></div>
     </div>
 
+
+    <div class="card" style="margin-bottom:1rem;border-color:#d4a97a;background:#fffbf5">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+        <div>
+          <h3 style="margin:0;color:#7a4f28">📦 Stock imobilizado</h3>
+          <div style="font-size:11px;color:#888;margin-top:2px">Valor investido em produtos que ainda não foram vendidos</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:#888">Custo total em stock</div>
+          <div style="font-size:22px;font-weight:700;color:#7a4f28">${fmt(stockCusto)}</div>
+        </div>
+      </div>
+      <div class="metrics" style="margin-bottom:0">
+        <div class="met"><div class="lb">Custo investido</div><div class="vl" style="color:#7a4f28">${fmt(stockCusto)}</div></div>
+        <div class="met"><div class="lb">PVP potencial</div><div class="vl">${fmt(stockPVP)}</div></div>
+        <div class="met"><div class="lb">Lucro potencial</div><div class="vl green">${fmt(stockLucroP)}</div></div>
+        <div class="met"><div class="lb">Produtos em stock</div><div class="vl">${nProdStock}</div></div>
+        ${stockCustoConsig>0?`<div class="met"><div class="lb">Consignação (farm.)</div><div class="vl amber">${fmt(stockCustoConsig)}</div></div>`:''}
+        ${stockCustoProprio>0?`<div class="met"><div class="lb">Stock próprio</div><div class="vl">${fmt(stockCustoProprio)}</div></div>`:''}
+      </div>
+    </div>
 
     <div class="ss-box" style="margin-bottom:1rem">
       <h3 style="margin-bottom:10px">Segurança Social — estimativa ENI ${dashMes?'('+mesLabel+')':''}</h3>
