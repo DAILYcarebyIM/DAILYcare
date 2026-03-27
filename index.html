@@ -383,28 +383,18 @@ async function syncConsignacaoPublica(){
       .filter(p=>p.consig&&p.ativo!==false&&(p.stockMin||0)>0&&p.stock<(p.stockMin||0)&&encomendados.has(p.id))
       .map(p=>({nome:p.nome,cnp:p.cnp||'',pvp:p.pvp||0,stock:p.stock||0,stockMin:p.stockMin||0,qty:Math.max(0,(p.stockMin||0)-p.stock+1)}));
 
-    // tudo numa única coluna "data" para evitar problemas com colunas extra
+    // payload como objecto — a coluna data é jsonb, não text
     const payload = { vendas, stock, aEncomendar, jaEncomendados };
-    // sem id no body — é coluna de identidade gerada automaticamente
     const body = JSON.stringify({ data: payload, updated_at: new Date().toISOString() });
-    const bodyPost = JSON.stringify({ data: payload, updated_at: new Date().toISOString() });
 
-    // PATCH na linha existente (qualquer id)
-    const patchR = await fetch(SB_URL+'/rest/v1/consignacao_publica?select=id&limit=1', {
-      method:'GET', headers:{...SB_HDR}
+    // PATCH directo no id=1 (linha que criámos no Supabase)
+    const r = await fetch(SB_URL+'/rest/v1/consignacao_publica?id=eq.1', {
+      method:'PATCH', headers:{...SB_HDR,'Prefer':'return=minimal'}, body
     });
-    const existing = await patchR.json().catch(()=>[]);
-    if(Array.isArray(existing) && existing.length>0){
-      // linha existe — PATCH com o id real
-      const realId = existing[0].id;
-      await fetch(SB_URL+'/rest/v1/consignacao_publica?id=eq.'+realId, {
-        method:'PATCH', headers:{...SB_HDR,'Prefer':'return=minimal'}, body
-      });
-    } else {
-      // não existe — POST para criar
-      await fetch(SB_URL+'/rest/v1/consignacao_publica', {
-        method:'POST', headers:{...SB_HDR,'Prefer':'return=minimal'}, body:bodyPost
-      });
+    if(!r.ok){
+      const txt = await r.text();
+      console.error('syncConsignacao PATCH erro:', r.status, txt);
+      return false;
     }
     return true;
   }catch(e){ console.error('syncConsignacao:', e); return false; }
