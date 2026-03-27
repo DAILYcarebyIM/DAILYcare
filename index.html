@@ -4566,7 +4566,7 @@ function renderRelatorio(){
       <table>
         <thead>
           <tr>
-            <th>Mês</th><th>Consultas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th>SS est.</th>
+            <th>Mês</th><th>Consultas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th style="background:#f0fff4;color:#155724">💶 Líquido</th><th>SS est.</th>
           </tr>
         </thead>
         <tbody>
@@ -4582,13 +4582,16 @@ function renderRelatorio(){
             <td class="blue">${fmt(r.fat)}</td>
             <td class="red">${r.gasto>0?fmt(r.gasto):'—'}</td>
             <td class="green">${fmt(r.lucP)}</td>
+            <td style="font-weight:700;color:${(r.serv+r.lucP+r.pk+r.wk+r.fo-r.gasto)>=0?'#155724':'#721c24'};background:${(r.serv+r.lucP+r.pk+r.wk+r.fo-r.gasto)>=0?'#f0fff4':'#fff5f5'}">${fmt(r.serv+r.lucP+r.pk+r.wk+r.fo-r.gasto)}</td>
             <td class="amber" style="font-size:11px">${fmt(r.ssM)}</td>
           </tr>`).join('')}
           <tr style="border-top:2px solid #eee;font-weight:600;background:#fafaf7">
             <td>TOTAL</td><td style="text-align:center">${DB.consultas.length}</td>
             <td>${fmt(tServ)}</td><td>${fmt(tProd)}</td><td>${fmt(tPacks)}</td><td>${fmt(tWork)}</td><td>${fmt(tFo)}</td>
             <td><strong>${fmt(receitaTotal)}</strong></td><td class="blue">${fmt(tFat)}</td>
-            <td class="red">${fmt(tGasto)}</td><td class="green">${fmt(tLucro)}</td><td class="amber">${fmt(ss)}</td>
+            <td class="red">${fmt(tGasto)}</td><td class="green">${fmt(tLucro)}</td>
+            <td style="font-weight:700;color:${(tServ+tLucro+tPacks+tWork+tFo-tGasto)>=0?'#155724':'#721c24'}">${fmt(tServ+tLucro+tPacks+tWork+tFo-tGasto)}</td>
+            <td class="amber">${fmt(ss)}</td>
           </tr>
         </tbody>
       </table>
