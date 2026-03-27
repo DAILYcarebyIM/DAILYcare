@@ -2493,11 +2493,11 @@ function renderProdutosTabela(){
         <span class="badge ${p.stock<=0&&(p.stockMin??0)>0?'bg-r':(p.stockMin??0)>0&&p.stock<=(p.stockMin??0)?'bg-a':'bg-g'}">${p.stock??0}</span>
         <span style="font-size:10px;color:#999;display:block;margin-top:1px">mín: ${p.stockMin??0}</span>
       </td>
-      <td style="white-space:nowrap">
-        <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28" onclick="abrirHistoricoProd('${p.id}')">Histórico</button>
-        <button class="btn sm" onclick="editarStockDirecto('${p.id}')" style="margin-top:2px" title="Editar stock directamente">📦 Stock</button>
-        <button class="btn sm" onclick="startEditP('${p.id}')" style="margin-top:2px">Editar</button>
-        <button class="btn dan sm" onclick="delProduto('${p.id}')" style="margin-top:2px">Apagar</button>
+      <td style="white-space:nowrap;min-width:90px">
+        <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28;display:block;width:100%;margin-bottom:2px" onclick="abrirHistoricoProd('${p.id}')">Histórico</button>
+        <button class="btn sm" style="display:block;width:100%;margin-bottom:2px" onclick="editarStockDirecto('${p.id}')" title="Editar stock directamente">📦 Stock</button>
+        <button class="btn sm" style="display:block;width:100%;margin-bottom:2px" onclick="startEditP('${p.id}')">Editar</button>
+        <button class="btn dan sm" style="display:block;width:100%" onclick="delProduto('${p.id}')">Apagar</button>
       </td>
     </tr>`;
   };
@@ -2520,9 +2520,9 @@ function saveEditP(id){
   p.cat=document.getElementById('ep-cat').value;
   p.custo=parseFloat(document.getElementById('ep-custo').value)||0;
   p.pvp=parseFloat(document.getElementById('ep-pvp').value)||0;
-  p.stock=parseInt(document.getElementById('ep-stock').value)||0;
+  // ep-stock não existe no form — stock só editável via botão 📦
   const _sm=document.getElementById('ep-smin').value; p.stockMin=_sm===''?0:parseInt(_sm);
-  p.consig=document.getElementById('ep-cons').value==='true';
+  p.consig=document.getElementById('ep-consig').value==='true';
   editingProdId=null; save(); withScroll(renderProdutos);
 }
 function toggleAtivoProd(id){
@@ -4776,7 +4776,7 @@ function renderFornecedores(){
             <td><input id="em-nome" value="${m.replace(/"/g,'&quot;')}" style="min-width:180px"/></td>
             <td style="color:#888;font-size:11px">${nProd} produto${nProd!==1?'s':''}</td>
             <td style="white-space:nowrap">
-              <button class="btn pri sm" onclick="saveEditMarcaIdx(${mi})">Guardar</button>
+              <button class="btn pri sm" onclick="saveEditMarcaByName(this)" data-nome="${m.replace(/"/g,'&quot;')}">Guardar</button>
               <button class="btn sm" onclick="cancelEditMarca()" style="margin-top:2px">Cancelar</button>
             </td>
           </tr>`;
@@ -4784,8 +4784,8 @@ function renderFornecedores(){
             <td><strong>${m}</strong></td>
             <td style="color:#888;font-size:11px">${nProd} produto${nProd!==1?'s':''}</td>
             <td style="white-space:nowrap">
-              <button class="btn sm" onclick="startEditMarcaIdx(${mi})">Editar</button>
-              <button class="btn dan sm" onclick="delMarcaIdx(${mi})">Apagar</button>
+              <button class="btn sm" onclick="startEditMarcaByName(this)" data-nome="${m.replace(/"/g,'&quot;')}">Editar</button>
+              <button class="btn dan sm" onclick="delMarcaByName(this)" data-nome="${m.replace(/"/g,'&quot;')}">Apagar</button>
             </td>
           </tr>`;
         }).join('') : '<tr><td colspan="3" style="text-align:center;padding:2rem;color:#999">Sem marcas registadas</td></tr>'}
@@ -4800,6 +4800,34 @@ function addMarca(){
   if(!DB.marcas) DB.marcas=[];
   if(!DB.marcas.includes(n)) DB.marcas.push(n);
   save(); showAddMarca(); renderFornecedores();
+}
+function startEditMarcaByName(btn){ startEditMarcaIdx_inner(btn.dataset.nome); }
+function startEditMarcaIdx_inner(nome){
+  if(!nome) return;
+  if(!DB.marcas) DB.marcas=[];
+  if(!DB.marcas.includes(nome)) DB.marcas.push(nome);
+  editingMarca=nome; renderFornecedores(); setTimeout(()=>document.getElementById('em-nome')?.focus(),50);
+}
+function startEditMarcaIdx(mi){
+  const m=_todasMarcas[mi]; if(!m) return;
+  startEditMarcaIdx_inner(m);
+}
+function saveEditMarcaByName(btn){ saveEditMarcaIdx_inner(btn.dataset.nome); }
+function saveEditMarcaIdx_inner(oldNome){
+  const newNome=document.getElementById('em-nome')?.value.trim(); if(!newNome)return;
+  if(!DB.marcas) DB.marcas=[];
+  const idx=DB.marcas.indexOf(oldNome);
+  if(idx>=0) DB.marcas[idx]=newNome; else DB.marcas.push(newNome);
+  DB.produtos.forEach(p=>{ if(p.marca===oldNome) p.marca=newNome; });
+  editingMarca=null; save(); withScroll(renderFornecedores);
+}
+function delMarcaByName(btn){
+  const nome=btn.dataset.nome; if(!nome) return;
+  confirmDel(`Apagar marca "${nome}"? Os produtos continuam mas ficam sem marca.`, ()=>{
+    if(!DB.marcas) DB.marcas=[];
+    DB.marcas=DB.marcas.filter(m=>m!==nome);
+    save(); renderFornecedores();
+  });
 }
 function startEditMarcaIdx(mi){
   const m = _todasMarcas[mi]; if(!m) return;
