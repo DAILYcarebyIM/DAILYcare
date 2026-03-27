@@ -3,175 +3,547 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DAILYcare — Consignação Farmácia</title>
+<title>DAILYcare × Farmácia Fonte da Moura — Consignação</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#1a1a1a;background:#f5f5f0;min-height:100vh}
-.header{background:#fff;border-bottom:1px solid #e5e5e0;padding:0 1.5rem;display:flex;align-items:center;gap:1rem;height:52px}
-.logo{font-weight:600;font-size:15px}.logo span{color:#8b6f4e}
-.sub{font-size:12px;color:#999}
-.main{max-width:1000px;margin:0 auto;padding:1.5rem}
-.card{background:#fff;border:1px solid #e5e5e0;border-radius:10px;padding:1rem 1.25rem;margin-bottom:1rem}
-.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:1rem}
-.met{background:#f8f8f5;border-radius:8px;padding:0.75rem;border:1px solid #eeede8}
-.met .lb{font-size:11px;color:#888;margin-bottom:3px}
-.met .vl{font-size:20px;font-weight:600}
-.amber{color:#856404}.green{color:#1a6b1a}
-.cbanner{background:#fff8e6;border:1px solid #f5c842;border-radius:10px;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem}
-table{width:100%;border-collapse:collapse;font-size:12px}
-th{font-weight:600;text-align:left;padding:8px 10px;border-bottom:1px solid #eee;color:#888;font-size:11px;background:#fafaf7}
-td{padding:7px 10px;border-bottom:1px solid #f0f0ec;vertical-align:middle}
-.badge{display:inline-block;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600}
-.bg-g{background:#d4edda;color:#155724}.bg-a{background:#fff3cd;color:#856404}
-.btn{padding:7px 14px;border:1px solid #ddd;border-radius:7px;cursor:pointer;font-size:12px;background:#fff;color:#1a1a1a;font-family:inherit;font-weight:500}
-.btn:hover{background:#f5f5f0}
-.btn.pri{background:#1a1a1a;color:#fff}
-h2{font-size:15px;font-weight:600;margin-bottom:12px}
-.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;height:60vh;gap:1rem}
-@keyframes prog{from{transform:translateX(-20%)}to{transform:translateX(120%)}}
+  :root {
+    --cream: #faf8f4;
+    --warm: #f2ede4;
+    --gold: #b8933e;
+    --gold-light: #d4b06a;
+    --gold-pale: #f5ead6;
+    --ink: #1c1814;
+    --ink-mid: #4a4035;
+    --ink-light: #8a7d6e;
+    --ink-faint: #c4b9a8;
+    --green: #2d6a4f;
+    --green-bg: #edf7f1;
+    --amber: #92600a;
+    --amber-bg: #fef3dc;
+    --red: #8b2020;
+    --red-bg: #fdeaea;
+    --border: #e2d9cc;
+    --shadow: 0 1px 3px rgba(28,24,20,0.06), 0 4px 16px rgba(28,24,20,0.04);
+    --shadow-lg: 0 8px 32px rgba(28,24,20,0.10), 0 2px 8px rgba(28,24,20,0.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: var(--cream);
+    color: var(--ink);
+    min-height: 100vh;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    background: var(--ink);
+    padding: 0 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .header-logo {
+    font-family: 'DM Serif Display', serif;
+    font-size: 18px;
+    color: #fff;
+    letter-spacing: -0.3px;
+  }
+  .header-logo span { color: var(--gold-light); }
+  .header-sub {
+    font-size: 11px;
+    color: var(--ink-faint);
+    font-weight: 300;
+    letter-spacing: 0.5px;
+  }
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: var(--ink-faint);
+  }
+  .status-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #555;
+    transition: background 0.3s;
+  }
+  .status-dot.online { background: #4caf50; box-shadow: 0 0 0 3px rgba(76,175,80,0.2); }
+  .status-dot.error  { background: #f44336; }
+
+  /* ── MAIN ── */
+  .main { max-width: 1000px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+  /* ── BANNER ── */
+  .banner {
+    background: var(--ink);
+    border-radius: 14px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    position: relative;
+    overflow: hidden;
+  }
+  .banner::before {
+    content: '';
+    position: absolute;
+    right: -40px; top: -40px;
+    width: 180px; height: 180px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(184,147,62,0.15) 0%, transparent 70%);
+  }
+  .banner-label {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--gold-light);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .banner-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 22px;
+    color: #fff;
+    letter-spacing: -0.3px;
+  }
+  .banner-sub {
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-top: 2px;
+  }
+  .banner-amount {
+    text-align: right;
+  }
+  .banner-amount .amount-label {
+    font-size: 11px;
+    color: var(--gold-light);
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .banner-amount .amount-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 32px;
+    color: #fff;
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+
+  /* ── METRICS ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+    margin-bottom: 1.5rem;
+  }
+  .met {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem 1.1rem;
+    box-shadow: var(--shadow);
+  }
+  .met .lb {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--ink-light);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 5px;
+  }
+  .met .vl {
+    font-family: 'DM Serif Display', serif;
+    font-size: 20px;
+    color: var(--ink);
+    letter-spacing: -0.5px;
+    line-height: 1;
+  }
+  .met .vl.amber { color: var(--amber); }
+  .met .vl.green { color: var(--green); }
+
+  /* ── TABLE CARD ── */
+  .card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    margin-bottom: 1.5rem;
+  }
+  .card-header {
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--warm);
+  }
+  .card-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 15px;
+    color: var(--ink);
+    letter-spacing: -0.2px;
+  }
+  .card-hint {
+    font-size: 11px;
+    color: var(--ink-light);
+  }
+
+  /* ── TABLE ── */
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--ink-light);
+    padding: 9px 14px;
+    text-align: left;
+    background: var(--warm);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f5f0e8;
+    vertical-align: middle;
+    color: var(--ink);
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fdfbf7; }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+    white-space: nowrap;
+    letter-spacing: 0.2px;
+  }
+  .badge-green  { background: var(--green-bg);  color: var(--green); }
+  .badge-amber  { background: var(--amber-bg);  color: var(--amber); }
+  .badge-red    { background: var(--red-bg);    color: var(--red); }
+  .badge-gray   { background: #f0ece6; color: var(--ink-mid); }
+
+  /* ── ALERTS ── */
+  .alert {
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 12px;
+    margin-bottom: 1rem;
+    border: 1px solid;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .alert-warn  { background: var(--amber-bg); color: var(--amber); border-color: #f0d080; }
+  .alert-ok    { background: var(--green-bg); color: var(--green); border-color: #a8d8be; }
+  .alert-error { background: var(--red-bg);   color: var(--red);   border-color: #f0aaaa; }
+
+  /* ── SEPARATOR ── */
+  .section-divider {
+    padding: 8px 14px;
+    background: var(--gold-pale);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--amber);
+    letter-spacing: 0.4px;
+  }
+
+  /* ── LOADING ── */
+  .loading {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--ink-light);
+  }
+  .loading-spinner {
+    width: 36px; height: 36px;
+    border: 2px solid var(--border);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 1rem;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px; }
+  .strong { font-weight: 600; }
+  .green-text { color: var(--green); }
+  .amber-text { color: var(--amber); }
+  .faint { color: var(--ink-light); font-size: 11px; }
+
+  /* ── FOOTER ── */
+  .footer {
+    text-align: center;
+    padding: 2rem 1rem;
+    font-size: 11px;
+    color: var(--ink-faint);
+    border-top: 1px solid var(--border);
+    margin-top: 1rem;
+  }
+  .footer strong { color: var(--ink-light); }
+
+  /* ── ATUALIZADO ── */
+  .updated-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--ink-light);
+    background: var(--warm);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 3px 10px;
+  }
+
+  @media (max-width: 600px) {
+    .header { padding: 0 1rem; }
+    .main { padding: 1rem; }
+    .banner { padding: 1.25rem; }
+    .banner-amount .amount-value { font-size: 24px; }
+    th, td { padding: 8px 10px; }
+  }
 </style>
 </head>
 <body>
+
 <div class="header">
-  <div class="logo">DAILY<span>care</span></div>
-  <div class="sub">Consignação — Farmácia Fonte da Moura</div>
-  <div style="margin-left:auto;font-size:11px;color:#999" id="sync-status">A carregar…</div>
-  <button class="btn" onclick="recarregar()" style="font-size:11px;padding:4px 10px">↻ Atualizar</button>
+  <div>
+    <div class="header-logo">DAILY<span>care</span></div>
+    <div class="header-sub">Gestão de Consignação</div>
+  </div>
+  <div class="header-status">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">A carregar…</span>
+  </div>
 </div>
-<div class="main" id="main">
-  <div class="loading">
-    <div style="font-size:18px;font-weight:600;color:#8b6f4e">DAILYcare</div>
-    <div style="font-size:13px;color:#888">A carregar dados…</div>
-    <div style="width:200px;height:3px;background:#eee;border-radius:2px;overflow:hidden">
-      <div style="width:60%;height:100%;background:#8b6f4e;border-radius:2px;animation:prog 1.2s ease-in-out infinite alternate"></div>
+
+<div class="main">
+  <div id="content">
+    <div class="loading">
+      <div class="loading-spinner"></div>
+      <div>A carregar dados da consignação…</div>
     </div>
   </div>
+</div>
+
+<div class="footer">
+  <strong>Farmácia Fonte da Moura</strong> × DAILYcare &nbsp;·&nbsp; Dados atualizados em tempo real &nbsp;·&nbsp; Apenas para uso interno
 </div>
 
 <script>
 const SB_URL = 'https://zwdnnawqcbulcfveiqmx.supabase.co';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp3ZG5uYXdxY2J1bGNmdmVpcW14Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM2MTQwMTAsImV4cCI6MjA4OTE5MDAxMH0.jXeTvdQPMSeK8CZTKvp2tF93HxyXlqaGCybGZbZYnTs';
-const HDR = {'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
-const fmt = n => (Math.round(n*100)/100).toFixed(2)+'€';
+const HDR = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
 
-async function recarregar(){ await init(); }
+const fmt = n => (Math.round((n||0)*100)/100).toFixed(2) + '€';
+const fmtDate = d => d ? d.split('-').reverse().join('/') : '—';
 
-async function init(){
-  document.getElementById('sync-status').textContent = 'A carregar…';
-  try{
-    // ler dados principais
-    const r = await fetch(SB_URL+'/rest/v1/dailycare_data?id=eq.main&select=data,updated_at', {headers:HDR});
-    if(!r.ok) throw new Error('sem ligação');
+function setStatus(online, msg) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  dot.className = 'status-dot ' + (online ? 'online' : 'error');
+  txt.textContent = msg;
+}
+
+async function loadData() {
+  try {
+    const r = await fetch(
+      `${SB_URL}/rest/v1/consignacao_publica?id=eq.1&select=data,updated_at`,
+      { headers: HDR }
+    );
+    if (!r.ok) throw new Error('HTTP ' + r.status);
     const rows = await r.json();
-    if(!rows.length || !rows[0].data || !rows[0].data.consultas){
-      document.getElementById('main').innerHTML='<div class="card" style="text-align:center;color:#999;padding:3rem">Sem dados disponíveis ainda.</div>';
+    if (!rows.length || !rows[0].data) {
+      setStatus(false, 'Sem dados disponíveis');
+      render([], null);
       return;
     }
-    const DB = rows[0].data;
-    const updated = new Date(rows[0].updated_at).toLocaleString('pt-PT');
-    document.getElementById('sync-status').textContent = 'Atualizado: '+updated;
-    renderConsign(DB);
-  }catch(e){
-    document.getElementById('sync-status').textContent = 'Erro de ligação';
-    document.getElementById('main').innerHTML='<div class="card" style="color:#c0392b;text-align:center;padding:2rem">Não foi possível carregar os dados. Verifica a ligação à internet.</div>';
+    setStatus(true, 'Atualizado');
+    render(rows[0].data, rows[0].updated_at);
+  } catch(e) {
+    setStatus(false, 'Erro de ligação');
+    document.getElementById('content').innerHTML = `
+      <div class="alert alert-error">
+        <span>⚠</span>
+        <div>Não foi possível carregar os dados. Verifica a ligação à internet e tenta novamente.<br>
+        <span class="faint">${e.message}</span></div>
+      </div>
+      <button onclick="location.reload()" style="padding:8px 18px;background:var(--ink);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit">Tentar novamente</button>`;
   }
 }
 
-function cNome(DB, id){ const c=(DB.clientes||[]).find(x=>x.id===id); return c?c.nome:'—'; }
+function render(items, updatedAt) {
+  const pendentes = items.filter(v => v.estado !== 'Pago');
+  const pagos     = items.filter(v => v.estado === 'Pago');
 
-function renderConsign(DB){
-  const consultas = DB.consultas||[];
-  const pagas = DB.consignacoesPagas||[];
+  const tPagar  = pendentes.reduce((s,v) => s + (v.custo_efetivo||0)*(v.qty||1), 0);
+  const tPVP    = items.filter(v=>v.pvp>0).reduce((s,v) => s + (v.pvp||0)*(v.qty||1), 0);
+  const tLucro  = items.filter(v=>v.pvp>0).reduce((s,v) => s + ((v.pvp_cobrado||v.pvp)-(v.custo_efetivo||0))*(v.qty||1), 0);
+  const tUn     = items.reduce((s,v) => s + (v.qty||1), 0);
 
-  const items = consultas.flatMap(c=>
-    (c.vendas||[]).filter(v=>v.marca==='Farmácia Fonte da Moura'||v.consig).map((v,li)=>{
-      const prod=(DB.produtos||[]).find(p=>p.id===v.prodId);
-      return{...v, data:c.data, cnp:prod?.cnp||'', idx:
-        consultas.slice(0,consultas.indexOf(c)).reduce((s,cc)=>s+(cc.vendas||[]).filter(vv=>vv.marca==='Farmácia Fonte da Moura'||vv.consig).length,0)+li
-      };
-    })
-  );
+  // data de última atualização
+  const updLabel = updatedAt
+    ? new Date(updatedAt).toLocaleString('pt-PT', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+    : '—';
 
-  const pendentes = items.filter(v=>!pagas.includes(v.idx));
-  const tPagar  = pendentes.reduce((s,v)=>s+v.custo*(v.qty||1),0);
-  const tVendido= items.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
-  const tUnid   = items.reduce((s,v)=>s+(v.qty||1),0);
+  const rowHtml = (v, isPago) => {
+    const custoEf = (v.custo_efetivo||0) * (v.qty||1);
+    const pvpCob  = (v.pvp_cobrado||v.pvp||0);
+    const lucro   = (pvpCob - (v.custo_efetivo||0)) * (v.qty||1);
+    const descForn = v.desc_forn||0;
+    const descCli  = v.desc_cliente||0;
 
-  document.getElementById('main').innerHTML=`
-    <h2>Produtos vendidos em consignação</h2>
-    <div class="cbanner">
+    return `<tr style="${isPago ? 'opacity:0.45' : ''}">
+      <td style="white-space:nowrap">
+        <span class="faint">${fmtDate(v.data)}</span>
+      </td>
+      <td>
+        <div class="strong">${v.produto || '—'}</div>
+        ${v.cnp ? `<div class="mono faint">CNP: ${v.cnp}</div>` : ''}
+      </td>
+      <td style="text-align:center">${v.qty||1}</td>
+      <td>
+        <div class="strong">${fmt(v.pvp||0)}</div>
+        ${descCli > 0
+          ? `<div style="font-size:10px;color:var(--amber)">cliente: ${fmt(pvpCob)} (-${descCli}%)</div>`
+          : ''}
+      </td>
+      <td>
+        ${descForn > 0
+          ? `<span class="badge badge-green">10%+${descForn}%=${10+descForn}%</span>`
+          : '<span class="faint">10%</span>'}
+      </td>
+      <td>
+        <span class="strong amber-text">${fmt(custoEf)}</span>
+      </td>
+      <td class="green-text">
+        ${v.pvp > 0 ? fmt(lucro) : '<span class="faint">—</span>'}
+      </td>
+      <td>
+        <span class="badge ${isPago ? 'badge-green' : 'badge-amber'}">
+          ${isPago ? '✓ Pago' : 'Por pagar'}
+        </span>
+      </td>
+    </tr>`;
+  };
+
+  document.getElementById('content').innerHTML = `
+
+    <!-- Banner principal -->
+    <div class="banner">
       <div>
-        <div style="font-weight:600;color:#856404">Total por liquidar</div>
-        <div style="font-size:11px;color:#999">Valor baseado no preço de custo acordado</div>
+        <div class="banner-label">Farmácia Fonte da Moura</div>
+        <div class="banner-title">Consignação DAILYcare</div>
+        <div class="banner-sub">Inês Mota · Produtos em consignação</div>
       </div>
-      <div style="font-size:26px;font-weight:700;color:#856404">${fmt(tPagar)}</div>
+      <div class="banner-amount">
+        <div class="amount-label">Total por liquidar</div>
+        <div class="amount-value">${fmt(tPagar)}</div>
+        <div style="margin-top:6px">
+          <span class="updated-tag">🕐 ${updLabel}</span>
+        </div>
+      </div>
     </div>
+
+    <!-- Métricas -->
     <div class="metrics">
-      <div class="met"><div class="lb">Total vendido (PVP)</div><div class="vl">${fmt(tVendido)}</div></div>
-      <div class="met"><div class="lb">Por liquidar</div><div class="vl amber">${fmt(tPagar)}</div></div>
-      <div class="met"><div class="lb">Já pago</div><div class="vl green">${fmt(items.filter(v=>pagas.includes(v.idx)).reduce((s,v)=>s+v.custo*(v.qty||1),0))}</div></div>
-      <div class="met"><div class="lb">Unidades vendidas</div><div class="vl">${tUnid}</div></div>
+      <div class="met">
+        <div class="lb">A pagar (pendente)</div>
+        <div class="vl amber">${fmt(tPagar)}</div>
+      </div>
+      <div class="met">
+        <div class="lb">Total PVP vendido</div>
+        <div class="vl">${fmt(tPVP)}</div>
+      </div>
+      <div class="met">
+        <div class="lb">Já liquidado</div>
+        <div class="vl green">${fmt(pagos.reduce((s,v)=>s+(v.custo_efetivo||0)*(v.qty||1),0))}</div>
+      </div>
+      <div class="met">
+        <div class="lb">Unidades vendidas</div>
+        <div class="vl">${tUn}</div>
+      </div>
+      <div class="met">
+        <div class="lb">Linhas pendentes</div>
+        <div class="vl">${pendentes.length}</div>
+      </div>
     </div>
-    <div style="display:flex;gap:8px;margin-bottom:1rem">
-      <button class="btn pri" onclick="exportarCSV()">↓ Exportar CSV</button>
-    </div>
-    <div class="card" style="padding:0;overflow:hidden">
-      <table>
-        <thead><tr><th>Data</th><th>CNP</th><th>Produto</th><th>Qty</th><th>PVP unit.</th><th>PVP total</th><th>Custo farm.</th><th>Estado</th></tr></thead>
-        <tbody>
-          ${items.length ? items.map(v=>{
-            const pago=pagas.includes(v.idx), qty=v.qty||1;
-            return`<tr style="${pago?'opacity:0.4;text-decoration:line-through':''}">
-              <td>${v.data}</td>
-              <td style="font-family:monospace;color:#8b6f4e">${v.cnp||'—'}</td>
-              <td><strong>${v.nome}</strong></td>
-              <td>${qty}</td>
-              <td>${fmt(v.pvp)}</td>
-              <td>${fmt(v.pvp*qty)}</td>
-              <td class="amber"><strong>${fmt(v.custo*qty)}</strong></td>
-              <td><span class="badge ${pago?'bg-g':'bg-a'}">${pago?'Pago':'Por pagar'}</span></td>
-            </tr>`;
-          }).join('') : '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem vendas registadas</td></tr>'}
-        </tbody>
-      </table>
-    </div>
-    <div style="font-size:11px;color:#bbb;text-align:center;margin-top:1rem">
-      Esta página é atualizada automaticamente cada vez que a DAILYcare regista uma venda.
-    </div>`;
 
-  // guardar items para exportar
-  window._consignItems = items;
-  window._consignDB = DB;
+    ${!pendentes.length && !pagos.length ? `
+      <div class="alert alert-ok">
+        <span>✓</span>
+        <div>Nenhum produto em consignação por liquidar.</div>
+      </div>` : ''}
+
+    ${pendentes.length ? `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Por liquidar</span>
+        <span class="card-hint">${pendentes.length} linha${pendentes.length!==1?'s':''} · <span class="amber-text strong">${fmt(tPagar)}</span></span>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Data</th><th>Produto</th><th style="text-align:center">Qty</th>
+            <th>PVP unit.</th><th>Desc. forn.</th><th>A pagar</th><th>Lucro DAILYcare</th><th>Estado</th>
+          </tr></thead>
+          <tbody>
+            ${pendentes.sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(v=>rowHtml(v,false)).join('')}
+            <tr style="background:var(--warm);font-weight:600">
+              <td colspan="5" style="text-align:right;font-size:12px;color:var(--ink-mid)">Total a pagar:</td>
+              <td class="amber-text strong" style="font-size:14px">${fmt(tPagar)}</td>
+              <td></td><td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    ${pagos.length ? `
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Histórico liquidado</span>
+        <span class="card-hint">${pagos.length} linha${pagos.length!==1?'s':''} · <span class="green-text">${fmt(pagos.reduce((s,v)=>s+(v.custo_efetivo||0)*(v.qty||1),0))}</span></span>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead><tr>
+            <th>Data</th><th>Produto</th><th style="text-align:center">Qty</th>
+            <th>PVP unit.</th><th>Desc. forn.</th><th>Pago</th><th>Lucro DAILYcare</th><th>Estado</th>
+          </tr></thead>
+          <tbody>
+            ${pagos.sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(v=>rowHtml(v,true)).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>` : ''}
+
+    <div style="font-size:11px;color:var(--ink-faint);text-align:center;padding:1rem 0">
+      Os dados são atualizados automaticamente sempre que há uma nova venda no sistema DAILYcare.<br>
+      Desc. forn. = desconto de campanha adicional ao desconto habitual de 10%.
+    </div>
+  `;
 }
 
-function exportarCSV(){
-  const items = window._consignItems||[];
-  const DB = window._consignDB||{};
-  const pagas = DB.consignacoesPagas||[];
-  const header = ['Data','CNP','Produto','Quantidade','PVP unitário','PVP total','Custo farmácia','Estado'];
-  const rows = items.map(v=>{
-    const qty=v.qty||1;
-    return[v.data,v.cnp||'',v.nome,qty,v.pvp.toFixed(2),(v.pvp*qty).toFixed(2),(v.custo*qty).toFixed(2),pagas.includes(v.idx)?'Pago':'Por pagar'];
-  });
-  const total = items.filter(v=>!pagas.includes(v.idx)).reduce((s,v)=>s+v.custo*(v.qty||1),0);
-  const csv=[
-    ['DAILYcare — Consignação Farmácia Fonte da Moura'],
-    ['Exportado em: '+new Date().toLocaleString('pt-PT')],
-    [],
-    header,
-    ...rows,
-    [],
-    ['','','','','','Total por liquidar:',total.toFixed(2),'']
-  ].map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}));
-  a.download=`consignacao_${new Date().toISOString().split('T')[0]}.csv`;
-  a.click();
-}
-
-init();
-// auto-refresh a cada 5 minutos
-setInterval(init, 5*60*1000);
+// Carregar e auto-refresh a cada 5 minutos
+loadData();
+setInterval(loadData, 5 * 60 * 1000);
 </script>
 </body>
 </html>
