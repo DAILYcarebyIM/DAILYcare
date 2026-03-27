@@ -59,13 +59,12 @@ tr:hover td{background:#fafaf7}
 </div>
 <div class="tabs">
   <button class="tab active" onclick="tab('p',this)">Pagamentos</button>
-  <button class="tab" onclick="tab('s',this)">Stock</button>
-  <button class="tab" onclick="tab('e',this)">A encomendar</button>
+  
+  
 </div>
 <div class="main">
   <div id="pp" class="pg active"><div class="loading"><span class="spin"></span>A carregar…</div></div>
-  <div id="ps" class="pg"></div>
-  <div id="pe" class="pg"></div>
+  
 </div>
 <script>
 const SB='https://zwdnnawqcbulcfveiqmx.supabase.co/rest/v1/consignacao_publica?id=eq.1&select=data,updated_at';
@@ -108,7 +107,7 @@ async function load(){
     }
     const upd=rows[0].updated_at?new Date(rows[0].updated_at).toLocaleString('pt-PT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
     sync('ok','Atualizado '+upd);
-    renderP(); renderS(); renderE();
+    renderP();
   }catch(e){
     sync('err','Erro');
     document.getElementById('pp').innerHTML='<div class="al warn">⚠ Não foi possível carregar: '+e.message+'</div>';
@@ -157,39 +156,7 @@ function renderP(){
     <div class="hint">Desc. forn. = desconto de campanha adicional ao desconto habitual de 10%.</div>`;
 }
 
-function renderS(){
-  if(!S.length){
-    document.getElementById('ps').innerHTML='<h2>Stock em consignação</h2><div class="al warn">⏳ Dados de stock não disponíveis. Abre o DAILYcare → Consignação → ☁ Sincronizar com farmácia.</div>';
-    return;
-  }
-  const tSt=S.reduce((s,p)=>s+(p.stock||0),0);
-  const tVal=S.reduce((s,p)=>s+(p.pvp||0)*(p.stock||0),0);
-  const nZ=S.filter(p=>(p.stock||0)<=0).length;
-  const nB=S.filter(p=>(p.stock||0)>0&&(p.stockMin||0)>0&&(p.stock||0)<=(p.stockMin||0)).length;
-  const nOk=S.length-nZ-nB;
-  document.getElementById('ps').innerHTML=`
-    <h2>Stock em consignação</h2>
-    <p style="color:#888;font-size:12px;margin-bottom:1rem">Todos os produtos em consignação na DAILYcare.</p>
-    <div class="metrics">
-      <div class="met"><div class="lb">Total produtos</div><div class="vl">${S.length}</div></div>
-      <div class="met"><div class="lb">Unidades em stock</div><div class="vl">${tSt}</div></div>
-      <div class="met"><div class="lb">Valor PVP em stock</div><div class="vl">${f(tVal)}</div></div>
-      <div class="met"><div class="lb">Stock OK</div><div class="vl gr">${nOk}</div></div>
-      <div class="met"><div class="lb">Stock baixo</div><div class="vl am">${nB}</div></div>
-      <div class="met"><div class="lb">Esgotados</div><div class="vl re">${nZ}</div></div>
-    </div>
-    <div class="card"><div style="overflow-x:auto"><table>
-      <thead><tr><th>Produto</th><th>CNP</th><th>Marca</th><th>PVP (€)</th><th>Custo farm.</th><th>Stock</th><th>Mín.</th><th>Estado</th></tr></thead>
-      <tbody>${S.sort((a,b)=>(a.nome||'').localeCompare(b.nome||'')).map(p=>{
-        const st=p.stock||0,mn=p.stockMin||0;
-        const bc=st<=0?'br':mn>0&&st<=mn?'ba':'bg';
-        const lb=st<=0?'Esgotado':mn>0&&st<=mn?'Stock baixo':'OK';
-        return `<tr><td><strong>${p.nome}</strong></td><td style="font-family:monospace;font-size:11px;color:#8b6f4e">${p.cnp||'—'}</td><td><span class="tag">${p.marca||'—'}</span></td><td>${f(p.pvp||0)}</td><td class="am">${f(p.custo||0)}</td><td><span class="b ${bc}">${st}</span></td><td style="color:#888">${mn}</td><td><span class="b ${bc}">${lb}</span></td></tr>`;
-      }).join('')}</tbody>
-    </table></div></div>`;
-}
-
-function renderE(){
+function renderE_REMOVED(){} function renderE({
   if(!AE.length&&!JE.length&&!S.length){
     document.getElementById('pe').innerHTML='<h2>A encomendar</h2><div class="al warn">⏳ Dados não disponíveis. Abre o DAILYcare → Consignação → ☁ Sincronizar com farmácia.</div>';
     return;
