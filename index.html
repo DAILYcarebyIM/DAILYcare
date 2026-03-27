@@ -383,6 +383,7 @@ async function loadFromCloud(){
 
 function migrarCampos(){
   if(!DB.consignacoesPagas) DB.consignacoesPagas = [];
+  if(!DB.encomendados) DB.encomendados = [];
   if(!DB.entradas) DB.entradas = [];
   if(!DB.consumo) DB.consumo = [];
   if(!DB.fornecedores) DB.fornecedores = JSON.parse(JSON.stringify(DEFAULT.fornecedores));
@@ -678,7 +679,6 @@ function renderDash(){
       <div class="met"><div class="lb">Ticket médio</div><div class="vl">${fmt(ticket)}</div></div>
     </div>
 
-    ${stockB.length&&!dashMes?`<div class="alert al-err">⚠ Stock baixo: ${stockB.map(p=>`<strong>${p.nome}</strong> (${p.stock})`).join(', ')}</div>`:''}
 
     <div class="ss-box" style="margin-bottom:1rem">
       <h3 style="margin-bottom:10px">Segurança Social — estimativa ENI ${dashMes?'('+mesLabel+')':''}</h3>
@@ -1027,6 +1027,21 @@ function syncInputs(){
   });
 }
 
+// Após guardar edição, faz scroll suave para o item editado
+function scrollToItem(id){
+  setTimeout(()=>{
+    const el = document.getElementById(id) || document.querySelector(`[data-id="${id}"]`);
+    if(el) el.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }, 80);
+}
+
+// Guarda e restaura posição de scroll após re-render
+function withScroll(fn){
+  const pg = document.querySelector('.pg.active') || document.body;
+  const sy = pg.scrollTop || window.scrollY;
+  fn();
+  setTimeout(()=>{ if(pg!==document.body) pg.scrollTop=sy; else window.scrollTo(0,sy); }, 30);
+}
 // Calcula custo efectivo e PVP cobrado ao cliente
 // Para consignação: custoFarm = pvpBase × (1 - (descConsig + descForn) / 100)
 // Para não-consig:  custoFarm = custoOriginal × (1 - descForn / 100)
@@ -1464,7 +1479,7 @@ function saveEditCons(id){
   c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*v.qty,0);
   c.lucroProd=c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*v.qty,0);
 
-  editingConsId=null; save(); renderConsultas();
+  editingConsId=null; save(); withScroll(renderConsultas);
 }
 
 function delConsulta(id){
@@ -1979,7 +1994,7 @@ function saveEditCli(id){
   cl.telefone=document.getElementById('ecl-t').value;
   cl.email=document.getElementById('ecl-e')?.value||cl.email||'';
   cl.notas=document.getElementById('ecl-no').value;
-  editingCliId=null; save(); renderClientes();
+  editingCliId=null; save(); withScroll(renderClientes);
 }
 function showAddCli(){const f=document.getElementById('add-cli-f');f.style.display=f.style.display==='none'?'block':'none';}
 function addCli(){
@@ -2496,7 +2511,7 @@ function saveEditP(id){
   p.stock=parseInt(document.getElementById('ep-stock').value)||0;
   const _sm=document.getElementById('ep-smin').value; p.stockMin=_sm===''?0:parseInt(_sm);
   p.consig=document.getElementById('ep-cons').value==='true';
-  editingProdId=null; save(); renderProdutos();
+  editingProdId=null; save(); withScroll(renderProdutos);
 }
 function toggleAtivoProd(id){
   const p=DB.produtos.find(x=>x.id===id); if(!p) return;
@@ -2766,7 +2781,7 @@ function saveEditE(id){
   // actualizar produto com novos preços
   const p=DB.produtos.find(x=>x.id===e.prodId);
   if(p){ if(e.custo>0)p.custo=e.custo; if(e.pvp>0)p.pvp=Math.max(p.pvp||0,e.pvp); }
-  editingEntradaId=null; save(); renderEntradas();
+  editingEntradaId=null; save(); withScroll(renderEntradas);
 }
 function showAddE(){ showEncomenda(); } // redireciona para encomenda
 function showEncomenda(){
@@ -3353,7 +3368,7 @@ function saveEditCI(id){
   c.qty=novaQty;
   c.data=document.getElementById('eci-d').value;
   c.motivo=document.getElementById('eci-m').value;
-  editingConsumoId=null; save(); renderConsumo();
+  editingConsumoId=null; save(); withScroll(renderConsumo);
 }
 
 // ─── CONSIGNAÇÃO ─────────────────────────────────────────────────────────────
@@ -3721,7 +3736,7 @@ function saveEditW(id){
   w.preco   = parseFloat(document.getElementById('ew-p').value)||0;
   w.faturado= document.getElementById('ew-fat').value==='true';
   w.notas   = document.getElementById('ew-no').value;
-  editingWorkshopId=null; save(); renderWorkshops();
+  editingWorkshopId=null; save(); withScroll(renderWorkshops);
 }
 function toggleFaturadoW(id){
   const w=DB.workshops.find(x=>x.id===id); if(!w) return;
@@ -4000,7 +4015,7 @@ function saveEditFo(id){
   f.pago=document.getElementById('efo-pago').value==='true';
   f.dataPagamento=document.getElementById('efo-dpag').value||null;
   f.notas=document.getElementById('efo-no').value;
-  editingFormacaoId=null;save();renderFormacao();
+  editingFormacaoId=null;save();withScroll(renderFormacao);
 }
 function marcarFormacaoPaga(id){
   const f=DB.formacoes.find(x=>x.id===id);if(!f)return;
@@ -4229,7 +4244,7 @@ function saveEditG(id){
   g.cat=document.getElementById('eg-c').value;
   g.valor=parseFloat(document.getElementById('eg-v').value)||0;
   g.fornecedor=document.getElementById('eg-forn')?.value.trim()||'';
-  editingGastoId=null; save(); renderGastos();
+  editingGastoId=null; save(); withScroll(renderGastos);
 }
 function addG(){
   const d=document.getElementById('ng-d').value.trim(); if(!d)return;
@@ -4245,27 +4260,95 @@ function addG(){
 }
 
 // ─── LISTA ENCOMENDAS ────────────────────────────────────────────────────────
+let editingEncProdId = null;
 function renderEncomendas(){
-  // só produtos ativos (ativo !== false)
+  if(!DB.encomendados) DB.encomendados=[];
   const ativos = DB.produtos.filter(p=>p.ativo!==false);
-  const baixo = ativos.filter(p=>(p.stockMin??0)>0 && p.stock<(p.stockMin??0));
-  const esgotado = ativos.filter(p=>p.stock<=0);
+  const baixo  = ativos.filter(p=>(p.stockMin??0)>0 && p.stock<(p.stockMin??0));
+  const porEncomendar = baixo.filter(p=>!DB.encomendados.includes(p.id));
+  const jaEncomendado = baixo.filter(p=> DB.encomendados.includes(p.id));
+  // limpar encomendados cujo stock já voltou ao normal
+  DB.encomendados = DB.encomendados.filter(id=>baixo.find(p=>p.id===id));
+
+  const rowHtml = (p, enc) => {
+    if(editingEncProdId===p.id) return `<tr style="background:#fffbf5">
+      <td colspan="7" style="padding:10px 12px">
+        <div style="font-weight:600;margin-bottom:8px">✏️ Editar: ${p.nome}</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+          <div><label style="font-size:11px;color:#888;display:block">Stock mínimo</label>
+            <input id="eenc-smin" type="number" value="${p.stockMin??0}" min="0"
+              style="width:80px;padding:4px 6px;font-size:13px;border:1px solid #d4a97a;border-radius:6px"/></div>
+          <div><label style="font-size:11px;color:#888;display:block">Stock atual</label>
+            <input id="eenc-stock" type="number" value="${p.stock??0}" min="0"
+              style="width:80px;padding:4px 6px;font-size:13px;border:1px solid #ddd;border-radius:6px"/></div>
+          <div><label style="font-size:11px;color:#888;display:block">Custo (€)</label>
+            <input id="eenc-custo" type="number" value="${parseFloat(p.custo||0).toFixed(2)}" step="0.01" min="0"
+              style="width:90px;padding:4px 6px;font-size:13px;border:1px solid #ddd;border-radius:6px"/></div>
+          <div><label style="font-size:11px;color:#888;display:block">PVP (€)</label>
+            <input id="eenc-pvp" type="number" value="${parseFloat(p.pvp||0).toFixed(2)}" step="0.01" min="0"
+              style="width:90px;padding:4px 6px;font-size:13px;border:1px solid #ddd;border-radius:6px"/></div>
+          <button class="btn pri sm" onclick="saveEncProd('${p.id}')">Guardar</button>
+          <button class="btn sm" onclick="cancelEncProd()">Cancelar</button>
+        </div>
+      </td>
+    </tr>`;
+    return `<tr style="${enc?'opacity:0.55;background:#f6fff6':''}">
+      <td>
+        <strong>${p.nome}</strong>
+        ${p.cnp?`<div style="font-size:10px;color:#8b6f4e;font-family:monospace">CNP: ${p.cnp}</div>`:''}
+        ${enc?'<span class="badge bg-g" style="font-size:9px;margin-top:2px">Encomendado</span>':''}
+      </td>
+      <td><span class="tag">${p.marca||'—'}</span></td>
+      <td><span class="tag" style="background:#f3e8da;color:#7a4f28">${p.fornecedor||'—'}</span></td>
+      <td><span class="badge bg-${p.stock<=0?'r':'a'}">${p.stock}</span></td>
+      <td>${p.stockMin??0}</td>
+      <td><strong class="${enc?'':'green'}">${Math.max(0,(p.stockMin??0)-p.stock+1)}</strong></td>
+      <td style="white-space:nowrap;vertical-align:middle">
+        <button class="btn sm" onclick="startEncProd('${p.id}')" style="font-size:11px;margin-bottom:3px">✏️ Editar</button><br>
+        ${enc
+          ? `<button class="btn sm" onclick="desmarcarEncomendado('${p.id}')" style="font-size:11px">↩ Desmarcar</button>`
+          : `<button class="btn suc sm" onclick="marcarEncomendado('${p.id}')" style="font-size:11px">✓ Encomendado</button>`
+        }
+      </td>
+    </tr>`;
+  };
+
   document.getElementById('pg-encomendas').innerHTML=`
-    <h2>Lista de encomendas automática</h2>
-    <p style="color:#888;font-size:12px;margin-bottom:1rem">Produtos ativos com stock abaixo do mínimo definido. Produtos inativos não aparecem aqui.</p>
-    ${esgotado.length?`<div class="alert al-err"><strong>Esgotados:</strong> ${esgotado.map(p=>`<strong>${p.nome}</strong>`).join(', ')}</div>`:''}
-    ${!baixo.length?'<div class="alert al-suc">✓ Todos os produtos ativos têm stock suficiente. Nada a encomendar.</div>':''}
+    <h2>Lista de encomendas</h2>
+    <p style="color:#888;font-size:12px;margin-bottom:1rem">Produtos ativos com stock abaixo do mínimo. Marca como "Encomendado" para não perderes o controlo.</p>
+    ${!baixo.length?'<div class="alert al-suc">✓ Todos os produtos ativos têm stock suficiente.</div>':''}
     ${baixo.length?`<div class="card" style="padding:0;overflow:hidden"><table>
-      <thead><tr><th>Produto</th><th>Marca</th><th>Fornecedor</th><th>Stock atual</th><th>Stock mínimo</th><th>Qty a encomendar</th></tr></thead>
-      <tbody>${baixo.map(p=>`<tr>
-        <td><strong>${p.nome}</strong>${p.cnp?`<div style="font-size:10px;color:#8b6f4e;font-family:monospace">CNP: ${p.cnp}</div>`:''}</td>
-        <td><span class="tag">${p.marca||'—'}</span></td>
-        <td><span class="tag" style="background:#f3e8da;color:#7a4f28">${p.fornecedor||'—'}</span></td>
-        <td><span class="badge bg-${p.stock<=0?'r':'a'}">${p.stock}</span></td>
-        <td>${p.stockMin??0}</td>
-        <td><strong class="green">${Math.max(0,(p.stockMin??0)-p.stock+1)}</strong></td>
-      </tr>`).join('')}</tbody>
+      <thead><tr><th>Produto</th><th>Marca</th><th>Fornecedor</th><th>Stock atual</th><th>Stock mín.</th><th>Qty</th><th></th></tr></thead>
+      <tbody>
+        ${porEncomendar.map(p=>rowHtml(p,false)).join('')}
+        ${jaEncomendado.length?`<tr><td colspan="7" style="padding:6px 12px;background:#f0fff0;font-size:11px;color:#5a8a5a;font-weight:600">✓ Já encomendado</td></tr>`:''}
+        ${jaEncomendado.map(p=>rowHtml(p,true)).join('')}
+      </tbody>
     </table></div>`:''}`;
+}
+function startEncProd(id){ editingEncProdId=id; withScroll(renderEncomendas); setTimeout(()=>document.getElementById('eenc-smin')?.focus(),60); }
+function cancelEncProd(){ editingEncProdId=null; renderEncomendas(); }
+function saveEncProd(id){
+  const p=DB.produtos.find(x=>x.id===id); if(!p) return;
+  const smin=document.getElementById('eenc-smin')?.value;
+  const stk =document.getElementById('eenc-stock')?.value;
+  const cst =document.getElementById('eenc-custo')?.value;
+  const pvp =document.getElementById('eenc-pvp')?.value;
+  if(smin!==undefined) p.stockMin = smin===''?0:parseInt(smin);
+  if(stk !==undefined) p.stock    = stk===''?0:parseInt(stk);
+  if(cst !==undefined) p.custo    = parseFloat(cst)||0;
+  if(pvp !==undefined) p.pvp      = parseFloat(pvp)||0;
+  editingEncProdId=null; save(); withScroll(renderEncomendas);
+}
+function marcarEncomendado(id){
+  if(!DB.encomendados) DB.encomendados=[];
+  if(!DB.encomendados.includes(id)) DB.encomendados.push(id);
+  save(); renderEncomendas();
+}
+function desmarcarEncomendado(id){
+  if(!DB.encomendados) DB.encomendados=[];
+  DB.encomendados=DB.encomendados.filter(x=>x!==id);
+  save(); renderEncomendas();
 }
 
 // ─── RELATÓRIO ───────────────────────────────────────────────────────────────
@@ -4503,6 +4586,7 @@ function setConsigDefaultEnc(){
 }
 
 let editingMarca = null;
+let _todasMarcas = [];
 function renderFornecedores(){
   if(!DB.fornecedores) DB.fornecedores=[];
   if(!DB.marcas) DB.marcas=[];
@@ -4542,6 +4626,7 @@ function renderFornecedores(){
     </tr>`;
   };
 
+  _todasMarcas = todasMarcas; // cache para funções por índice
   document.getElementById('pg-fornecedores').innerHTML=`
     <h2>Fornecedores e Marcas</h2>
 
@@ -4586,14 +4671,14 @@ function renderFornecedores(){
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr><th>Marca</th><th>Produtos associados</th><th>Ações</th></tr></thead>
-        <tbody>${todasMarcas.length ? todasMarcas.map(m=>{
+        <tbody>${todasMarcas.length ? todasMarcas.map((m,mi)=>{
           const nProd=DB.produtos.filter(p=>p.marca===m).length;
           const isEditing=editingMarca===m;
           if(isEditing) return `<tr style="background:#fffbf5">
             <td><input id="em-nome" value="${m.replace(/"/g,'&quot;')}" style="min-width:180px"/></td>
             <td style="color:#888;font-size:11px">${nProd} produto${nProd!==1?'s':''}</td>
             <td style="white-space:nowrap">
-              <button class="btn pri sm" onclick="saveEditMarca('${m.replace(/'/g,"\\'")}')">Guardar</button>
+              <button class="btn pri sm" onclick="saveEditMarcaIdx(${mi})">Guardar</button>
               <button class="btn sm" onclick="cancelEditMarca()" style="margin-top:2px">Cancelar</button>
             </td>
           </tr>`;
@@ -4601,8 +4686,8 @@ function renderFornecedores(){
             <td><strong>${m}</strong></td>
             <td style="color:#888;font-size:11px">${nProd} produto${nProd!==1?'s':''}</td>
             <td style="white-space:nowrap">
-              <button class="btn sm" onclick="startEditMarca('${m.replace(/'/g,"\\'")}')">Editar</button>
-              <button class="btn dan sm" onclick="delMarca('${m.replace(/'/g,"\\'")}')">Apagar</button>
+              <button class="btn sm" onclick="startEditMarcaIdx(${mi})">Editar</button>
+              <button class="btn dan sm" onclick="delMarcaIdx(${mi})">Apagar</button>
             </td>
           </tr>`;
         }).join('') : '<tr><td colspan="3" style="text-align:center;padding:2rem;color:#999">Sem marcas registadas</td></tr>'}
@@ -4618,22 +4703,27 @@ function addMarca(){
   if(!DB.marcas.includes(n)) DB.marcas.push(n);
   save(); showAddMarca(); renderFornecedores();
 }
-function startEditMarca(m){ editingMarca=m; renderFornecedores(); setTimeout(()=>document.getElementById('em-nome')?.focus(),50); }
+function startEditMarcaIdx(mi){
+  const m = _todasMarcas[mi]; if(!m) return;
+  if(!DB.marcas) DB.marcas=[];
+  if(!DB.marcas.includes(m)) DB.marcas.push(m);
+  editingMarca=m; renderFornecedores(); setTimeout(()=>document.getElementById('em-nome')?.focus(),50);
+}
 function cancelEditMarca(){ editingMarca=null; renderFornecedores(); }
-function saveEditMarca(oldNome){
+function saveEditMarcaIdx(mi){
+  const oldNome = _todasMarcas[mi]; if(!oldNome) return;
   const newNome=document.getElementById('em-nome')?.value.trim(); if(!newNome)return;
   if(!DB.marcas) DB.marcas=[];
-  // atualizar na lista de marcas
   const idx=DB.marcas.indexOf(oldNome);
   if(idx>=0) DB.marcas[idx]=newNome; else DB.marcas.push(newNome);
-  // atualizar em todos os produtos
   DB.produtos.forEach(p=>{ if(p.marca===oldNome) p.marca=newNome; });
-  editingMarca=null; save(); renderFornecedores();
+  editingMarca=null; save(); withScroll(renderFornecedores);
 }
-function delMarca(nome){
+function delMarcaIdx(mi){
+  const nome = _todasMarcas[mi]; if(!nome) return;
   confirmDel(`Apagar marca "${nome}"? Os produtos continuam mas ficam sem marca.`, ()=>{
-    if(DB.marcas) DB.marcas=DB.marcas.filter(m=>m!==nome);
-    // não apagar dos produtos — só da lista
+    if(!DB.marcas) DB.marcas=[];
+    DB.marcas=DB.marcas.filter(m=>m!==nome);
     save(); renderFornecedores();
   });
 }
@@ -4658,7 +4748,7 @@ function saveEditF(id){
   f.email=document.getElementById('ef-e').value;
   f.consigDefault=document.getElementById('ef-consig').value==='true';
   f.notas=document.getElementById('ef-no').value;
-  editingFornId=null;save();renderFornecedores();
+  editingFornId=null;save();withScroll(renderFornecedores);
 }
 function delForn(id){
   const f=DB.fornecedores.find(x=>x.id===id);
