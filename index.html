@@ -2594,6 +2594,7 @@ function renderProdutosTabela(){
 function startEditP(id){ editingProdId=id; renderProdutosTabela(); setTimeout(()=>document.getElementById('ep-n')?.focus(),50); }
 function cancelEditP(){ editingProdId=null; renderProdutosTabela(); }
 function saveEditP(id){
+  const _scrollToId = id; // guardar para scroll depois do render
   const p=DB.produtos.find(x=>x.id===id); if(!p) return;
   p.nome=document.getElementById('ep-n').value.trim()||p.nome;
   p.ativo=document.getElementById('ep-ativo')?.value!=='false';
@@ -2606,7 +2607,19 @@ function saveEditP(id){
   // ep-stock não existe no form — stock só editável via botão 📦
   const _sm=document.getElementById('ep-smin').value; p.stockMin=_sm===''?0:parseInt(_sm);
   p.consig=document.getElementById('ep-consig').value==='true';
-  editingProdId=null; save(); withScroll(renderProdutos);
+  editingProdId=null;
+  save();
+  withScroll(renderProdutos);
+  // scroll para a linha do produto guardado
+  setTimeout(()=>{
+    const rows = document.querySelectorAll('#prod-tbody-wrap tr');
+    for(const row of rows){
+      if(row.innerHTML.includes(_scrollToId)){
+        row.scrollIntoView({behavior:'smooth',block:'center'});
+        break;
+      }
+    }
+  }, 120);
 }
 function toggleAtivoProd(id){
   const p=DB.produtos.find(x=>x.id===id); if(!p) return;
@@ -2794,7 +2807,7 @@ function renderEntradasTabela(){
     const t=normalizar(fEntradasTexto);
     lista=lista.filter(e=>normalizar(e.prodNome||'').includes(t)||normalizar(e.fornecedor||'').includes(t)||normalizar(e.fatura||'').includes(t));
   }
-  wrap.innerHTML=`<table>
+  wrap.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table>
     <thead><tr>${thSort('entradas','data','Data')}${thSort('entradas','nome','Produto')}<th>CNP</th>${thSort('entradas','qty','Qty')}${thSort('entradas','custo','Custo unit.')}${thSort('entradas','pvp','PVP')}${thSort('entradas','margem','Margem')}<th>Total</th>${thSort('entradas','fornecedor','Fornecedor')}<th>Fatura/Guia</th><th>Consig.</th><th>Ações</th></tr></thead>
     <tbody>${lista.length?lista.map(e=>{
       if(editingEntradaId===e.id){
@@ -2859,7 +2872,7 @@ function renderEntradasTabela(){
       </tr>`;
     }).join(''):'<tr><td colspan="12" style="text-align:center;padding:2rem;color:#999">Sem entradas registadas</td></tr>'}
     </tbody>
-  </table>`;
+  </table></div>`;
 }
 
 let editingEntradaId = null;
@@ -4480,7 +4493,7 @@ function renderEncomendas(){
       <td><span class="tag" style="background:#f3e8da;color:#7a4f28">${p.fornecedor||'—'}</span></td>
       <td><span class="badge bg-${p.stock<=0?'r':'a'}">${p.stock}</span></td>
       <td>${p.stockMin??0}</td>
-      <td><strong class="${enc?'':'green'}">${Math.max(0,(p.stockMin??0)-p.stock+1)}</strong></td>
+      <td><strong class="${enc?'':'green'}">${Math.max(0,(p.stockMin??0)-p.stock)}</strong></td>
       <td style="white-space:nowrap;vertical-align:middle">
         <button class="btn sm" onclick="startEncProd('${p.id}')" style="font-size:11px;margin-bottom:3px">✏️ Editar</button><br>
         ${enc
