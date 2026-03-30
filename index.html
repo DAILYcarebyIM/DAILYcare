@@ -75,7 +75,64 @@ tr:hover td{background:#fafaf7}
 .bar-val{font-size:9px;color:#888;white-space:nowrap}
 .bar-fill{width:100%;background:#8b6f4e;border-radius:3px 3px 0 0;opacity:0.8;min-height:4px}
 .bar-lbl{font-size:9px;color:#888}
-@media(max-width:600px){.c3{grid-template-columns:1fr 1fr}.c4{grid-template-columns:1fr 1fr}.nav{padding:0}}
+@media(max-width:600px){
+  /* grids */
+  .c3{grid-template-columns:1fr 1fr}
+  .c4{grid-template-columns:1fr 1fr}
+  .nav{padding:0}
+
+  /* header mais compacto */
+  .header{padding:0 0.75rem;gap:6px;height:48px}
+  .header .logo{font-size:13px}
+  .save-indicator{display:none} /* esconder indicador de save */
+
+  /* botão ajuda e settings mais pequenos */
+  .header .btn{padding:4px 8px;font-size:10px}
+
+  /* main com menos padding */
+  .main{padding:0.75rem}
+
+  /* cards */
+  .card{padding:0.75rem 0.875rem}
+
+  /* métricas em 2 colunas */
+  .metrics{grid-template-columns:repeat(2,1fr)}
+
+  /* tabelas — scroll horizontal, sem texto cortado */
+  .card table, table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;width:100%}
+  th,td{white-space:nowrap;padding:6px 8px;font-size:11px}
+
+  /* formulários — campos em coluna */
+  .row.c2,.row.c3,.row.c4{grid-template-columns:1fr}
+
+  /* flex-b em coluna */
+  .flex-b{flex-direction:column;align-items:flex-start;gap:6px}
+  .flex-b h2{margin-bottom:0}
+
+  /* vrow mais compacto */
+  .vrow{flex-direction:column;align-items:flex-start;gap:6px}
+
+  /* badges e tags não cortam */
+  .badge,.tag{white-space:nowrap}
+
+  /* dropdown não sai do ecrã */
+  .dropdown{max-width:calc(100vw - 1.5rem)}
+
+  /* ss-box */
+  .ss-box .metrics{grid-template-columns:repeat(2,1fr)}
+
+  /* cbanner em coluna */
+  .cbanner{flex-direction:column;align-items:flex-start}
+  .cbanner > div:last-child{font-size:20px}
+
+  /* bar chart scrollável */
+  .bar-chart{overflow-x:auto;min-height:100px}
+}
+
+/* nav separadores — sempre scrollável horizontalmente sem quebrar */
+.nav{overflow-x:auto;-webkit-overflow-scrolling:touch;flex-wrap:nowrap;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nb{flex-shrink:0}
 </style>
 </head>
 <body>
