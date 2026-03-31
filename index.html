@@ -230,6 +230,22 @@ tr:hover td{background:#fafaf7}
   </div>
 </div>
 
+<div id="rel-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:500;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow-y:auto">
+  <div style="background:#fff;border-radius:12px;width:100%;max-width:680px;box-shadow:0 8px 40px rgba(0,0,0,0.2);margin:auto">
+    <div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:700;font-size:15px" id="rel-modal-titulo">Relatório de vendas</div>
+        <div style="font-size:11px;color:#888;margin-top:2px" id="rel-modal-sub"></div>
+      </div>
+      <button onclick="document.getElementById('rel-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888;line-height:1">×</button>
+    </div>
+    <div id="rel-modal-body" style="padding:16px 20px;max-height:70vh;overflow-y:auto"></div>
+    <div style="padding:12px 20px;border-top:1px solid #eee;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn sm" onclick="exportarListagemVendas()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Exportar CSV</button>
+      <button class="btn sm" onclick="document.getElementById('rel-modal').style.display='none'">Fechar</button>
+    </div>
+  </div>
+</div>
 <div class="menu-overlay" id="menu-overlay" onclick="closeMenuDrawer()"></div>
 <div class="menu-drawer" id="menu-drawer">
   <div class="menu-drawer-header"><span>DAILY</span>care <button onclick="closeMenuDrawer()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#888">×</button></div>
@@ -1873,7 +1889,8 @@ function renderVendas(){
         <span style="font-size:11px;color:#888">→</span>
         <input id="fv-ate" type="date" value="${fVendasAte}" onchange="fVendasData='';fVendasAte=this.value;renderVendasTabela()" title="Até" style="width:130px"/>
         <button class="btn sm" onclick="fVendasTexto='';fVendasData='';fVendasDe='';fVendasAte='';fVendasMarca='';document.getElementById('fv-texto').value='';renderVendas()">× Limpar</button>
-        <button class="btn sm" onclick="exportarListagemVendas()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32;margin-left:auto">↓ Exportar listagem</button>
+        <button class="btn sm" onclick="verRelatorioVendas()" style="background:#e8f0ff;border-color:#9b8ff0;color:#4a2db5;font-weight:600;margin-left:auto">📊 Ver relatório</button>
+        <button class="btn sm" onclick="exportarListagemVendas()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Exportar</button>
       </div>
       <div id="vendas-metricas" style="padding:8px 12px;border-bottom:1px solid #eee;display:flex;gap:8px;flex-wrap:wrap"></div>
       <div id="vendas-tabela"></div>
@@ -1979,6 +1996,82 @@ function renderVendasPagina(){
     }).join(''):'<tr><td colspan="9" style="text-align:center;padding:2rem;color:#999">Sem resultados</td></tr>'}
     </tbody>
   </table></div>`;
+}
+
+function verRelatorioVendas(){
+  // recolher dados com filtros activos
+  let consultas = DB.consultas.filter(c=>c.vendas&&c.vendas.length>0);
+  if(fVendasData) consultas=consultas.filter(c=>c.data===fVendasData);
+  if(fVendasDe)   consultas=consultas.filter(c=>c.data>=fVendasDe);
+  if(fVendasAte)  consultas=consultas.filter(c=>c.data<=fVendasAte);
+  if(fVendasTexto) consultas=consultas.filter(c=>matchWords(cNome(c.clienteId),fVendasTexto)||c.vendas.some(v=>matchWords(v.nome,fVendasTexto)));
+  if(fVendasMarca) consultas=consultas.filter(c=>c.vendas.some(v=>(v.marca||(DB.produtos.find(x=>x.id===v.prodId)?.marca)||'')=== fVendasMarca));
+
+  // expandir para linhas de produto e agrupar por produto
+  const porProd = {};
+  consultas.forEach(c=>c.vendas
+    .filter(v=>!fVendasMarca||(v.marca||(DB.produtos.find(x=>x.id===v.prodId)?.marca)||'')=== fVendasMarca)
+    .forEach(v=>{
+      const key = v.prodId||v.nome;
+      if(!porProd[key]) porProd[key]={ nome:v.nome, marca:v.marca||(DB.produtos.find(x=>x.id===v.prodId)?.marca)||'', qty:0, pvpTotal:0, lucro:0 };
+      porProd[key].qty += v.qty||1;
+      porProd[key].pvpTotal += (v.pvpCobrado||v.pvp||0)*(v.qty||1);
+      porProd[key].lucro += ((v.pvpCobrado||v.pvp||0)-(v.custo||0))*(v.qty||1);
+    })
+  );
+  const linhas = Object.values(porProd).sort((a,b)=>b.qty-a.qty);
+  const tQty  = linhas.reduce((s,l)=>s+l.qty,0);
+  const tPVP  = linhas.reduce((s,l)=>s+l.pvpTotal,0);
+  const tLucro= linhas.reduce((s,l)=>s+l.lucro,0);
+
+  // título
+  const partes=[];
+  if(fVendasMarca) partes.push(fVendasMarca);
+  const periodo = fVendasDe&&fVendasAte ? `${fVendasDe.split('-').reverse().join('/')} → ${fVendasAte.split('-').reverse().join('/')}` : fVendasDe ? `desde ${fVendasDe.split('-').reverse().join('/')}` : fVendasAte ? `até ${fVendasAte.split('-').reverse().join('/')}` : fVendasData ? fVendasData.split('-').reverse().join('/') : 'Todos os períodos';
+
+  document.getElementById('rel-modal-titulo').textContent = partes.length ? partes.join(' · ') : 'Relatório de vendas';
+  document.getElementById('rel-modal-sub').textContent = periodo + ' · ' + linhas.length + ' produto' + (linhas.length!==1?'s':'') + ' · ' + tQty + ' unidades';
+
+  if(!linhas.length){
+    document.getElementById('rel-modal-body').innerHTML='<div style="text-align:center;padding:2rem;color:#999">Sem resultados para os filtros seleccionados.</div>';
+    document.getElementById('rel-modal').style.display='flex';
+    return;
+  }
+
+  // barra de progresso relativa ao produto mais vendido
+  const maxQty = linhas[0].qty;
+
+  document.getElementById('rel-modal-body').innerHTML=`
+    <div style="margin-bottom:16px;padding:10px 14px;background:#f8f8f5;border-radius:8px;display:flex;gap:24px;flex-wrap:wrap">
+      <div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Unidades</div><div style="font-size:20px;font-weight:700">${tQty}</div></div>
+      <div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Total PVP</div><div style="font-size:20px;font-weight:700">${fmt(tPVP)}</div></div>
+      <div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Lucro</div><div style="font-size:20px;font-weight:700;color:#1a6b1a">${fmt(tLucro)}</div></div>
+    </div>
+    ${linhas.map(l=>{
+      const pct = Math.round(l.qty/maxQty*100);
+      return `<div style="margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">
+          <div>
+            <span style="font-weight:600;font-size:13px">${l.nome}</span>
+            ${l.marca?`<span style="font-size:10px;color:#8b6f4e;margin-left:6px;background:#f3e8da;padding:1px 6px;border-radius:10px">${l.marca}</span>`:''}
+          </div>
+          <div style="text-align:right;white-space:nowrap;margin-left:12px">
+            <span style="font-weight:700;font-size:15px">${l.qty} un.</span>
+            <span style="font-size:11px;color:#888;margin-left:8px">${fmt(l.pvpTotal)}</span>
+            <span style="font-size:11px;color:#1a6b1a;margin-left:6px">+${fmt(l.lucro)}</span>
+          </div>
+        </div>
+        <div style="height:6px;background:#eee;border-radius:3px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:#8b6f4e;border-radius:3px;transition:width .3s"></div>
+        </div>
+      </div>`;
+    }).join('')}
+    <div style="border-top:1px solid #eee;margin-top:12px;padding-top:10px;display:flex;justify-content:space-between;font-weight:600;font-size:13px">
+      <span>Total</span>
+      <span>${tQty} un. &nbsp;·&nbsp; ${fmt(tPVP)} &nbsp;·&nbsp; <span style="color:#1a6b1a">${fmt(tLucro)}</span></span>
+    </div>`;
+
+  document.getElementById('rel-modal').style.display='flex';
 }
 
 function exportarListagemVendas(){
