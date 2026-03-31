@@ -1927,6 +1927,13 @@ function renderVendasPagina(){
               <td><button class="btn dan sm" onclick="remVendaItem('${c.id}',${vi})">×</button></td>
             </tr>`).join('')}</tbody>
           </table></div>
+          <div style="margin-bottom:8px">
+            <label style="font-size:11px;color:#888;margin-bottom:4px;display:block">Adicionar produto</label>
+            <div class="dd-wrap" style="margin-bottom:0">
+              <input id="ev-ps-${c.id}" placeholder="Pesquisar produto..." oninput="ddProdEV(this.value,'${c.id}')" autocomplete="off" style="font-size:12px"/>
+              <div class="dropdown" id="dd-ev-${c.id}" style="display:none"></div>
+            </div>
+          </div>
           <div style="display:flex;gap:8px">
             <button class="btn pri" onclick="saveEditVenda('${c.id}')">Guardar</button>
             <button class="btn" onclick="cancelEditVenda()">Cancelar</button>
@@ -1954,6 +1961,50 @@ function renderVendasPagina(){
 }
 
 let editingVendaId = null;
+
+function ddProdEV(v, cId){
+  const dd = document.getElementById('dd-ev-'+cId);
+  if(!v||v.length<1){ dd.style.display='none'; return; }
+  const m = DB.produtos.filter(p=>p.ativo!==false&&matchProd(p,v));
+  dd.innerHTML = m.map(p=>`<div class="ddi" onclick="addProdEV('${cId ? cId : ""}','${"PRODID"}')".replace('${cId ? cId : ""}','${cId}').replace('${"PRODID"}','${p.id}')>
+    <strong>${p.nome}</strong>
+    <span style="color:#999;font-size:11px"> — stock: ${p.stock} · PVP: ${fmt(p.pvp)}</span>
+  </div>`).join('');
+  // usar onclick directo sem template aninhado
+  dd.innerHTML = m.map(p=>`<div class="ddi" onclick="addProdEV('${cId}','${p.id}')">
+    <strong>${p.nome}</strong>
+    <span style="color:#999;font-size:11px"> — stock: ${p.stock} · PVP: ${fmt(p.pvp)}</span>
+  </div>`).join('');
+  dd.style.display = m.length ? 'block' : 'none';
+}
+
+function addProdEV(cId, pid){
+  const c = DB.consultas.find(x=>x.id===cId); if(!c) return;
+  const p = DB.produtos.find(x=>x.id===pid); if(!p) return;
+  // verificar se já existe — aumentar qty
+  const ex = c.vendas.find(v=>v.prodId===pid);
+  if(ex){ ex.qty++; }
+  else {
+    const margPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
+    const descConsig = p.consig ? 10 : 0;
+    c.vendas.push({
+      prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp,
+      custoOriginal:p.custo, custo:p.custo, qty:1,
+      marca:p.marca||'', consig:p.consig||false,
+      margemBase:margPct, descExtra:0, descConsig,
+      descForn:0, descCliente:0, faturado:c.faturado
+    });
+    p.stock -= 1; // baixar stock
+  }
+  c.totalProd = c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0);
+  c.lucroProd = c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  const inp = document.getElementById('ev-ps-'+cId);
+  const dd  = document.getElementById('dd-ev-'+cId);
+  if(inp) inp.value='';
+  if(dd)  dd.style.display='none';
+  // re-renderizar só a tabela de produtos dentro do form de edição
+  withScroll(renderVendasPagina);
+}
 function startEditVenda(id){ editingVendaId=id; withScroll(renderVendasPagina); }
 function cancelEditVenda(){ editingVendaId=null; renderVendasPagina(); }
 function remVendaItem(cId, vi){
