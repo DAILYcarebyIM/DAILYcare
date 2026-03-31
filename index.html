@@ -1394,6 +1394,7 @@ function renderConsultasLista(){
           <div><label>Estado</label><select id="ec-est"><option ${c.estado==='Pago'?'selected':''}>Pago</option><option ${c.estado==='Por pagar'?'selected':''}>Por pagar</option></select></div>
           <div><label>Faturado?</label><select id="ec-fat"><option value="false" ${!c.faturado?'selected':''}>Não faturado</option><option value="true" ${c.faturado?'selected':''}>Faturado</option></select></div>
           <div><label>Notas</label><input id="ec-notas" value="${c.notas||''}"/></div>
+          <div><label>Valor pendente (€)</label><input id="ec-pendente" type="number" step="0.01" min="0" value="${(c.valorPendente||0).toFixed(2)}"/></div>
         </div>
 
         <!-- produtos da consulta -->
@@ -1564,6 +1565,8 @@ function saveEditCons(id){
   c.estado=document.getElementById('ec-est').value;
   c.faturado=document.getElementById('ec-fat').value==='true';
   c.notas=document.getElementById('ec-notas').value;
+  c.valorPendente=parseFloat(document.getElementById('ec-pendente')?.value)||0;
+  c.valorPendente=parseFloat(document.getElementById('ec-pendente')?.value)||0;
 
   // recalcular totais com os dados atualizados
   c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*v.qty,0);
@@ -1895,42 +1898,101 @@ function renderVendasPagina(){
   ];
   const {col}=getSort('vendas');
   const lista=col?sortArr(consultas,'vendas',defs):[...consultas].sort((a,b)=>b.data.localeCompare(a.data));
-  wrap.innerHTML=`<table>
-    <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Estado</th><th></th></tr></thead>
+  wrap.innerHTML=`<div style="overflow-x:auto"><table>
+    <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Pendente</th><th>Estado</th><th></th></tr></thead>
     <tbody>${lista.length?lista.map(c=>{
       const tp=c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
       const tl=c.vendas.reduce((s,v)=>s+(v.pvp-v.custo)*(v.qty||1),0);
       const nomes=c.vendas.map(v=>`${v.nome}${v.qty>1?' ×'+v.qty:''}`).join(', ');
+      const pendente=c.valorPendente||0;
+      const isEditingV = editingVendaId===c.id;
+      if(isEditingV) return `<tr style="background:#fffbf5">
+        <td colspan="9" style="padding:12px">
+          <div style="font-size:12px;font-weight:600;color:#8b6f4e;margin-bottom:10px">Editar venda — ${cNome(c.clienteId)} · ${c.data}</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px">
+            <div><label>Data</label><input id="ev-data" type="date" value="${c.data}"/></div>
+            <div><label>Estado</label><select id="ev-estado"><option ${c.estado==='Pago'?'selected':''}>Pago</option><option ${c.estado==='Por pagar'?'selected':''}>Por pagar</option></select></div>
+            <div><label>Valor pendente (€)</label><input id="ev-pendente" type="number" step="0.01" min="0" value="${pendente.toFixed(2)}" placeholder="0.00"/></div>
+            <div><label>Faturado?</label><select id="ev-fat"><option value="false" ${!c.faturado?'selected':''}>Não</option><option value="true" ${c.faturado?'selected':''}>Sim</option></select></div>
+          </div>
+          <div style="margin-bottom:8px;font-size:12px;font-weight:600;color:#555">Produtos</div>
+          <div style="overflow-x:auto"><table style="margin-bottom:8px">
+            <thead><tr style="background:#f0f0ec"><th>Produto</th><th style="width:70px">Qty</th><th style="width:90px">PVP (€)</th><th style="width:90px">Custo (€)</th><th>Lucro</th><th style="width:30px"></th></tr></thead>
+            <tbody id="ev-produtos-${c.id}">${c.vendas.map((v,vi)=>`<tr>
+              <td><strong>${v.nome}</strong>${v.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':''}</td>
+              <td><input type="number" id="ev-qty-${c.id}-${vi}" value="${v.qty||1}" min="1" style="width:60px;font-size:12px"/></td>
+              <td><input type="number" id="ev-pvp-${c.id}-${vi}" value="${v.pvp.toFixed(2)}" step="0.01" min="0" style="width:80px;font-size:12px"/></td>
+              <td><input type="number" id="ev-custo-${c.id}-${vi}" value="${v.custo.toFixed(2)}" step="0.01" min="0" style="width:80px;font-size:12px"/></td>
+              <td class="green" style="font-size:12px">${fmt((v.pvp-v.custo)*(v.qty||1))}</td>
+              <td><button class="btn dan sm" onclick="remVendaItem('${c.id}',${vi})">×</button></td>
+            </tr>`).join('')}</tbody>
+          </table></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn pri" onclick="saveEditVenda('${c.id}')">Guardar</button>
+            <button class="btn" onclick="cancelEditVenda()">Cancelar</button>
+          </div>
+        </td>
+      </tr>`;
       return `<tr>
         <td>${c.data}</td><td>${cNome(c.clienteId)}</td>
         <td><span class="badge ${c.tipo==='Venda direta'?'bg-b':'bg-gray'}" style="font-size:10px">${c.tipo||'Consulta'}</span></td>
-        <td style="font-size:11px;color:#888;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nomes}">${nomes}</td>
+        <td style="font-size:11px;color:#888;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nomes}">${nomes}</td>
         <td><strong>${fmt(tp)}</strong></td>
         <td class="green"><strong>${fmt(tl)}</strong></td>
-        <td><span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado||'—'}</span></td>
-        <td><button class="btn sm" onclick="toggleVendaDetalhe('${c.id}',this)" style="font-size:10px">▼ Detalhes</button></td>
-      </tr>
-      <tr id="vd-${c.id}" style="display:none;background:#fafaf7">
-        <td colspan="8" style="padding:0"><table style="margin:0;background:#fafaf7">
-          <thead><tr style="background:#f0f0ec"><th style="padding:6px 12px">Produto</th><th>Qty</th><th>PVP unit.</th><th>PVP total</th><th>Custo ef.</th><th>Lucro</th><th>Desc.%</th><th>Consig.</th></tr></thead>
-          <tbody>${c.vendas.map(v=>`<tr style="background:#fafaf7">
-            <td style="padding:6px 12px"><strong>${v.nome}</strong></td>
-            <td>${v.qty||1}</td><td>${fmt(v.pvp)}</td><td>${fmt(v.pvp*(v.qty||1))}</td>
-            <td class="amber">${fmt(v.custo*(v.qty||1))}</td>
-            <td class="green"><strong>${fmt((v.pvp-v.custo)*(v.qty||1))}</strong></td>
-            <td>${v.descExtra>0?`<span class="badge bg-g">-${v.descExtra}%</span>`:'—'}</td>
-            <td>${v.consig?'<span class="badge bg-a">Sim</span>':'—'}</td>
-          </tr>`).join('')}
-          <tr style="background:#f0f0ec;font-weight:600">
-            <td style="padding:6px 12px">Total</td><td></td><td></td><td>${fmt(tp)}</td>
-            <td class="amber">${fmt(c.vendas.reduce((s,v)=>s+v.custo*(v.qty||1),0))}</td>
-            <td class="green">${fmt(tl)}</td><td></td><td></td>
-          </tr></tbody>
-        </table></td>
+        <td>${pendente>0?`<span class="badge bg-a">${fmt(pendente)}</span>`:'<span style="color:#bbb;font-size:11px">—</span>'}</td>
+        <td>
+          <span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado||'—'}</span>
+          ${c.estado!=='Pago'?`<button class="btn suc sm" onclick="marcarVendaPaga('${c.id}')" style="font-size:10px;margin-top:3px;display:block">✓ Pago</button>`:''}
+        </td>
+        <td style="white-space:nowrap">
+          <button class="btn sm" onclick="startEditVenda('${c.id}')" style="font-size:10px">✏ Editar</button>
+        </td>
       </tr>`;
-    }).join(''):'<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem resultados</td></tr>'}
+    }).join(''):'<tr><td colspan="9" style="text-align:center;padding:2rem;color:#999">Sem resultados</td></tr>'}
     </tbody>
-  </table>`;
+  </table></div>`;
+}
+
+let editingVendaId = null;
+function startEditVenda(id){ editingVendaId=id; withScroll(renderVendasPagina); }
+function cancelEditVenda(){ editingVendaId=null; renderVendasPagina(); }
+function remVendaItem(cId, vi){
+  const c=DB.consultas.find(x=>x.id===cId); if(!c) return;
+  const v=c.vendas[vi];
+  const p=DB.produtos.find(x=>x.id===v.prodId);
+  if(p) p.stock+=v.qty; // repor stock
+  c.vendas.splice(vi,1);
+  c.totalProd=c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  save(); renderVendasPagina();
+}
+function saveEditVenda(id){
+  const c=DB.consultas.find(x=>x.id===id); if(!c) return;
+  c.data    = document.getElementById('ev-data')?.value||c.data;
+  c.estado  = document.getElementById('ev-estado')?.value||c.estado;
+  c.faturado= document.getElementById('ev-fat')?.value==='true';
+  c.valorPendente = parseFloat(document.getElementById('ev-pendente')?.value)||0;
+  // actualizar cada produto
+  c.vendas.forEach((v,vi)=>{
+    const qty  = parseInt(document.getElementById(`ev-qty-${id}-${vi}`)?.value)||v.qty;
+    const pvp  = parseFloat(document.getElementById(`ev-pvp-${id}-${vi}`)?.value);
+    const custo= parseFloat(document.getElementById(`ev-custo-${id}-${vi}`)?.value);
+    const oldQty = v.qty;
+    if(!isNaN(qty)) v.qty=Math.max(1,qty);
+    if(!isNaN(pvp)) v.pvp=pvp;
+    if(!isNaN(custo)) v.custo=custo;
+    // ajustar stock se qty mudou
+    const p=DB.produtos.find(x=>x.id===v.prodId);
+    if(p && v.qty!==oldQty) p.stock+=oldQty-v.qty;
+  });
+  c.totalProd=c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  editingVendaId=null; save(); renderVendasPagina();
+}
+function marcarVendaPaga(id){
+  const c=DB.consultas.find(x=>x.id===id); if(!c) return;
+  c.estado='Pago'; c.valorPendente=0;
+  save(); renderVendasPagina();
 }
 
 function toggleVendaDetalhe(cId, btn){
