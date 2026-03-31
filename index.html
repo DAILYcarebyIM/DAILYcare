@@ -450,12 +450,12 @@ function migrarCampos(){
   if(!DB.marcas) DB.marcas = [];
   if(!DB.ids.f) DB.ids.f = 4;
   if(!DB.ids.fo) DB.ids.fo = 1;
-  // migrar produtos que têm fornecedor no campo marca
+  // migrar produtos que têm fornecedor no campo marca — só se ainda não tiver fornecedor definido
   const fornNomes = ['Mary Kay','Dermagius','Farmácia Fonte da Moura'];
   (DB.produtos||[]).forEach(p=>{
-    if(fornNomes.includes(p.marca)){
-      if(!p.fornecedor) p.fornecedor = p.marca;
-      p.marca = ''; // limpar — utilizador edita depois
+    if(fornNomes.includes(p.marca) && !p.fornecedor){
+      p.fornecedor = p.marca;
+      p.marca = ''; // limpar só na primeira migração
     }
   });
   // migrar vendas antigas: garantir descConsig=10 (fixo) em consignação,
