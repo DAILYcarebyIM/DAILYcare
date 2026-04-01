@@ -2210,7 +2210,7 @@ function saveEditVenda(id){
     const custo= parseFloat(document.getElementById(`ev-custo-${id}-${vi}`)?.value);
     const oldQty = v.qty;
     if(!isNaN(qty)) v.qty=Math.max(1,qty);
-    if(!isNaN(pvp)) v.pvp=pvp;
+    if(!isNaN(pvp)){ v.pvp=pvp; v.pvpBase=pvp; v.pvpCobrado=pvp; } // pvpCobrado acompanha pvp editado
     if(!isNaN(custo)) v.custo=custo;
     // ajustar stock se qty mudou
     const p=DB.produtos.find(x=>x.id===v.prodId);
