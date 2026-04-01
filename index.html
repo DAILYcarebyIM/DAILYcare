@@ -489,9 +489,14 @@ function migrarCampos(){
         v.custo = Math.max(0, (v.pvpBase||v.pvp) * (1 - (10 + (v.descForn||0)) / 100));
       }
       // pvpCobrado: se não estava guardado, recalcular
-      if(!v.pvpCobrado || v.pvpCobrado === v.pvp){
+      // só recalcular pvpCobrado se não foi editado manualmente (descCliente > 0 ou pvpCobrado nunca foi definido)
+      if(!v.pvpCobrado){
+        v.pvpCobrado = Math.max(0, v.pvp * (1 - (v.descCliente||0) / 100));
+      } else if((v.descCliente||0) > 0){
         v.pvpCobrado = Math.max(0, (v.pvpBase||v.pvp) * (1 - (v.descCliente||0) / 100));
       }
+      // garantir pvpBase não sobrescreve pvp editado
+      if(!v.pvpBase) v.pvpBase = v.pvp;
     });
   });
 }
