@@ -1129,7 +1129,7 @@ function syncInputs(){
     const descEl   = document.getElementById('vi-desc-'+v.prodId);
     const fornEl   = document.getElementById('vi-dforn-'+v.prodId);
     const cliEl    = document.getElementById('vi-dcli-'+v.prodId);
-    if(pvpEl)  v.pvp        = parseFloat(pvpEl.value)||v.pvp;
+    if(pvpEl){ v.pvp = parseFloat(pvpEl.value)||v.pvp; v.pvpBase = v.pvp; } // pvpBase acompanha pvp editado
     if(qtyEl)  v.qty        = parseInt(qtyEl.value)||1;
     if(descEl){ v.descExtra = parseFloat(descEl.value)||0; }
     if(fornEl){ v.descForn  = parseFloat(fornEl.value)||0; }
