@@ -866,7 +866,10 @@ function renderConsultaAtual(){
         </div>
         <div><label>Valor serviço (€)</label><input id="cc-val" type="number" placeholder="0.00" oninput="reRenderVendas()"/></div>
         <div><label>Estado</label>
-          <select id="cc-est"><option>Pago</option><option>Por pagar</option></select>
+          <select id="cc-est" onchange="togglePendenteField()"><option>Pago</option><option>Por pagar</option></select>
+        </div>
+        <div><label>Método pagamento</label>
+          <select id="cc-metodo"><option value="MBWay">💳 MBWay</option><option value="Dinheiro">💵 Dinheiro</option><option value="Outro">Outro</option></select>
         </div>
       </div>
       <div class="row c2">
@@ -1164,19 +1167,23 @@ function withScroll(fn){
 // Para não-consig:  custoFarm = custoOriginal × (1 - descForn / 100)
 // pvpCobrado = pvpBase × (1 - descCliente / 100)
 function calcCustoFarm(v){
-  const descTotal = (v.descConsig||0) + (v.descForn||0);
   if(v.consig){
-    return Math.max(0, (v.pvpBase||v.custoOriginal) * (1 - descTotal/100));
+    // A pagar à farmácia = PVP produto × (1 - 10% - descForn%)
+    // descForn é desconto extra dado pelo fornecedor (acima dos 10% habituais)
+    const descTotal = 10 + (v.descForn||0);
+    return Math.max(0, (v.pvpBase||v.pvp) * (1 - descTotal/100));
   } else {
-    return Math.max(0, (v.custoOriginal||0) * (1 - (v.descForn||0)/100));
+    // produto próprio: custo = preço de compra (não muda com descForn)
+    return Math.max(0, (v.custoOriginal||v.custo||0));
   }
 }
 function calcPvpCobrado(v){
-  // pvp da venda É o preço cobrado — lucro = pvp - custo
-  // descCliente só se aplicar em consignação (desconto adicional ao pvp base)
-  if(v.consig && (v.descCliente||0)>0){
+  if(v.consig){
+    // PVP cobrado ao cliente = PVP produto × (1 - descCliente%)
+    // descForn NÃO afecta o PVP cobrado ao cliente — é desconto do fornecedor para nós
     return Math.max(0, (v.pvpBase||v.pvp) * (1 - (v.descCliente||0)/100));
   }
+  // produto próprio: pvp da venda é o preço cobrado
   return v.pvp||0;
 }
 
@@ -1294,6 +1301,11 @@ function atualizarTotais(){
 
 // alias para o oninput do valor do serviço
 function reRenderVendas(){ atualizarTotais(); }
+function togglePendenteField(){
+  const est=document.getElementById('cc-est')?.value;
+  const bloco=document.getElementById('cc-pendente-bloco');
+  if(bloco) bloco.style.display=est==='Por pagar'?'block':'none';
+}
 function gravarConsulta(){
   syncInputs(); // garante que todos os valores editados ficam no array
   const cliNome = document.getElementById('cc-cli').value.trim();
@@ -1308,6 +1320,7 @@ function gravarConsulta(){
   const tipo = document.getElementById('cc-tipo').value;
   const valor = parseFloat(document.getElementById('cc-val').value)||0;
   const estado = document.getElementById('cc-est').value;
+  const metodoPagamento = document.getElementById('cc-metodo')?.value||'MBWay';
   const faturado = document.getElementById('cc-fat').value==='true';
   const notas = document.getElementById('cc-notas').value;
   const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
@@ -1315,7 +1328,7 @@ function gravarConsulta(){
   const tp = cvs.reduce((s,v)=>s+(v.pvpCobrado||calcPvpCobrado(v))*v.qty,0);
   const tl = cvs.reduce((s,v)=>s+((v.pvpCobrado||calcPvpCobrado(v))-v.custo)*v.qty,0);
   const id = 'c'+DB.ids.c++;
-  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,estado,notas,portes,vendas:vendasComFat,totalProd:tp,lucroProd:tl});
+  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,estado,metodoPagamento:document.getElementById('cc-metodo')?.value||'MBWay',notas,portes,vendas:vendasComFat,totalProd:tp,lucroProd:tl});
   cvs.forEach(v=>{const p=DB.produtos.find(x=>x.id===v.prodId);if(p)p.stock-=v.qty;});
   if(tipo==='Pack'){
     const pk = DB.packs.find(p=>p.clienteId===cId&&p.estado==='Ativo');
@@ -1424,6 +1437,11 @@ function renderConsultasLista(){
         </div>
         <div class="row c3">
           <div><label>Estado</label><select id="ec-est"><option ${c.estado==='Pago'?'selected':''}>Pago</option><option ${c.estado==='Por pagar'?'selected':''}>Por pagar</option></select></div>
+          <div><label>Método pagamento</label><select id="ec-metodo">
+            <option value="MBWay" ${(c.metodoPagamento||'MBWay')==='MBWay'?'selected':''}>💳 MBWay</option>
+            <option value="Dinheiro" ${c.metodoPagamento==='Dinheiro'?'selected':''}>💵 Dinheiro</option>
+            <option value="Outro" ${c.metodoPagamento==='Outro'?'selected':''}>Outro</option>
+          </select></div>
           <div><label>Faturado?</label><select id="ec-fat"><option value="false" ${!c.faturado?'selected':''}>Não faturado</option><option value="true" ${c.faturado?'selected':''}>Faturado</option></select></div>
           <div><label>Notas</label><input id="ec-notas" value="${c.notas||''}"/></div>
           <div><label>Valor pendente (€)</label><input id="ec-pendente" type="number" step="0.01" min="0" value="${(c.valorPendente||0).toFixed(2)}"/></div>
@@ -1605,6 +1623,7 @@ function saveEditCons(id){
   c.tipo=document.getElementById('ec-tipo').value;
   c.valor=parseFloat(document.getElementById('ec-val').value)||0;
   c.estado=document.getElementById('ec-est').value;
+  c.metodoPagamento=document.getElementById('ec-metodo')?.value||c.metodoPagamento||'MBWay';
   c.faturado=document.getElementById('ec-fat').value==='true';
   c.notas=document.getElementById('ec-notas').value;
   c.valorPendente=parseFloat(document.getElementById('ec-pendente')?.value)||0;
@@ -1812,6 +1831,7 @@ function guardarVendaRapida(){
     valor:0,
     faturado,
     estado,
+    metodoPagamento,
     notas:'',
     portes:portesVR,
     vendas,
@@ -1861,6 +1881,9 @@ function renderVendas(){
         <div><label>Data</label><input id="vr-data" type="date" value="${today()}"/></div>
         <div><label>Estado</label>
           <select id="vr-estado"><option value="Pago">Pago</option><option value="Pendente">Pendente</option></select>
+        </div>
+        <div><label>Método pagamento</label>
+          <select id="vr-metodo"><option value="MBWay">💳 MBWay</option><option value="Dinheiro">💵 Dinheiro</option><option value="Outro">Outro</option></select>
         </div>
         <div><label>Faturado?</label>
           <select id="vr-fat"><option value="false">Não faturado</option><option value="true">Faturado</option></select>
@@ -1966,6 +1989,11 @@ function renderVendasPagina(){
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px">
             <div><label>Data</label><input id="ev-data" type="date" value="${c.data}"/></div>
             <div><label>Estado</label><select id="ev-estado"><option ${c.estado==='Pago'?'selected':''}>Pago</option><option ${c.estado==='Por pagar'?'selected':''}>Por pagar</option></select></div>
+            <div><label>Método pagamento</label><select id="ev-metodo">
+              <option value="MBWay" ${(c.metodoPagamento||'MBWay')==='MBWay'?'selected':''}>💳 MBWay</option>
+              <option value="Dinheiro" ${c.metodoPagamento==='Dinheiro'?'selected':''}>💵 Dinheiro</option>
+              <option value="Outro" ${c.metodoPagamento==='Outro'?'selected':''}>Outro</option>
+            </select></div>
             <div><label>Valor pendente (€)</label><input id="ev-pendente" type="number" step="0.01" min="0" value="${pendente.toFixed(2)}" placeholder="0.00"/></div>
             <div><label>Faturado?</label><select id="ev-fat"><option value="false" ${!c.faturado?'selected':''}>Não</option><option value="true" ${c.faturado?'selected':''}>Sim</option></select></div>
           </div>
@@ -2217,6 +2245,7 @@ function saveEditVenda(id){
   const c=DB.consultas.find(x=>x.id===id); if(!c) return;
   c.data    = document.getElementById('ev-data')?.value||c.data;
   c.estado  = document.getElementById('ev-estado')?.value||c.estado;
+  c.metodoPagamento = document.getElementById('ev-metodo')?.value||c.metodoPagamento||'MBWay';
   c.faturado= document.getElementById('ev-fat')?.value==='true';
   c.valorPendente = parseFloat(document.getElementById('ev-pendente')?.value)||0;
   // actualizar cada produto
@@ -2238,6 +2267,9 @@ function saveEditVenda(id){
 }
 function marcarVendaPaga(id){
   const c=DB.consultas.find(x=>x.id===id); if(!c) return;
+  const metodo = prompt('Método de pagamento:\n1 - MBWay\n2 - Dinheiro\n3 - Outro\n\nEscreve 1, 2 ou 3:','1');
+  if(metodo===null) return;
+  c.metodoPagamento = metodo==='2'?'Dinheiro':metodo==='3'?'Outro':'MBWay';
   c.estado='Pago'; c.valorPendente=0;
   save(); renderVendasPagina();
 }
