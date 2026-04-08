@@ -3856,9 +3856,9 @@ function renderConsign(){
     .sort((a,b)=>b.data.localeCompare(a.data));
 
   const pendentes = allItems.filter(v=>!pagas.has(v.cid));
-  const tCusto    = pendentes.reduce((s,v)=>s+v.custo*(v.qty||1),0);
+  const tCusto    = pendentes.reduce((s,v)=>s+calcCustoFarm(v)*(v.qty||1),0);
   const tLucro    = allItems.filter(v=>!pagas.has(v.cid)&&v.tipo==='Venda')
-                    .reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+                    .reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*(v.qty||1),0);
 
   document.getElementById('pg-consignacao').innerHTML=`
     <h2>Consignação — Farmácia Fonte da Moura</h2>
@@ -3896,11 +3896,12 @@ function renderConsign(){
         <tbody>
           ${allItems.length ? allItems.map(v=>{
             const qty=v.qty||1;
-            const custoBase=v.custoOriginal||v.custo;
-            const descPct=v.descExtra||0;
-            const custoEf=v.custo;
             const pago=pagas.has(v.cid);
             const isCI=v.tipo==='Consumo interno';
+            // calcular com funções correctas — pvpCobrado e custo podem estar desactualizados
+            const pvc  = isCI ? 0 : calcPvpCobrado(v);   // pvp cobrado ao cliente
+            const cEf  = calcCustoFarm(v);                 // o que pago à farmácia
+            const lucro = (pvc - cEf) * qty;
             return `<tr style="${pago?'opacity:0.4;text-decoration:line-through':''}${isCI?';background:#fafaf7':''}">
               <td style="white-space:nowrap">${v.data}</td>
               <td><span class="badge ${isCI?'bg-gray':'bg-b'}" style="font-size:9px">${v.tipo}</span></td>
@@ -3909,10 +3910,10 @@ function renderConsign(){
               <td style="font-size:11px;color:#888">${v.cliente}</td>
               <td>${qty}</td>
               <td>${isCI?'<span style="color:#bbb">—</span>':fmt(v.pvp)}</td>
-              <td style="white-space:nowrap">${isCI?'<span style="color:#bbb">—</span>':(v.descCliente>0?`<span style="color:#c05050;font-weight:600">${fmt((v.pvpCobrado||v.pvp))}</span><div style="font-size:10px;color:#c05050">(-${v.descCliente}%)</div>`:fmt(v.pvp))}</td>
+              <td style="white-space:nowrap">${isCI?'<span style="color:#bbb">—</span>':(v.descCliente>0?`<span style="color:#c05050;font-weight:600">${fmt(pvc)}</span><div style="font-size:10px;color:#c05050">(-${v.descCliente}%)</div>`:fmt(pvc))}</td>
               <td>${v.descForn>0?`<span class="badge bg-g" title="10% habitual + ${v.descForn}% extra = ${10+(v.descForn||0)}% total">+${v.descForn}%</span>`:'—'}</td>
-              <td class="amber"><strong>${fmt(custoEf*qty)}</strong></td>
-              <td class="${isCI?'':'green'}">${isCI?'<span style="color:#bbb">0,00€</span>':fmt(((v.pvpCobrado||v.pvp)-custoEf)*qty)}</td>
+              <td class="amber"><strong>${fmt(cEf*qty)}</strong></td>
+              <td class="${isCI?'':'green'}">${isCI?'<span style="color:#bbb">0,00€</span>':fmt(lucro)}</td>
               <td>${pago?'<span class="badge bg-g">Pago</span>':`<button class="btn suc sm" onclick="pagarC('${v.cid}')">Marcar pago</button>`}</td>
             </tr>`;
           }).join('') : '<tr><td colspan="12" style="text-align:center;padding:2rem;color:#999">Sem itens de consignação</td></tr>'}
