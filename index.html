@@ -4832,23 +4832,17 @@ function renderEncomendas(){
   // limpar encomendados cujo stock já voltou ao normal
   DB.encomendados = DB.encomendados.filter(id=>baixo.find(p=>p.id===id));
 
-  // média mensal de vendas por produto (últimos 3 meses)
+  // unidades vendidas no mês anterior (mês completo fechado)
   const agora = new Date();
-  const ultimos3 = [0,1,2].map(i=>{ const d=new Date(agora); d.setMonth(d.getMonth()-i); return d.toISOString().substring(0,7); });
-  const vendaMensal = {};
+  const mesAnterior = new Date(agora.getFullYear(), agora.getMonth()-1, 1).toISOString().substring(0,7);
+  const vendasMesAnt = {};
   DB.consultas.forEach(c=>{
-    const mes=c.data.substring(0,7);
-    if(!ultimos3.includes(mes)) return;
+    if(!c.data.startsWith(mesAnterior)) return;
     (c.vendas||[]).forEach(v=>{
-      if(!vendaMensal[v.prodId]) vendaMensal[v.prodId]={};
-      vendaMensal[v.prodId][mes]=(vendaMensal[v.prodId][mes]||0)+(v.qty||1);
+      vendasMesAnt[v.prodId]=(vendasMesAnt[v.prodId]||0)+(v.qty||1);
     });
   });
-  const mediaVendas = p => {
-    const mv=vendaMensal[p.id]||{};
-    const total=ultimos3.reduce((s,m)=>s+(mv[m]||0),0);
-    return Math.round(total/3*10)/10;
-  };
+  const mediaVendas = p => vendasMesAnt[p.id]||0;
 
   const rowHtml = (p, enc) => {
     if(editingEncProdId===p.id) return `<tr style="background:#fffbf5">
@@ -4899,7 +4893,7 @@ function renderEncomendas(){
     <p style="color:#888;font-size:12px;margin-bottom:1rem">Produtos ativos com stock abaixo do mínimo. Marca como "Encomendado" para não perderes o controlo.</p>
     ${!baixo.length?'<div class="alert al-suc">✓ Todos os produtos ativos têm stock suficiente.</div>':''}
     ${baixo.length?`<div class="card" style="padding:0;overflow:hidden"><table>
-      <thead><tr><th>Produto</th><th>Marca</th><th>Fornecedor</th><th>Stock atual</th><th>Stock mín.</th><th>Qty</th><th title="Média mensal vendida (últimos 3 meses)">Méd/mês</th><th></th></tr></thead>
+      <thead><tr><th>Produto</th><th>Marca</th><th>Fornecedor</th><th>Stock atual</th><th>Stock mín.</th><th>Qty</th><th title="Unidades vendidas no mês anterior">Mês ant.</th><th></th></tr></thead>
       <tbody>
         ${porEncomendar.map(p=>rowHtml(p,false)).join('')}
         ${jaEncomendado.length?`<tr><td colspan="7" style="padding:6px 12px;background:#f0fff0;font-size:11px;color:#5a8a5a;font-weight:600">✓ Já encomendado</td></tr>`:''}
