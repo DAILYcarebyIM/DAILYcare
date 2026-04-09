@@ -842,7 +842,10 @@ function renderDash(){
 function renderConsultaAtual(){
   document.getElementById('pg-consulta_atual').innerHTML=`
     <div class="card">
-      <h2>Consulta atual</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <h2 style="margin:0">Consulta atual</h2>
+        <button id="btn-blur-lucro" class="btn sm" onclick="toggleLucroBlur()" title="Ocultar/mostrar valores de lucro" style="font-size:11px">🙈 Ocultar lucro</button>
+      </div>
       <div class="row c2">
         <div><label>Cliente</label>
           <div class="dd-wrap">
@@ -1255,8 +1258,8 @@ function renderVendasTabela(){
             <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
           </div>`}
           <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
-            <span style="font-size:10px;color:#888">Lucro (${margemTot}%)</span>
-            <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vi-lucro-${v.prodId}">${fmt(lucroUnit)}</span>
+            <span class="lucro-val" style="font-size:10px;color:#888;transition:filter 0.2s">Lucro (${margemTot}%)</span>
+            <span class="lucro-val" style="font-size:12px;font-weight:600;color:#1a6b1a;transition:filter 0.2s" id="vi-lucro-${v.prodId}">${fmt(lucroUnit)}</span>
           </div>
         </div>
       </div>
@@ -1268,6 +1271,7 @@ function renderVendasTabela(){
   }).join('');
 
   if(tv){ tv.style.display='block'; atualizarTotais(); }
+  if(lucroBlur) setTimeout(()=>document.querySelectorAll('.lucro-val').forEach(el=>{el.style.filter='blur(4px)';el.style.userSelect='none';}),30);
 }
 
 // actualiza só os totais sem re-renderizar os inputs (evita perder foco)
