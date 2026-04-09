@@ -906,7 +906,7 @@ function renderConsultaAtual(){
         <div class="row c4" style="margin-bottom:8px">
           <div><div class="lb">Total produtos (PVP)</div><div style="font-weight:600" id="vt-p">0€</div></div>
           <div><div class="lb">Desconto fornecedor</div><div style="font-weight:600;color:#c0392b" id="vt-d">0€</div></div>
-          <div><div class="lb">Lucro líquido produtos</div><div style="font-weight:600;color:#1a6b1a" id="vt-l">0€</div></div>
+          <div><div class="lb">Lucro líquido produtos</div><div style="font-weight:600;color:#1a6b1a" class="lucro-val" id="vt-l">0€</div></div>
           <div><div class="lb">Total a pagar (cliente)</div><div style="font-weight:600;font-size:15px" id="vt-t">0€</div></div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;border-top:1px solid #f0e8d0;padding-top:8px">
@@ -1301,6 +1301,8 @@ function atualizarTotais(){
   if(vtl) vtl.textContent=fmt(tl);
   if(vtt) vtt.textContent=fmt(total);
   if(vtp2) vtp2.textContent=portes>0?fmt(totalComPortes):fmt(total);
+  // reaplicar blur se activo (os textContent repõem mas não afectam o style)
+  if(lucroBlur) aplicarBlurLucro();
 }
 
 // alias para o oninput do valor do serviço
@@ -1376,6 +1378,27 @@ function gravarConsulta(){
 }
 
 // ─── CONSULTAS (histórico) ───────────────────────────────────────────────────
+let lucroBlur = false;
+
+function toggleLucroBlur(){
+  lucroBlur = !lucroBlur;
+  aplicarBlurLucro();
+  const btn = document.getElementById('btn-blur-lucro');
+  if(btn){
+    btn.textContent = lucroBlur ? '👁 Mostrar lucro' : '🙈 Ocultar lucro';
+    btn.style.background = lucroBlur ? '#fff3cd' : '';
+    btn.style.borderColor = lucroBlur ? '#ffc107' : '';
+  }
+}
+
+function aplicarBlurLucro(){
+  document.querySelectorAll('.lucro-val').forEach(el=>{
+    el.style.filter = lucroBlur ? 'blur(5px)' : '';
+    el.style.userSelect = lucroBlur ? 'none' : '';
+    el.style.pointerEvents = lucroBlur ? 'none' : '';
+  });
+}
+
 let editingConsId = null;
 
 function renderConsultas(){
