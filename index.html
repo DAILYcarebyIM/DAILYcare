@@ -1112,7 +1112,9 @@ function ddProd(v){
   if(!m.length){dd.style.display='none';return;}
   dd.innerHTML = m.map(p=>`<div class="ddi" onclick="addV('${p.id}')">
     <div style="font-weight:600">${p.nome}</div>
-    <div class="sub">${p.marca} &nbsp;·&nbsp; PVP: ${fmt(p.pvp)} &nbsp;·&nbsp; Custo: ${fmt(p.custo)} &nbsp;·&nbsp; Margem: ${fmt(p.pvp-p.custo)} &nbsp;·&nbsp; Stock: <span class="${p.stock<=0?'red':p.stock<=p.stockMin?'amber':'green'}" style="font-weight:600">${p.stock}</span></div>
+    <div class="sub">${p.marca} &nbsp;·&nbsp; PVP: ${fmt(p.pvp)} &nbsp;·&nbsp;
+      <span class="lucro-val" style="${lucroBlur?'filter:blur(5px);user-select:none':''}">Custo: ${fmt(p.custo)} &nbsp;·&nbsp; Margem: ${fmt(p.pvp-p.custo)}</span>
+      &nbsp;·&nbsp; Stock: <span class="${p.stock<=0?'red':p.stock<=p.stockMin?'amber':'green'}" style="font-weight:600">${p.stock}</span></div>
   </div>`).join('');
   dd.style.display='block';
 }
@@ -1250,12 +1252,12 @@ function renderVendasTabela(){
             <span style="font-size:12px;font-weight:600;color:#7a5500" id="vi-pvpcob-${v.prodId}">${fmt(pvpCobrado)}</span>
           </div>
           <div style="display:flex;flex-direction:column;gap:2px;background:#fff3f3;border-radius:6px;padding:4px 8px;border:1px solid #e8b4b4">
-            <span style="font-size:10px;color:#888">A pagar farm.</span>
-            <span style="font-size:12px;font-weight:600;color:#a83232" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
+            <span class="lucro-val" style="font-size:10px;color:#888;transition:filter 0.2s">A pagar farm.</span>
+            <span class="lucro-val" style="font-size:12px;font-weight:600;color:#a83232;transition:filter 0.2s" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
           </div>` : `
           <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
-            <span style="font-size:10px;color:#888">Custo efectivo</span>
-            <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
+            <span class="lucro-val" style="font-size:10px;color:#888;transition:filter 0.2s">Custo efectivo</span>
+            <span class="lucro-val" style="font-size:12px;font-weight:600;color:#1a6b1a;transition:filter 0.2s" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
           </div>`}
           <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
             <span class="lucro-val" style="font-size:10px;color:#888;transition:filter 0.2s">Lucro (${margemTot}%)</span>
@@ -1288,7 +1290,7 @@ function atualizarTotais(){
     const el_l    = document.getElementById('vi-lucro-'+v.prodId);
     const el_t    = document.getElementById('vi-total-'+v.prodId);
     const el_flbl = document.getElementById('vi-dforn-label-'+v.prodId);
-    if(el_c)    el_c.textContent=fmt(ce);
+    if(el_c){ el_c.textContent=fmt(ce); if(lucroBlur){el_c.style.filter='blur(5px)';el_c.style.userSelect='none';} }
     if(el_pvc)  el_pvc.textContent=fmt(pvc);
     if(el_flbl) el_flbl.textContent=`farm.: 10%+${v.descForn||0}%=${10+(v.descForn||0)}%`;
     if(el_l){ el_l.textContent=fmt(lu); el_l.parentElement.querySelector('span:first-child').textContent=`Lucro (${mt}%)`; }
@@ -4830,9 +4832,27 @@ function renderEncomendas(){
   // limpar encomendados cujo stock já voltou ao normal
   DB.encomendados = DB.encomendados.filter(id=>baixo.find(p=>p.id===id));
 
+  // média mensal de vendas por produto (últimos 3 meses)
+  const agora = new Date();
+  const ultimos3 = [0,1,2].map(i=>{ const d=new Date(agora); d.setMonth(d.getMonth()-i); return d.toISOString().substring(0,7); });
+  const vendaMensal = {};
+  DB.consultas.forEach(c=>{
+    const mes=c.data.substring(0,7);
+    if(!ultimos3.includes(mes)) return;
+    (c.vendas||[]).forEach(v=>{
+      if(!vendaMensal[v.prodId]) vendaMensal[v.prodId]={};
+      vendaMensal[v.prodId][mes]=(vendaMensal[v.prodId][mes]||0)+(v.qty||1);
+    });
+  });
+  const mediaVendas = p => {
+    const mv=vendaMensal[p.id]||{};
+    const total=ultimos3.reduce((s,m)=>s+(mv[m]||0),0);
+    return Math.round(total/3*10)/10;
+  };
+
   const rowHtml = (p, enc) => {
     if(editingEncProdId===p.id) return `<tr style="background:#fffbf5">
-      <td colspan="7" style="padding:10px 12px">
+      <td colspan="8" style="padding:10px 12px">
         <div style="font-weight:600;margin-bottom:8px">✏️ Editar: ${p.nome}</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
           <div><label style="font-size:11px;color:#888;display:block">Stock mínimo</label>
@@ -4863,6 +4883,7 @@ function renderEncomendas(){
       <td><span class="badge bg-${p.stock<=0?'r':'a'}">${p.stock}</span></td>
       <td>${p.stockMin??0}</td>
       <td><strong class="${enc?'':'green'}">${Math.max(0,(p.stockMin??0)-p.stock)}</strong></td>
+      <td style="text-align:center;vertical-align:middle">${(()=>{const m=mediaVendas(p);return m>0?`<span style="font-weight:600;color:#8b6f4e;font-size:13px">${m}</span><div style="font-size:9px;color:#aaa">un/mês</div>`:'<span style="color:#ddd">—</span>'})()}</td>
       <td style="white-space:nowrap;vertical-align:middle">
         <button class="btn sm" onclick="startEncProd('${p.id}')" style="font-size:11px;margin-bottom:3px">✏️ Editar</button><br>
         ${enc
@@ -4878,7 +4899,7 @@ function renderEncomendas(){
     <p style="color:#888;font-size:12px;margin-bottom:1rem">Produtos ativos com stock abaixo do mínimo. Marca como "Encomendado" para não perderes o controlo.</p>
     ${!baixo.length?'<div class="alert al-suc">✓ Todos os produtos ativos têm stock suficiente.</div>':''}
     ${baixo.length?`<div class="card" style="padding:0;overflow:hidden"><table>
-      <thead><tr><th>Produto</th><th>Marca</th><th>Fornecedor</th><th>Stock atual</th><th>Stock mín.</th><th>Qty</th><th></th></tr></thead>
+      <thead><tr><th>Produto</th><th>Marca</th><th>Fornecedor</th><th>Stock atual</th><th>Stock mín.</th><th>Qty</th><th title="Média mensal vendida (últimos 3 meses)">Méd/mês</th><th></th></tr></thead>
       <tbody>
         ${porEncomendar.map(p=>rowHtml(p,false)).join('')}
         ${jaEncomendado.length?`<tr><td colspan="7" style="padding:6px 12px;background:#f0fff0;font-size:11px;color:#5a8a5a;font-weight:600">✓ Já encomendado</td></tr>`:''}
