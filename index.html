@@ -5867,7 +5867,14 @@ let dragSrc = null;
 function loadTabSettings(){
   try{
     const s = localStorage.getItem('dailycare_tabs');
-    if(s){ const p=JSON.parse(s); tabOrder=p.order||tabOrder; tabHidden=new Set(p.hidden||[]); }
+    if(s){
+      const p=JSON.parse(s);
+      let order=p.order||tabOrder;
+      // garantir que tabs novas (ex: Cedências) aparecem mesmo que não estejam no localStorage
+      ALL_TABS.forEach(t=>{ if(!order.includes(t.id)) order.push(t.id); });
+      tabOrder=order;
+      tabHidden=new Set(p.hidden||[]);
+    }
   }catch(e){}
   applyTabOrder();
 }
