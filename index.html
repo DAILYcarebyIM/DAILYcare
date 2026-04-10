@@ -3869,6 +3869,7 @@ let editingCedId = null;
 function renderCedencias(){
   if(!DB.cedencias) DB.cedencias=[];
   const lista = [...DB.cedencias].sort((a,b)=>b.data.localeCompare(a.data));
+  // total recebido = valorRecebido já inclui qty (é o total da cedência, não unit.)
   const tRecebido = lista.reduce((s,c)=>s+(c.valorRecebido||0),0);
   const tQty      = lista.reduce((s,c)=>s+(c.qty||1),0);
 
@@ -3876,10 +3877,10 @@ function renderCedencias(){
     if(editingCedId===c.id) return `<tr style="background:#fffbf5">
       <td><input id="eced-d" type="date" value="${c.data}" style="width:130px"/></td>
       <td><strong>${c.prodNome}</strong></td>
-      <td><input id="eced-q" type="number" value="${c.qty||1}" min="1" style="width:70px"/></td>
-      <td><input id="eced-dest" value="${(c.destinatario||'').replace(/"/g,'&quot;')}" placeholder="Nome da colega" style="min-width:140px"/></td>
-      <td><input id="eced-m" value="${(c.motivo||'').replace(/"/g,'&quot;')}" placeholder="Motivo" style="min-width:120px"/></td>
-      <td><input id="eced-v" type="number" step="0.01" min="0" value="${(c.valorRecebido||0).toFixed(2)}" style="width:90px"/></td>
+      <td><input id="eced-q" type="number" value="${c.qty||1}" min="1" style="width:70px" oninput="syncCedValor('${c.id}')"/></td>
+      <td><input id="eced-dest" value="${(c.destinatario||'').replace(/"/g,'&quot;')}" placeholder="Nome" style="min-width:130px"/></td>
+      <td><input id="eced-m" value="${(c.motivo||'').replace(/"/g,'&quot;')}" placeholder="Motivo" style="min-width:100px"/></td>
+      <td><input id="eced-v" type="number" step="0.01" min="0" value="${(c.valorRecebido||0).toFixed(2)}" style="width:90px" title="Total recebido (qty × preço unit.)"/></td>
       <td style="white-space:nowrap">
         <button class="btn pri sm" onclick="saveEditCed('${c.id}')">Guardar</button>
         <button class="btn sm" onclick="cancelEditCed()" style="margin-top:2px">Cancelar</button>
@@ -3887,7 +3888,7 @@ function renderCedencias(){
     </tr>`;
     return `<tr>
       <td>${c.data}</td>
-      <td><strong>${c.prodNome}</strong>${c.qty>1?` <span style="color:#888;font-size:11px">×${c.qty}</span>`:''}</td>
+      <td><strong>${c.prodNome}</strong></td>
       <td style="text-align:center">${c.qty||1}</td>
       <td style="color:#555">${c.destinatario||'—'}</td>
       <td style="color:#888;font-size:11px">${c.motivo||'—'}</td>
@@ -3906,29 +3907,30 @@ function renderCedencias(){
       <div class="met"><div class="lb">Unidades cedidas</div><div class="vl">${tQty}</div></div>
       <div class="met"><div class="lb">Montante recebido</div><div class="vl green">${fmt(tRecebido)}</div></div>
     </div>
+
     <div id="add-ced-f" style="display:none" class="card">
       <h3>Nova cedência</h3>
-      <div class="row c3">
-        <div><label>Produto</label>
-          <div class="dd-wrap">
-            <input id="ced-p" placeholder="Pesquisar produto..." oninput="ddProdCed(this.value)" autocomplete="off"/>
-            <input type="hidden" id="ced-p-id"/>
-            <div class="dropdown" id="dd-ced" style="display:none"></div>
-          </div>
-        </div>
-        <div><label>Quantidade</label><input id="ced-q" type="number" placeholder="1" min="1" value="1"/></div>
+      <div class="row c2" style="margin-bottom:8px">
+        <div><label>Destinatário</label><input id="ced-dest" placeholder="ex: Cat Pinto"/></div>
         <div><label>Data</label><input id="ced-d" type="date" value="${today()}"/></div>
       </div>
-      <div class="row c3" style="margin-top:4px">
-        <div><label>Destinatário</label><input id="ced-dest" placeholder="ex: Cat Pinto"/></div>
-        <div><label>Motivo</label><input id="ced-m" placeholder="ex: cedência ao custo, oferta"/></div>
-        <div><label>Valor recebido (€)</label><input id="ced-v" type="number" step="0.01" min="0" placeholder="0.00"/></div>
+      <div><label>Motivo</label><input id="ced-m" placeholder="ex: cedência ao custo, oferta" style="margin-bottom:10px"/></div>
+
+      <div style="background:#f8f8f5;border-radius:8px;padding:10px 12px;margin-bottom:8px">
+        <label style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px;display:block">Produtos</label>
+        <div id="ced-lista-prods" style="margin-bottom:8px"></div>
+        <div class="dd-wrap" style="margin-bottom:0">
+          <input id="ced-p" placeholder="Pesquisar produto para adicionar..." oninput="ddProdCed(this.value)" autocomplete="off" style="font-size:12px"/>
+          <div class="dropdown" id="dd-ced" style="display:none"></div>
+        </div>
       </div>
+
       <div style="display:flex;gap:8px;margin-top:8px">
-        <button class="btn pri" onclick="addCed()">Guardar</button>
+        <button class="btn pri" onclick="gravarCedencia()">Guardar cedência</button>
         <button class="btn" onclick="showAddCed()">Cancelar</button>
       </div>
     </div>
+
     <div class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto"><table>
         <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Destinatário</th><th>Motivo</th><th>Valor recebido</th><th>Ações</th></tr></thead>
@@ -3940,52 +3942,83 @@ function renderCedencias(){
     </div>`;
 }
 
-function showAddCed(){const f=document.getElementById('add-ced-f');f.style.display=f.style.display==='none'?'block':'none';}
+// lista temporária de produtos para nova cedência
+let cedProds = []; // [{prodId, nome, qty, custoUnit}]
+
+function showAddCed(){
+  const f=document.getElementById('add-ced-f');
+  const open = f.style.display==='none'||f.style.display==='';
+  if(open){ cedProds=[]; renderCedProds(); }
+  f.style.display=open?'block':'none';
+}
+
+function renderCedProds(){
+  const el=document.getElementById('ced-lista-prods'); if(!el) return;
+  if(!cedProds.length){ el.innerHTML='<div style="color:#999;font-size:12px;padding:4px 0">Ainda sem produtos. Pesquisa abaixo.</div>'; return; }
+  el.innerHTML=cedProds.map((v,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;background:#fff;padding:6px 8px;border-radius:6px;border:1px solid #eee">
+      <div style="flex:1;font-size:12px;font-weight:600">${v.nome}</div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <label style="font-size:10px;color:#888">Qty</label>
+        <input type="number" value="${v.qty}" min="1" style="width:55px;font-size:12px" onchange="cedProds[${i}].qty=Math.max(1,parseInt(this.value)||1);cedProds[${i}].valorRecebido=+(cedProds[${i}].custoUnit*cedProds[${i}].qty).toFixed(2);renderCedProds()"/>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px">
+        <label style="font-size:10px;color:#888">Valor total (€)</label>
+        <input type="number" value="${v.valorRecebido.toFixed(2)}" step="0.01" min="0" style="width:80px;font-size:12px" onchange="cedProds[${i}].valorRecebido=parseFloat(this.value)||0"/>
+      </div>
+      <button class="btn dan sm" onclick="cedProds.splice(${i},1);renderCedProds()">×</button>
+    </div>`).join('');
+}
 
 function ddProdCed(v){
   const dd=document.getElementById('dd-ced');
+  if(!v||v.length<1){dd.style.display='none';return;}
   const m=DB.produtos.filter(p=>matchProd(p,v));
-  dd.innerHTML=m.map(p=>`<div class="ddi" onclick="selProdCed('${p.id}','${p.nome.replace(/'/g,"\'")}')">
+  dd.innerHTML=m.map(p=>`<div class="ddi" onclick="addProdCed('${p.id}')">
     <strong>${p.nome}</strong>
     <span style="color:#999;font-size:11px"> — stock: ${p.stock} · custo: ${fmt(p.custo)}</span>
   </div>`).join('');
   dd.style.display=m.length?'block':'none';
 }
 
-function selProdCed(id,nome){
-  document.getElementById('ced-p').value=nome;
-  document.getElementById('ced-p-id').value=id;
-  document.getElementById('dd-ced').style.display='none';
-  // preencher valor recebido com custo do produto
-  const p=DB.produtos.find(x=>x.id===id);
-  if(p){ const qtyEl=document.getElementById('ced-q'); const qty=parseInt(qtyEl?.value)||1;
-    const vEl=document.getElementById('ced-v'); if(vEl&&!vEl.value) vEl.value=(p.custo*qty).toFixed(2); }
+function addProdCed(pid){
+  const p=DB.produtos.find(x=>x.id===pid); if(!p) return;
+  const ex=cedProds.find(v=>v.prodId===pid);
+  if(ex){ ex.qty++; ex.valorRecebido=+(ex.custoUnit*ex.qty).toFixed(2); }
+  else cedProds.push({prodId:pid,nome:p.nome,qty:1,custoUnit:p.custo,valorRecebido:+p.custo.toFixed(2)});
+  renderCedProds();
+  const inp=document.getElementById('ced-p');
+  const dd=document.getElementById('dd-ced');
+  if(inp) inp.value='';
+  if(dd) dd.style.display='none';
 }
 
-function addCed(){
-  const pid=document.getElementById('ced-p-id').value;
-  const qty=parseInt(document.getElementById('ced-q').value)||1;
-  if(!pid||!qty){ alert('Seleciona um produto e quantidade.'); return; }
-  const p=DB.produtos.find(x=>x.id===pid); if(p) p.stock-=qty;
+function gravarCedencia(){
+  if(!cedProds.length){ alert('Adiciona pelo menos um produto.'); return; }
+  const dest=document.getElementById('ced-dest').value;
+  const data=document.getElementById('ced-d').value;
+  const motivo=document.getElementById('ced-m').value;
   if(!DB.cedencias) DB.cedencias=[];
   if(!DB.ids.ced) DB.ids.ced=1;
-  DB.cedencias.push({
-    id:'ced'+DB.ids.ced++,
-    prodId:pid,
-    prodNome:document.getElementById('ced-p').value,
-    qty,
-    data:document.getElementById('ced-d').value,
-    destinatario:document.getElementById('ced-dest').value,
-    motivo:document.getElementById('ced-m').value,
-    valorRecebido:parseFloat(document.getElementById('ced-v').value)||0
+  cedProds.forEach(v=>{
+    const p=DB.produtos.find(x=>x.id===v.prodId);
+    if(p) p.stock-=v.qty;
+    DB.cedencias.push({id:'ced'+DB.ids.ced++,prodId:v.prodId,prodNome:v.nome,qty:v.qty,data,destinatario:dest,motivo,valorRecebido:v.valorRecebido});
   });
-  document.getElementById('ced-p').value='';
-  document.getElementById('ced-p-id').value='';
-  document.getElementById('ced-q').value='1';
-  document.getElementById('ced-dest').value='';
-  document.getElementById('ced-m').value='';
-  document.getElementById('ced-v').value='';
+  cedProds=[];
   save(); showAddCed(); renderCedencias();
+}
+
+function syncCedValor(id){
+  // ao mudar qty na edição, actualizar valor proporcional
+  const c=DB.cedencias.find(x=>x.id===id); if(!c) return;
+  const qtyEl=document.getElementById('eced-q');
+  const valEl=document.getElementById('eced-v');
+  if(qtyEl&&valEl){
+    const newQty=parseInt(qtyEl.value)||1;
+    const custoUnit=c.qty>0?(c.valorRecebido/c.qty):0;
+    valEl.value=(custoUnit*newQty).toFixed(2);
+  }
 }
 
 function startEditCed(id){ editingCedId=id; withScroll(renderCedencias); }
