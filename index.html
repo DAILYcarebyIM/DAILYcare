@@ -1840,6 +1840,7 @@ function guardarVendaRapida(){
   if(!DB.ids.c) DB.ids.c=1;
   const faturado = document.getElementById('vr-fat').value==='true';
   const estado   = document.getElementById('vr-estado').value;
+  const metodoPagamento = document.getElementById('vr-metodo')?.value||'MBWay';
   const portesVR = parseFloat(document.getElementById('vr-portes')?.value)||0;
   const tp = vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
   const tl = vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
@@ -3778,6 +3779,7 @@ function renderConsumo(){
       <td><strong>${c.prodNome}</strong>${DB.produtos.find(p=>p.id===c.prodId)?.consig?'<br><span class="badge bg-a" style="font-size:9px">consig.</span>':''}</td>
       <td><input id="eci-q" type="number" value="${c.qty}" min="1" style="width:70px"/></td>
       <td><input id="eci-m" value="${(c.motivo||'').replace(/"/g,'&quot;')}" style="min-width:160px"/></td>
+      <td><input id="eci-v" type="number" step="0.01" min="0" value="${(c.valorRecebido||0).toFixed(2)}" style="width:90px" placeholder="0.00"/></td>
       <td style="white-space:nowrap">
         <button class="btn pri sm" onclick="saveEditCI('${c.id}')">Guardar</button>
         <button class="btn sm" onclick="cancelEditCI()" style="margin-top:2px">Cancelar</button>
@@ -3789,6 +3791,7 @@ function renderConsumo(){
       <td><strong>${c.prodNome}</strong>${isConsig?'<br><span class="badge bg-a" style="font-size:9px">consig.</span>':''}</td>
       <td>${c.qty}</td>
       <td style="color:#888;font-size:11px">${c.motivo||'—'}</td>
+      <td style="text-align:right">${(c.valorRecebido||0)>0?`<span style="font-weight:600;color:#1a6b1a">${fmt(c.valorRecebido)}</span>`:'<span style="color:#bbb;font-size:11px">—</span>'}</td>
       <td style="white-space:nowrap">
         <button class="btn sm" onclick="startEditCI('${c.id}')">Editar</button>
         <button class="btn dan sm" onclick="delConsumo('${c.id}')" style="margin-top:2px">Apagar</button>
@@ -3796,8 +3799,14 @@ function renderConsumo(){
     </tr>`;
   };
 
+  const totalRecebidoCI = DB.consumo.reduce((s,c)=>s+(c.valorRecebido||0),0);
+  const nCedencias = DB.consumo.filter(c=>(c.valorRecebido||0)>0).length;
   document.getElementById('pg-consumo').innerHTML=`
     <div class="flex-b"><h2 style="margin:0">Consumo interno</h2><button class="btn" onclick="showAddCI()">+ Registar consumo</button></div>
+    ${totalRecebidoCI>0?`<div class="metrics" style="margin-bottom:1rem">
+      <div class="met"><div class="lb">Total recebido em cedências</div><div class="vl green">${fmt(totalRecebidoCI)}</div></div>
+      <div class="met"><div class="lb">Nº cedências com valor</div><div class="vl">${nCedencias}</div></div>
+    </div>`:''}
     <div id="add-ci-f" style="display:none" class="card">
       <h3>Novo consumo interno</h3>
       <div class="row c3">
@@ -3846,6 +3855,7 @@ function saveEditCI(id){
   c.qty=novaQty;
   c.data=document.getElementById('eci-d').value;
   c.motivo=document.getElementById('eci-m').value;
+  c.valorRecebido=parseFloat(document.getElementById('eci-v')?.value)||0;
   editingConsumoId=null; save(); withScroll(renderConsumo);
 }
 
