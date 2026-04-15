@@ -5110,30 +5110,53 @@ function addG(){
 
 // ─── LISTA ENCOMENDAS ────────────────────────────────────────────────────────
 let editingEncProdId = null;
+let encFiltroMarca='', encFiltroForn='', encOrdem='nome', encGraficoId=null;
+
 function renderEncomendas(){
   if(!DB.encomendados) DB.encomendados=[];
   const ativos = DB.produtos.filter(p=>p.ativo!==false);
   const baixo  = ativos.filter(p=>(p.stockMin??0)>0 && p.stock<(p.stockMin??0));
-  const porEncomendar = baixo.filter(p=>!DB.encomendados.includes(p.id));
-  const jaEncomendado = baixo.filter(p=> DB.encomendados.includes(p.id));
-  // limpar encomendados cujo stock já voltou ao normal
   DB.encomendados = DB.encomendados.filter(id=>baixo.find(p=>p.id===id));
 
-  // unidades vendidas no mês anterior (mês completo fechado)
-  const agora = new Date();
-  const mesAnterior = new Date(agora.getFullYear(), agora.getMonth()-1, 1).toISOString().substring(0,7);
-  const vendasMesAnt = {};
-  DB.consultas.forEach(c=>{
-    if(!c.data.startsWith(mesAnterior)) return;
-    (c.vendas||[]).forEach(v=>{
-      vendasMesAnt[v.prodId]=(vendasMesAnt[v.prodId]||0)+(v.qty||1);
-    });
-  });
-  const mediaVendas = p => vendasMesAnt[p.id]||0;
+  // média mensal desde que o produto entrou em stock (primeira entrada)
+  const primeiraEntrada = {};
+  (DB.entradas||[]).forEach(e=>{ if(!primeiraEntrada[e.prodId]) primeiraEntrada[e.prodId]=e.data; });
+
+  const mediaVendas = p => {
+    const entrada = primeiraEntrada[p.id];
+    if(!entrada) return 0;
+    const inicio = new Date(entrada);
+    const agora  = new Date();
+    const meses  = Math.max(1, (agora.getFullYear()-inicio.getFullYear())*12 + (agora.getMonth()-inicio.getMonth()));
+    const total  = DB.consultas.reduce((s,c)=>{
+      return s+(c.vendas||[]).filter(v=>v.prodId===p.id).reduce((ss,v)=>ss+(v.qty||1),0);
+    },0);
+    return Math.round(total/meses*10)/10;
+  };
+
+  // filtros
+  const todasMarcas = [...new Set(ativos.map(p=>p.marca).filter(Boolean))].sort();
+  const todosForn   = [...new Set(ativos.map(p=>p.fornecedor).filter(Boolean))].sort();
+
+  let listaPor = baixo.filter(p=>!DB.encomendados.includes(p.id));
+  let listaEnc = baixo.filter(p=> DB.encomendados.includes(p.id));
+
+  if(encFiltroMarca){ listaPor=listaPor.filter(p=>p.marca===encFiltroMarca); listaEnc=listaEnc.filter(p=>p.marca===encFiltroMarca); }
+  if(encFiltroForn) { listaPor=listaPor.filter(p=>p.fornecedor===encFiltroForn); listaEnc=listaEnc.filter(p=>p.fornecedor===encFiltroForn); }
+
+  const sortFn = (a,b) => {
+    if(encOrdem==='nome')   return a.nome.localeCompare(b.nome);
+    if(encOrdem==='marca')  return (a.marca||'').localeCompare(b.marca||'');
+    if(encOrdem==='forn')   return (a.fornecedor||'').localeCompare(b.fornecedor||'');
+    if(encOrdem==='qty')    return Math.max(0,(b.stockMin??0)-b.stock) - Math.max(0,(a.stockMin??0)-a.stock);
+    if(encOrdem==='media')  return mediaVendas(b)-mediaVendas(a);
+    return 0;
+  };
+  listaPor.sort(sortFn); listaEnc.sort(sortFn);
 
   const rowHtml = (p, enc) => {
     if(editingEncProdId===p.id) return `<tr style="background:#fffbf5">
-      <td colspan="8" style="padding:10px 12px">
+      <td colspan="9" style="padding:10px 12px">
         <div style="font-weight:600;margin-bottom:8px">✏️ Editar: ${p.nome}</div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
           <div><label style="font-size:11px;color:#888;display:block">Stock mínimo</label>
@@ -5153,6 +5176,7 @@ function renderEncomendas(){
         </div>
       </td>
     </tr>`;
+    const med = mediaVendas(p);
     return `<tr style="${enc?'opacity:0.55;background:#f6fff6':''}">
       <td>
         <strong>${p.nome}</strong>
@@ -5164,29 +5188,109 @@ function renderEncomendas(){
       <td><span class="badge bg-${p.stock<=0?'r':'a'}">${p.stock}</span></td>
       <td>${p.stockMin??0}</td>
       <td><strong class="${enc?'':'green'}">${Math.max(0,(p.stockMin??0)-p.stock)}</strong></td>
-      <td style="text-align:center;vertical-align:middle">${(()=>{const m=mediaVendas(p);return m>0?`<span style="font-weight:600;color:#8b6f4e;font-size:13px">${m}</span><div style="font-size:9px;color:#aaa">un/mês</div>`:'<span style="color:#ddd">—</span>'})()}</td>
-      <td style="white-space:nowrap;vertical-align:middle">
-        <button class="btn sm" onclick="startEncProd('${p.id}')" style="font-size:11px;margin-bottom:3px">✏️ Editar</button><br>
+      <td style="text-align:center">
+        ${med>0?`<span style="font-weight:600;color:#8b6f4e">${med}</span><div style="font-size:9px;color:#aaa">un/mês</div>`:'<span style="color:#ddd">—</span>'}
+      </td>
+      <td style="white-space:nowrap">
+        <button class="btn sm" style="font-size:11px;margin-bottom:2px" onclick="mostrarGraficoEnc('${p.id}','${p.nome.replace(/'/g,"\'")}')">📊</button>
+        <button class="btn sm" onclick="startEncProd('${p.id}')" style="font-size:11px;margin-bottom:2px">✏️</button><br>
         ${enc
           ? `<button class="btn sm" onclick="desmarcarEncomendado('${p.id}')" style="font-size:11px">↩ Desmarcar</button>`
-          : `<button class="btn suc sm" onclick="marcarEncomendado('${p.id}')" style="font-size:11px">✓ Encomendado</button>`
+          : `<button class="btn suc sm" onclick="marcarEncomendado('${p.id}')" style="font-size:11px">✓ Enc.</button>`
         }
       </td>
     </tr>`;
   };
 
+  const totalBaixo = listaPor.length + listaEnc.length;
+
   document.getElementById('pg-encomendas').innerHTML=`
-    <h2>Lista de encomendas</h2>
-    <p style="color:#888;font-size:12px;margin-bottom:1rem">Produtos ativos com stock abaixo do mínimo. Marca como "Encomendado" para não perderes o controlo.</p>
-    ${!baixo.length?'<div class="alert al-suc">✓ Todos os produtos ativos têm stock suficiente.</div>':''}
-    ${baixo.length?`<div class="card" style="padding:0;overflow:hidden"><table>
-      <thead><tr><th>Produto</th><th>Marca</th><th>Fornecedor</th><th>Stock atual</th><th>Stock mín.</th><th>Qty</th><th title="Unidades vendidas no mês anterior">Mês ant.</th><th></th></tr></thead>
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:1rem">
+      <h2 style="margin:0">Lista de encomendas</h2>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;background:#fafaf7;border:1px solid #eee;border-radius:8px;padding:8px 12px;margin-bottom:1rem">
+      <select onchange="encFiltroMarca=this.value;renderEncomendas()" style="font-size:12px">
+        <option value="">Todas as marcas</option>
+        ${todasMarcas.map(m=>`<option value="${m}" ${encFiltroMarca===m?'selected':''}>${m}</option>`).join('')}
+      </select>
+      <select onchange="encFiltroForn=this.value;renderEncomendas()" style="font-size:12px">
+        <option value="">Todos os fornecedores</option>
+        ${todosForn.map(f=>`<option value="${f}" ${encFiltroForn===f?'selected':''}>${f}</option>`).join('')}
+      </select>
+      <select onchange="encOrdem=this.value;renderEncomendas()" style="font-size:12px">
+        <option value="nome" ${encOrdem==='nome'?'selected':''}>Ordenar: Nome</option>
+        <option value="marca" ${encOrdem==='marca'?'selected':''}>Ordenar: Marca</option>
+        <option value="forn" ${encOrdem==='forn'?'selected':''}>Ordenar: Fornecedor</option>
+        <option value="qty" ${encOrdem==='qty'?'selected':''}>Ordenar: Qty a pedir</option>
+        <option value="media" ${encOrdem==='media'?'selected':''}>Ordenar: Média/mês</option>
+      </select>
+      ${(encFiltroMarca||encFiltroForn)?`<button class="btn sm" onclick="encFiltroMarca='';encFiltroForn='';renderEncomendas()">× Limpar</button>`:''}
+      <span style="font-size:11px;color:#888;margin-left:auto">${totalBaixo} produto${totalBaixo!==1?'s':''} abaixo do mínimo</span>
+    </div>
+
+    ${!totalBaixo?'<div class="alert al-suc">✓ Todos os produtos ativos têm stock suficiente.</div>':''}
+    ${totalBaixo?`<div class="card" style="padding:0;overflow:hidden"><div style="overflow-x:auto"><table>
+      <thead><tr><th>Produto</th><th>Marca</th><th>Fornecedor</th><th>Stock atual</th><th>Stock mín.</th><th>Qty</th><th title="Média mensal desde 1ª entrada">Méd/mês</th><th></th></tr></thead>
       <tbody>
-        ${porEncomendar.map(p=>rowHtml(p,false)).join('')}
-        ${jaEncomendado.length?`<tr><td colspan="7" style="padding:6px 12px;background:#f0fff0;font-size:11px;color:#5a8a5a;font-weight:600">✓ Já encomendado</td></tr>`:''}
-        ${jaEncomendado.map(p=>rowHtml(p,true)).join('')}
+        ${listaPor.map(p=>rowHtml(p,false)).join('')}
+        ${listaEnc.length?`<tr><td colspan="8" style="padding:6px 12px;background:#f0fff0;font-size:11px;color:#5a8a5a;font-weight:600">✓ Já encomendado</td></tr>`:''}
+        ${listaEnc.map(p=>rowHtml(p,true)).join('')}
       </tbody>
-    </table></div>`:''}`;
+    </table></div></div>`:``}
+
+    <!-- modal gráfico -->
+    <div id="enc-graf-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center">
+      <div style="background:#fff;border-radius:12px;width:90%;max-width:600px;padding:20px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div id="enc-graf-titulo" style="font-weight:700;font-size:14px"></div>
+          <button onclick="document.getElementById('enc-graf-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">×</button>
+        </div>
+        <canvas id="enc-graf-canvas" height="200"></canvas>
+        <div style="font-size:10px;color:#aaa;margin-top:8px;text-align:center">Unidades vendidas por mês</div>
+      </div>
+    </div>`;
+
+  // fechar modal ao clicar fora
+  const m=document.getElementById('enc-graf-modal');
+  if(m) m.onclick=e=>{ if(e.target===m) m.style.display='none'; };
+}
+
+function mostrarGraficoEnc(prodId, nome){
+  // recolher vendas por mês
+  const porMes={};
+  DB.consultas.forEach(c=>{
+    const mes=c.data.substring(0,7);
+    (c.vendas||[]).filter(v=>v.prodId===prodId).forEach(v=>{
+      porMes[mes]=(porMes[mes]||0)+(v.qty||1);
+    });
+  });
+  const meses=Object.keys(porMes).sort();
+  if(!meses.length){ alert('Sem vendas registadas para este produto.'); return; }
+
+  document.getElementById('enc-graf-titulo').textContent='📊 '+nome;
+  document.getElementById('enc-graf-modal').style.display='flex';
+
+  const canvas=document.getElementById('enc-graf-canvas');
+  const ctx=canvas.getContext('2d');
+  canvas.width=canvas.offsetWidth||560;
+  const vals=meses.map(m=>porMes[m]);
+  const maxV=Math.max(...vals,1);
+  const W=canvas.width, H=200, pad=40, barW=Math.max(20,Math.floor((W-pad*2)/meses.length)-6);
+
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#f8f8f5'; ctx.fillRect(0,0,W,H);
+
+  meses.forEach((mes,i)=>{
+    const x=pad+i*((W-pad*2)/meses.length)+((W-pad*2)/meses.length-barW)/2;
+    const bh=Math.round((vals[i]/maxV)*(H-60));
+    const y=H-30-bh;
+    ctx.fillStyle='#8b6f4e';
+    ctx.fillRect(x,y,barW,bh);
+    ctx.fillStyle='#1a1a1a'; ctx.font='10px system-ui'; ctx.textAlign='center';
+    ctx.fillText(vals[i],x+barW/2,y-4);
+    ctx.fillStyle='#888'; ctx.font='9px system-ui';
+    ctx.fillText(mes.substring(5),x+barW/2,H-14);
+  });
 }
 function startEncProd(id){ editingEncProdId=id; withScroll(renderEncomendas); setTimeout(()=>document.getElementById('eenc-smin')?.focus(),60); }
 function cancelEncProd(){ editingEncProdId=null; renderEncomendas(); }
