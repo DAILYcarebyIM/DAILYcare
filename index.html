@@ -3925,6 +3925,13 @@ function renderCedencias(){
         </div>
       </div>
 
+      <div id="ced-resumo" style="display:none;background:#f0fff4;border:1px solid #c3e6cb;border-radius:8px;padding:10px 14px;margin-top:8px">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">A receber</div><div style="font-size:20px;font-weight:700;color:#1a1a1a" id="ced-total-receber">—</div></div>
+          <div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Custo total</div><div style="font-size:20px;font-weight:700;color:#856404" id="ced-total-custo">—</div></div>
+          <div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Lucro</div><div style="font-size:20px;font-weight:700;color:#1a6b1a" id="ced-total-lucro">—</div></div>
+        </div>
+      </div>
       <div style="display:flex;gap:8px;margin-top:8px">
         <button class="btn pri" onclick="gravarCedencia()">Guardar cedência</button>
         <button class="btn" onclick="showAddCed()">Cancelar</button>
@@ -3933,10 +3940,35 @@ function renderCedencias(){
 
     <div class="card" style="padding:0;overflow:hidden">
       <div style="overflow-x:auto"><table>
-        <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Destinatário</th><th>Motivo</th><th>Valor recebido</th><th>Ações</th></tr></thead>
-        <tbody>${lista.length
-          ? lista.map(c=>rowHtml(c)).join('')
-          : '<tr><td colspan="7" style="text-align:center;padding:2rem;color:#999">Sem cedências registadas</td></tr>'}
+        <thead><tr><th>Data</th><th>Destinatário</th><th>Produtos</th><th>A receber</th><th>Lucro</th><th>Ações</th></tr></thead>
+        <tbody>${(()=>{
+          if(!lista.length) return '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#999">Sem cedências registadas</td></tr>';
+          // agrupar por grupoId (ou id se não tiver grupo)
+          const grupos={};
+          lista.forEach(c=>{
+            const gid=c.grupoId||c.id;
+            if(!grupos[gid]) grupos[gid]={gid,data:c.data,dest:c.destinatario||'—',motivo:c.motivo||'',items:[],tReceber:0,tCusto:0};
+            grupos[gid].items.push(c);
+            grupos[gid].tReceber+=c.valorRecebido||0;
+            grupos[gid].tCusto+=(c.custoUnit||0)*(c.qty||1);
+          });
+          return Object.values(grupos).sort((a,b)=>b.data.localeCompare(a.data)).map(g=>{
+            const tLucro=g.tReceber-g.tCusto;
+            const prods=g.items.map(c=>`<div style="font-size:11px"><strong>${c.prodNome}</strong> ×${c.qty||1}${c.descPct>0?` <span style="color:#856404">(-${c.descPct}%)</span>`:''} — ${fmt(c.valorRecebido)}</div>`).join('');
+            const ids=g.items.map(c=>c.id);
+            return `<tr>
+              <td style="white-space:nowrap">${g.data}</td>
+              <td style="font-weight:600">${g.dest}<br><span style="font-size:10px;color:#888;font-weight:400">${g.motivo}</span></td>
+              <td>${prods}</td>
+              <td style="text-align:right;font-weight:700;font-size:14px">${fmt(g.tReceber)}</td>
+              <td style="text-align:right;font-weight:700;color:${tLucro>=0?'#1a6b1a':'#c0392b'}">${tLucro>=0?'+':''}${fmt(tLucro)}</td>
+              <td style="white-space:nowrap">
+                ${g.items.length===1?`<button class="btn sm" onclick="startEditCed('${g.items[0].id}')">Editar</button>`:''}
+                <button class="btn dan sm" onclick="delCedGrupo(${JSON.stringify(ids)})" style="margin-top:2px">Apagar</button>
+              </td>
+            </tr>`;
+          }).join('');
+        })()}
         </tbody>
       </table></div>
     </div>`;
@@ -3955,6 +3987,21 @@ function showAddCed(){
 function renderCedProds(){
   const el=document.getElementById('ced-lista-prods'); if(!el) return;
   if(!cedProds.length){ el.innerHTML='<div style="color:#999;font-size:12px;padding:4px 0">Ainda sem produtos. Pesquisa abaixo.</div>'; return; }
+  // actualizar resumo
+  const resumo=document.getElementById('ced-resumo');
+  if(cedProds.length){
+    const tReceber=cedProds.reduce((s,v)=>s+(v.valorRecebido||0),0);
+    const tCusto=cedProds.reduce((s,v)=>s+v.custoUnit*v.qty,0);
+    const tLucro=tReceber-tCusto;
+    const r=document.getElementById('ced-total-receber');
+    const c=document.getElementById('ced-total-custo');
+    const l=document.getElementById('ced-total-lucro');
+    if(r) r.textContent=fmt(tReceber);
+    if(c) c.textContent=fmt(tCusto);
+    if(l){ l.textContent=(tLucro>=0?'+':'')+fmt(tLucro); l.style.color=tLucro>=0?'#1a6b1a':'#c0392b'; }
+    if(resumo) resumo.style.display='block';
+  } else { if(resumo) resumo.style.display='none'; }
+
   el.innerHTML=cedProds.map((v,i)=>{
     const lucroUnit = v.valorRecebido/Math.max(1,v.qty) - v.custoUnit;
     const lucroTotal = lucroUnit * v.qty;
@@ -3967,13 +4014,13 @@ function renderCedProds(){
         <div style="display:flex;align-items:center;gap:4px">
           <label style="font-size:10px;color:#888">Qty</label>
           <input type="number" value="${v.qty}" min="1" style="width:55px;font-size:12px"
-            onchange="cedProds[${i}].qty=Math.max(1,parseInt(this.value)||1);cedProds[${i}].valorRecebido=+(cedProds[${i}].pvp*cedProds[${i}].pctPvp/100*cedProds[${i}].qty).toFixed(2);renderCedProds()"/>
+            onchange="cedProds[${i}].qty=Math.max(1,parseInt(this.value)||1);cedProds[${i}].valorRecebido=+(cedProds[${i}].pvp*(1-(cedProds[${i}].descPct||0)/100)*cedProds[${i}].qty).toFixed(2);renderCedProds()"/>
         </div>
         <div style="display:flex;align-items:center;gap:4px">
-          <label style="font-size:10px;color:#888">% do PVP</label>
-          <input type="number" value="${v.pctPvp}" min="0" max="100" step="5" style="width:65px;font-size:12px;border-color:#d4a97a"
-            onchange="cedProds[${i}].pctPvp=parseFloat(this.value)||0;cedProds[${i}].valorRecebido=+(cedProds[${i}].pvp*cedProds[${i}].pctPvp/100*cedProds[${i}].qty).toFixed(2);renderCedProds()"/>
-          <span style="font-size:10px;color:#8b6f4e">(${fmt(v.pvp*v.pctPvp/100)} unit.)</span>
+          <label style="font-size:10px;color:#888">Desc. colega %</label>
+          <input type="number" value="${v.descPct||0}" min="0" max="100" step="5" style="width:65px;font-size:12px;border-color:#d4a97a"
+            onchange="cedProds[${i}].descPct=parseFloat(this.value)||0;cedProds[${i}].valorRecebido=+(cedProds[${i}].pvp*(1-cedProds[${i}].descPct/100)*cedProds[${i}].qty).toFixed(2);renderCedProds()"/>
+          <span style="font-size:10px;color:#8b6f4e">→ paga ${fmt(v.pvp*(1-(v.descPct||0)/100))} unit.</span>
         </div>
         <div style="display:flex;align-items:center;gap:4px">
           <label style="font-size:10px;color:#888">Valor total (€)</label>
@@ -4004,7 +4051,7 @@ function addProdCed(pid){
   const p=DB.produtos.find(x=>x.id===pid); if(!p) return;
   const ex=cedProds.find(v=>v.prodId===pid);
   if(ex){ ex.qty++; ex.valorRecebido=+(ex.custoUnit*ex.qty).toFixed(2); }
-  else cedProds.push({prodId:pid,nome:p.nome,qty:1,pvp:p.pvp,custoUnit:p.custo,pctPvp:100,valorRecebido:+p.pvp.toFixed(2)});
+  else cedProds.push({prodId:pid,nome:p.nome,qty:1,pvp:p.pvp,custoUnit:p.custo,descPct:0,valorRecebido:+p.pvp.toFixed(2)});
   renderCedProds();
   const inp=document.getElementById('ced-p');
   const dd=document.getElementById('dd-ced');
@@ -4019,10 +4066,11 @@ function gravarCedencia(){
   const motivo=document.getElementById('ced-m').value;
   if(!DB.cedencias) DB.cedencias=[];
   if(!DB.ids.ced) DB.ids.ced=1;
+  const cedGrupoId='cedg'+Date.now(); // id de grupo para esta cedência
   cedProds.forEach(v=>{
     const p=DB.produtos.find(x=>x.id===v.prodId);
     if(p) p.stock-=v.qty;
-    DB.cedencias.push({id:'ced'+DB.ids.ced++,prodId:v.prodId,prodNome:v.nome,qty:v.qty,data,destinatario:dest,motivo,valorRecebido:v.valorRecebido});
+    DB.cedencias.push({id:'ced'+DB.ids.ced++,grupoId:cedGrupoId,prodId:v.prodId,prodNome:v.nome,qty:v.qty,pvp:v.pvp,custoUnit:v.custoUnit,descPct:v.descPct||0,data,destinatario:dest,motivo,valorRecebido:v.valorRecebido});
   });
   cedProds=[];
   save(); showAddCed(); renderCedencias();
@@ -4057,6 +4105,16 @@ function saveEditCed(id){
   editingCedId=null; save(); withScroll(renderCedencias);
 }
 
+function delCedGrupo(ids){
+  confirmDel('Apagar esta cedência?', ()=>{
+    ids.forEach(id=>{
+      const c=DB.cedencias.find(x=>x.id===id);
+      if(c){ const p=DB.produtos.find(x=>x.id===c.prodId); if(p) p.stock+=c.qty||1; }
+    });
+    DB.cedencias=DB.cedencias.filter(x=>!ids.includes(x.id));
+    save(); renderCedencias();
+  });
+}
 function delCed(id){
   confirmDel('Apagar esta cedência?', ()=>{
     const c=DB.cedencias.find(x=>x.id===id);
