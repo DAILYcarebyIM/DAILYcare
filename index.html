@@ -3938,40 +3938,51 @@ function renderCedencias(){
       </div>
     </div>
 
-    <div class="card" style="padding:0;overflow:hidden">
-      <div style="overflow-x:auto"><table>
-        <thead><tr><th>Data</th><th>Destinatário</th><th>Produtos</th><th>A receber</th><th>Lucro</th><th>Ações</th></tr></thead>
-        <tbody>${(()=>{
-          if(!lista.length) return '<tr><td colspan="6" style="text-align:center;padding:2rem;color:#999">Sem cedências registadas</td></tr>';
-          // agrupar por grupoId (ou id se não tiver grupo)
-          const grupos={};
-          lista.forEach(c=>{
-            const gid=c.grupoId||c.id;
-            if(!grupos[gid]) grupos[gid]={gid,data:c.data,dest:c.destinatario||'—',motivo:c.motivo||'',items:[],tReceber:0,tCusto:0};
-            grupos[gid].items.push(c);
-            grupos[gid].tReceber+=c.valorRecebido||0;
-            grupos[gid].tCusto+=(c.custoUnit||0)*(c.qty||1);
-          });
-          return Object.values(grupos).sort((a,b)=>b.data.localeCompare(a.data)).map(g=>{
-            const tLucro=g.tReceber-g.tCusto;
-            const prods=g.items.map(c=>`<div style="font-size:11px"><strong>${c.prodNome}</strong> ×${c.qty||1}${c.descPct>0?` <span style="color:#856404">(-${c.descPct}%)</span>`:''} — ${fmt(c.valorRecebido)}</div>`).join('');
-            const ids=g.items.map(c=>c.id);
-            return `<tr>
-              <td style="white-space:nowrap">${g.data}</td>
-              <td style="font-weight:600">${g.dest}<br><span style="font-size:10px;color:#888;font-weight:400">${g.motivo}</span></td>
-              <td>${prods}</td>
-              <td style="text-align:right;font-weight:700;font-size:14px">${fmt(g.tReceber)}</td>
-              <td style="text-align:right;font-weight:700;color:${tLucro>=0?'#1a6b1a':'#c0392b'}">${tLucro>=0?'+':''}${fmt(tLucro)}</td>
-              <td style="white-space:nowrap">
-                ${g.items.length===1?`<button class="btn sm" onclick="startEditCed('${g.items[0].id}')">Editar</button>`:''}
-                <button class="btn dan sm" onclick="delCedGrupo(${JSON.stringify(ids)})" style="margin-top:2px">Apagar</button>
-              </td>
-            </tr>`;
-          }).join('');
-        })()}
-        </tbody>
-      </table></div>
-    </div>`;
+    <div id="ced-cards-wrap"></div>`;
+  renderCedCards(lista);
+}
+
+function renderCedCards(lista){
+  const wrap=document.getElementById('ced-cards-wrap'); if(!wrap) return;
+  if(!lista.length){ wrap.innerHTML='<div style="text-align:center;padding:2rem;color:#999">Sem cedências registadas.</div>'; return; }
+  const grupos={};
+  lista.forEach(c=>{
+    const gid=c.grupoId||c.id;
+    if(!grupos[gid]) grupos[gid]={gid,data:c.data,dest:c.destinatario||'—',motivo:c.motivo||'',items:[],tReceber:0,tCusto:0};
+    grupos[gid].items.push(c);
+    grupos[gid].tReceber+=+(c.valorRecebido||0).toFixed(2);
+    grupos[gid].tCusto+=+((c.custoUnit||0)*(c.qty||1)).toFixed(2);
+  });
+  wrap.innerHTML=Object.values(grupos).sort((a,b)=>b.data.localeCompare(a.data)).map(g=>{
+    const tLucro=+(g.tReceber-g.tCusto).toFixed(2);
+    const ids=g.items.map(c=>c.id);
+    const prodRows=g.items.map(c=>{
+      const unitCobrado=c.pvp?c.pvp*(1-(c.descPct||0)/100):(c.qty>0?c.valorRecebido/c.qty:0);
+      const lucroLinha=+((c.valorRecebido||0)-(c.custoUnit||0)*(c.qty||1)).toFixed(2);
+      return '<tr><td><strong>'+c.prodNome+'</strong></td>'
+        +'<td style="text-align:center">'+(c.qty||1)+'</td>'
+        +'<td>'+(c.pvp?fmt(c.pvp):'—')+'</td>'
+        +'<td>'+(c.descPct>0?'<span style="color:#856404">-'+c.descPct+'%</span>':'—')+'</td>'
+        +'<td>'+fmt(unitCobrado)+'</td>'
+        +'<td style="font-weight:600">'+fmt(c.valorRecebido)+'</td>'
+        +'<td style="color:'+(lucroLinha>=0?'#1a6b1a':'#c0392b')+';font-weight:600">'+(lucroLinha>=0?'+':'')+fmt(lucroLinha)+'</td></tr>';
+    }).join('');
+    const editBtn=ids.length===1?('<button class="btn sm" onclick="startEditCed('+JSON.stringify(ids[0])+')">Editar</button> '):'';
+    const delBtn='<button class="btn dan sm" onclick="delCedGrupo('+JSON.stringify(ids)+')">Apagar</button>';
+    return '<div class="card" style="margin-bottom:1rem">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
+        +'<div><div style="font-weight:700;font-size:14px">'+g.dest+'</div>'
+          +'<div style="font-size:11px;color:#888">'+g.data+(g.motivo?' · '+g.motivo:'')+'</div></div>'
+        +'<div style="display:flex;gap:6px">'+editBtn+delBtn+'</div></div>'
+      +'<div style="overflow-x:auto"><table>'
+        +'<thead><tr style="background:#fafaf7"><th>Produto</th><th>Qty</th><th>PVP</th><th>Desc.</th><th>Unit. cobrado</th><th>Total recebido</th><th>Lucro linha</th></tr></thead>'
+        +'<tbody>'+prodRows+'</tbody></table></div>'
+      +'<div style="display:flex;gap:24px;padding:10px 0;border-top:2px solid #f0f0ec;flex-wrap:wrap;margin-top:8px">'
+        +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Total a receber</div><div style="font-size:18px;font-weight:700">'+fmt(g.tReceber)+'</div></div>'
+        +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Custo total</div><div style="font-size:18px;font-weight:700;color:#856404">'+fmt(g.tCusto)+'</div></div>'
+        +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Lucro desta cedência</div><div style="font-size:18px;font-weight:700;color:'+(tLucro>=0?'#1a6b1a':'#c0392b')+'">'+(tLucro>=0?'+':'')+fmt(tLucro)+'</div></div>'
+      +'</div></div>';
+  }).join('');
 }
 
 // lista temporária de produtos para nova cedência
