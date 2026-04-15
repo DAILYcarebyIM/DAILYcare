@@ -3967,8 +3967,9 @@ function renderCedCards(lista){
         +'<td style="font-weight:600">'+fmt(c.valorRecebido)+'</td>'
         +'<td style="color:'+(lucroLinha>=0?'#1a6b1a':'#c0392b')+';font-weight:600">'+(lucroLinha>=0?'+':'')+fmt(lucroLinha)+'</td></tr>';
     }).join('');
-    const editBtn=ids.length===1?('<button class="btn sm" onclick="startEditCed('+JSON.stringify(ids[0])+')">Editar</button> '):'';
-    const delBtn='<button class="btn dan sm" onclick="delCedGrupo('+JSON.stringify(ids)+')">Apagar</button>';
+    const editBtn=ids.length===1?('<button class="btn sm" data-id="'+ids[0]+'" onclick="startEditCed(this.dataset.id)">Editar</button> '):'';
+    const safeIds=JSON.stringify(ids).replace(/"/g,"'");
+    const delBtn='<button class="btn dan sm" data-ids="'+encodeURIComponent(JSON.stringify(ids))+'" onclick="delCedGrupo(JSON.parse(decodeURIComponent(this.dataset.ids)))">Apagar</button>';
     return '<div class="card" style="margin-bottom:1rem">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
         +'<div><div style="font-weight:700;font-size:14px">'+g.dest+'</div>'
