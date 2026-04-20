@@ -247,6 +247,34 @@ tr:hover td{background:#fafaf7}
     </div>
   </div>
 </div>
+<div id="stock-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:90%;max-width:420px;padding:20px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="margin:0;color:#7a5500">⚖ Corrigir stock</h3>
+      <button onclick="fecharCorrecaoStock()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">×</button>
+    </div>
+    <div id="stock-modal-prod" style="font-size:12px;color:#888;margin-bottom:12px"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:11px;color:#888;display:block;margin-bottom:3px">Stock actual</label>
+        <div id="stock-modal-atual" style="font-size:22px;font-weight:700;color:#1a1a1a"></div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#888;display:block;margin-bottom:3px">Novo stock</label>
+        <input id="stock-modal-novo" type="number" min="0" style="width:100%;font-size:18px;font-weight:600;border:2px solid #f5c842;border-radius:8px;padding:6px 10px;color:#7a5500"/>
+      </div>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:11px;color:#888;display:block;margin-bottom:3px">Motivo / justificação</label>
+      <input id="stock-modal-motivo" placeholder="ex: contagem física, produto danificado, oferta..." style="width:100%;border-radius:8px"/>
+    </div>
+    <div id="stock-modal-diff" style="font-size:12px;color:#856404;background:#fff8e6;border-radius:6px;padding:8px 10px;margin-bottom:16px;display:none"></div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="fecharCorrecaoStock()">Cancelar</button>
+      <button class="btn pri" onclick="confirmarCorrecaoStock()">Confirmar acerto</button>
+    </div>
+  </div>
+</div>
 <div class="menu-overlay" id="menu-overlay" onclick="closeMenuDrawer()"></div>
 <div class="menu-drawer" id="menu-drawer">
   <div class="menu-drawer-header"><span>DAILY</span>care <button onclick="closeMenuDrawer()" style="background:none;border:none;font-size:18px;cursor:pointer;color:#888">×</button></div>
@@ -1564,15 +1592,45 @@ function renderConsultasLista(){
           <div><div class="lb">Produtos</div><strong>${fmt(c.totalProd)}</strong></div>
           <div><div class="lb">Lucro prod.</div><strong class="green">${fmt(c.lucroProd)}</strong></div>
         </div>
-        ${c.vendas.length?`<div class="divider"></div><div style="font-size:11px;color:#888">${c.vendas.map(v=>v.nome+' ×'+v.qty+' — '+fmt((v.pvpCobrado||v.pvp)*v.qty)+(v.descCliente>0?` <span style="color:#c05050">(-${v.descCliente}% cli.)</span>`:'')+(v.descForn>0?` <span style="color:#5a8a5a">(-${v.descForn}% forn.)</span>`:'')).join(' &nbsp;|&nbsp; ')}</div>`:``}
+        ${c.vendas.length?`
+        <div class="divider"></div>
+        <div style="font-size:11px;color:#888;margin-bottom:4px">${c.vendas.map(v=>v.nome+' ×'+(v.qty||1)).join(' · ')}</div>
+        <div id="prod-detail-${c.id}" style="display:none;margin-top:6px">
+          <table style="font-size:11px;width:100%">
+            <thead><tr style="background:#fafaf7"><th style="padding:4px 8px">Produto</th><th>Qty</th><th>PVP cobrado</th><th>Total</th></tr></thead>
+            <tbody>${c.vendas.map(v=>`<tr>
+              <td style="padding:4px 8px"><strong>${v.nome}</strong>${v.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':''}</td>
+              <td>${v.qty||1}</td>
+              <td>${fmt(v.pvpCobrado||v.pvp)}${v.descCliente>0?`<span style="color:#c05050;font-size:10px"> -${v.descCliente}%</span>`:''}</td>
+              <td><strong>${fmt((v.pvpCobrado||v.pvp)*(v.qty||1))}</strong></td>
+            </tr>`).join('')}
+            <tr style="border-top:1px solid #eee;font-weight:600;background:#f8f8f5">
+              <td colspan="3" style="padding:4px 8px;text-align:right;color:#888">Total produtos:</td>
+              <td><strong>${fmt(c.totalProd)}</strong></td>
+            </tr>
+            </tbody>
+          </table>
+        </div>`:''}
         ${c.notas?`<div style="font-size:11px;color:#999;margin-top:4px">Notas: ${c.notas}</div>`:''}
-        <div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end">
+        ${(c.valorPendente||0)>0?`<div style="margin-top:6px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <span style="font-size:12px;color:#856404;font-weight:600">⏳ Pendente: ${fmt(c.valorPendente)}</span>
+          <button class="btn suc sm" onclick="marcarConsultaPaga('${c.id}')">✓ Marcar pago</button>
+        </div>`:''}
+        <div style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap">
+          ${c.vendas.length?`<button class="btn sm" onclick="toggleProdDetail('${c.id}',this)" style="font-size:11px">📦 Ver produtos</button>`:''}
           <button class="btn sm" onclick="startEditCons('${c.id}')">Editar</button>
           <button class="btn dan sm" onclick="delConsulta('${c.id}')">Apagar</button>
         </div>
       </div>`;
     }).join('');
 }
+function toggleProdDetail(id, btn){
+  const el=document.getElementById('prod-detail-'+id); if(!el) return;
+  const open=el.style.display==='none';
+  el.style.display=open?'block':'none';
+  btn.textContent=open?'📦 Fechar produtos':'📦 Ver produtos';
+}
+
 function startEditCons(id){
   editingConsId=id;
   renderConsultas();
@@ -2792,14 +2850,70 @@ function recalcularStock(){
   alert('✓ Stock recalculado para todos os produtos.');
 }
 
-function editarStockDirecto(pid){
+let _correcaoStockPid = null;
+
+function abrirCorrecaoStock(pid){
   const p=DB.produtos.find(x=>x.id===pid); if(!p) return;
-  const novo=window.prompt(`Stock actual de "${p.nome}": ${p.stock}\n\nNovo valor:`, p.stock);
-  if(novo===null) return;
-  const val=parseInt(novo);
-  if(isNaN(val)){ alert('Valor inválido.'); return; }
-  p.stock=val; save(); renderProdutosTabela();
+  _correcaoStockPid = pid;
+  document.getElementById('stock-modal-prod').textContent = p.nome + (p.cnp?' — CNP: '+p.cnp:'');
+  document.getElementById('stock-modal-atual').textContent = p.stock;
+  const inp = document.getElementById('stock-modal-novo');
+  inp.value = p.stock;
+  document.getElementById('stock-modal-motivo').value = '';
+  document.getElementById('stock-modal-diff').style.display='none';
+  const modal = document.getElementById('stock-modal');
+  modal.style.display='flex';
+  setTimeout(()=>inp.select(),80);
+  inp.oninput = () => {
+    const novo = parseInt(inp.value);
+    const diff = document.getElementById('stock-modal-diff');
+    if(!isNaN(novo)){
+      const delta = novo - p.stock;
+      diff.style.display='block';
+      diff.textContent = delta===0 ? 'Sem alteração' : (delta>0 ? '▲ Acrescenta '+delta+' unidades' : '▼ Remove '+Math.abs(delta)+' unidades');
+      diff.style.color = delta>0?'#1a6b1a':delta<0?'#c0392b':'#888';
+      diff.style.background = delta>0?'#f0fff4':delta<0?'#fff5f5':'#f8f8f5';
+    } else { diff.style.display='none'; }
+  };
 }
+
+function fecharCorrecaoStock(){
+  document.getElementById('stock-modal').style.display='none';
+  _correcaoStockPid=null;
+}
+
+function confirmarCorrecaoStock(){
+  const p=DB.produtos.find(x=>x.id===_correcaoStockPid); if(!p) return;
+  const novo=parseInt(document.getElementById('stock-modal-novo').value);
+  if(isNaN(novo)||novo<0){ alert('Valor inválido.'); return; }
+  const motivo=document.getElementById('stock-modal-motivo').value.trim();
+  const delta=novo-p.stock;
+  // registar no histórico de entradas como acerto se houver alteração
+  if(delta!==0){
+    if(!DB.entradas) DB.entradas=[];
+    if(!DB.ids.e) DB.ids.e=1;
+    DB.entradas.push({
+      id:'e'+DB.ids.e++,
+      prodId:p.id, prodNome:p.nome,
+      qty: Math.abs(delta),
+      custo:0, pvp:p.pvp||0,
+      data:today(),
+      fornecedor:'',
+      fatura: motivo||'Acerto de stock',
+      consig:p.consig||false,
+      acerto:true, acertoDelta:delta
+    });
+  }
+  p.stock=novo;
+  fecharCorrecaoStock();
+  save(); renderProdutosTabela();
+}
+
+// fechar modal ao clicar fora
+document.addEventListener('DOMContentLoaded',()=>{
+  const m=document.getElementById('stock-modal');
+  if(m) m.addEventListener('click',e=>{ if(e.target===m) fecharCorrecaoStock(); });
+});
 
 let editingProdId = null;
 function renderProdutos(){
@@ -2953,7 +3067,7 @@ function renderProdutosTabela(){
       </td>
       <td style="white-space:nowrap;min-width:90px">
         <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28;display:block;width:100%;margin-bottom:2px" onclick="abrirHistoricoProd('${p.id}')">Histórico</button>
-        <button class="btn sm" style="display:block;width:100%;margin-bottom:2px" onclick="editarStockDirecto('${p.id}')" title="Editar stock directamente">📦 Stock</button>
+        <button class="btn sm" style="display:block;width:100%;margin-bottom:2px;background:#fff8e6;border-color:#f5c842;color:#7a5500" onclick="abrirCorrecaoStock('${p.id}')" title="Corrigir stock com justificação">⚖ Corrigir stock</button>
         <button class="btn sm" style="display:block;width:100%;margin-bottom:2px" onclick="startEditP('${p.id}')">Editar</button>
         <button class="btn dan sm" style="display:block;width:100%" onclick="delProduto('${p.id}')">Apagar</button>
       </td>
@@ -3979,7 +4093,7 @@ function renderCedCards(lista){
         +'<thead><tr style="background:#fafaf7"><th>Produto</th><th>Qty</th><th>PVP</th><th>Desc.</th><th>Unit. cobrado</th><th>Total recebido</th><th>Lucro linha</th></tr></thead>'
         +'<tbody>'+prodRows+'</tbody></table></div>'
       +'<div style="display:flex;gap:24px;padding:10px 0;border-top:2px solid #f0f0ec;flex-wrap:wrap;margin-top:8px">'
-        +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Total a receber</div><div style="font-size:18px;font-weight:700">'+fmt(g.tReceber)+'</div></div>'
+        +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Total a receber</div><div style="font-size:18px;font-weight:700">'+fmt(g.tReceber)+'</div>'+(g.items.some(x=>x.portesCedencia>0)?'<div style="font-size:10px;color:#888">incl. '+fmt(g.items[0].portesCedencia||0)+' portes</div>':'')+'</div>'
         +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Custo total</div><div style="font-size:18px;font-weight:700;color:#856404">'+fmt(g.tCusto)+'</div></div>'
         +'<div><div style="font-size:10px;color:#888;text-transform:uppercase;letter-spacing:.5px">Lucro desta cedência</div><div style="font-size:18px;font-weight:700;color:'+(tLucro>=0?'#1a6b1a':'#c0392b')+'">'+(tLucro>=0?'+':'')+fmt(tLucro)+'</div></div>'
       +'</div></div>';
@@ -4008,7 +4122,7 @@ function renderCedProds(){
     const r=document.getElementById('ced-total-receber');
     const c=document.getElementById('ced-total-custo');
     const l=document.getElementById('ced-total-lucro');
-    if(r) r.textContent=fmt(tReceber);
+    if(r) r.textContent=fmt(tReceber)+(portes>0?' (incl. '+fmt(portes)+' portes)':'');
     if(c) c.textContent=fmt(tCusto);
     if(l){ l.textContent=(tLucro>=0?'+':'')+fmt(tLucro); l.style.color=tLucro>=0?'#1a6b1a':'#c0392b'; }
     if(resumo) resumo.style.display='block';
@@ -4076,15 +4190,26 @@ function gravarCedencia(){
   const dest=document.getElementById('ced-dest').value;
   const data=document.getElementById('ced-d').value;
   const motivo=document.getElementById('ced-m').value;
+  const portes=parseFloat(document.getElementById('ced-portes')?.value)||0;
   if(!DB.cedencias) DB.cedencias=[];
   if(!DB.ids.ced) DB.ids.ced=1;
-  const cedGrupoId='cedg'+Date.now(); // id de grupo para esta cedência
+  const cedGrupoId='cedg'+Date.now();
+  const tValor=cedProds.reduce((s,v)=>s+(v.valorRecebido||0),0);
   cedProds.forEach(v=>{
     const p=DB.produtos.find(x=>x.id===v.prodId);
     if(p) p.stock-=v.qty;
-    DB.cedencias.push({id:'ced'+DB.ids.ced++,grupoId:cedGrupoId,prodId:v.prodId,prodNome:v.nome,qty:v.qty,pvp:v.pvp,custoUnit:v.custoUnit,descPct:v.descPct||0,data,destinatario:dest,motivo,valorRecebido:v.valorRecebido});
+    const portesLinha=portes>0?+(portes*(tValor>0?(v.valorRecebido||0)/tValor:1/cedProds.length)).toFixed(2):0;
+    DB.cedencias.push({
+      id:'ced'+DB.ids.ced++, grupoId:cedGrupoId,
+      prodId:v.prodId, prodNome:v.nome, qty:v.qty, pvp:v.pvp,
+      custoUnit:v.custoUnit, descPct:v.descPct||0,
+      data, destinatario:dest, motivo,
+      valorRecebido:+(v.valorRecebido+portesLinha).toFixed(2),
+      portesLinha, portesCedencia:portes
+    });
   });
   cedProds=[];
+  if(document.getElementById('ced-portes')) document.getElementById('ced-portes').value='';
   save(); showAddCed(); renderCedencias();
 }
 
