@@ -4116,7 +4116,8 @@ function renderCedProds(){
   // actualizar resumo
   const resumo=document.getElementById('ced-resumo');
   if(cedProds.length){
-    const tReceber=cedProds.reduce((s,v)=>s+(v.valorRecebido||0),0);
+    const portes=parseFloat(document.getElementById('ced-portes')?.value)||0;
+    const tReceber=cedProds.reduce((s,v)=>s+(v.valorRecebido||0),0)+portes;
     const tCusto=cedProds.reduce((s,v)=>s+v.custoUnit*v.qty,0);
     const tLucro=tReceber-tCusto;
     const r=document.getElementById('ced-total-receber');
