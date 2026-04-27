@@ -2085,7 +2085,7 @@ function renderVendasPagina(){
   const wrap = document.getElementById('vendas-tabela'); if(!wrap) return;
   const defs=[
     {col:'data',fn:c=>c.data},{col:'cliente',fn:c=>cNome(c.clienteId)},
-    {col:'pvp',fn:c=>c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0)},
+    {col:'pvp',fn:c=>c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0)},
     {col:'lucro',fn:c=>c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0)},
     {col:'produtos',fn:c=>c.vendas.length},
   ];
@@ -2094,7 +2094,7 @@ function renderVendasPagina(){
   wrap.innerHTML=`<div style="overflow-x:auto"><table>
     <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Pendente</th><th>Estado</th><th></th></tr></thead>
     <tbody>${lista.length?lista.map(c=>{
-      const tp=c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
+      const tp=c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0);
       const tl=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
       const nomes=c.vendas.map(v=>`${v.nome}${v.qty>1?' ×'+v.qty:''}`).join(', ');
       const pendente=c.valorPendente||0;
@@ -2121,7 +2121,7 @@ function renderVendasPagina(){
               <td><input type="number" id="ev-qty-${c.id}-${vi}" value="${v.qty||1}" min="1" style="width:60px;font-size:12px"/></td>
               <td><input type="number" id="ev-pvp-${c.id}-${vi}" value="${v.pvp.toFixed(2)}" step="0.01" min="0" style="width:80px;font-size:12px"/></td>
               <td><input type="number" id="ev-custo-${c.id}-${vi}" value="${v.custo.toFixed(2)}" step="0.01" min="0" style="width:80px;font-size:12px"/></td>
-              <td class="green" style="font-size:12px">${fmt((v.pvp-v.custo)*(v.qty||1))}</td>
+              <td class="green" style="font-size:12px">${fmt(((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1))}</td>
               <td><button class="btn dan sm" onclick="remVendaItem('${c.id}',${vi})">×</button></td>
             </tr>`).join('')}</tbody>
           </table></div>
