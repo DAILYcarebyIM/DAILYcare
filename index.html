@@ -1194,6 +1194,8 @@ function syncInputs(){
     const fornEl   = document.getElementById('vi-dforn-'+v.prodId);
     const cliEl    = document.getElementById('vi-dcli-'+v.prodId);
     if(pvpEl){ v.pvp = parseFloat(pvpEl.value)||v.pvp; v.pvpBase = v.pvp; } // pvpBase acompanha pvp editado
+    const dcliEl = document.getElementById('vi-dcli-'+v.prodId);
+    if(dcliEl) v.descCliente = parseFloat(dcliEl.value)||0;
     if(qtyEl)  v.qty        = parseInt(qtyEl.value)||1;
     if(descEl){ v.descExtra = parseFloat(descEl.value)||0; }
     if(fornEl){ v.descForn  = parseFloat(fornEl.value)||0; }
@@ -1233,12 +1235,10 @@ function calcCustoFarm(v){
   }
 }
 function calcPvpCobrado(v){
-  if(v.consig){
-    // PVP cobrado ao cliente = PVP produto × (1 - descCliente%)
-    // descForn NÃO afecta o PVP cobrado ao cliente — é desconto do fornecedor para nós
+  // descCliente aplica-se sempre — reduz o PVP cobrado ao cliente
+  if((v.descCliente||0)>0){
     return Math.max(0, (v.pvpBase||v.pvp) * (1 - (v.descCliente||0)/100));
   }
-  // produto próprio: pvp da venda é o preço cobrado
   return v.pvp||0;
 }
 
@@ -1305,6 +1305,12 @@ function renderVendasTabela(){
             <span class="lucro-val" style="font-size:10px;color:#888;transition:filter 0.2s">A pagar farm.</span>
             <span class="lucro-val" style="font-size:12px;font-weight:600;color:#a83232;transition:filter 0.2s" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
           </div>` : `
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:10px;color:#888">Desc. cliente %</span>
+            <input id="vi-dcli-${v.prodId}" type="number" value="${v.descCliente||0}" min="0" max="100" step="0.5"
+              oninput="syncInputs();atualizarTotais()"
+              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #d4a0a0;border-radius:6px;background:#fff8f8"/>
+          </div>
           <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
             <span class="lucro-val" style="font-size:10px;color:#888;transition:filter 0.2s">Custo efectivo</span>
             <span class="lucro-val" style="font-size:12px;font-weight:600;color:#1a6b1a;transition:filter 0.2s" id="vi-custo-${v.prodId}">${fmt(custoEfetivo)}</span>
