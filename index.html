@@ -518,8 +518,8 @@ function migrarCampos(){
   if(!DB.ids.fo) DB.ids.fo = 1;
   // recalcular totalProd e lucroProd com base no pvp real da venda
   (DB.consultas||[]).forEach(c=>{
-    c.totalProd = (c.vendas||[]).reduce((s,v)=>s+(v.pvp||0)*(v.qty||1),0);
-    c.lucroProd = (c.vendas||[]).reduce((s,v)=>s+((v.pvp||0)-(v.custo||0))*(v.qty||1),0);
+    c.totalProd = (c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado||v.pvp||0)*(v.qty||1),0);
+    c.lucroProd = (c.vendas||[]).reduce((s,v)=>s+((v.pvpCobrado||v.pvp||0)-(v.custo||0))*(v.qty||1),0);
   });
 
   // migrar produtos que têm fornecedor no campo marca — só se ainda não tiver fornecedor definido
