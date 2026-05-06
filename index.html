@@ -1388,9 +1388,11 @@ function gravarConsulta(){
   const faturado = document.getElementById('cc-fat').value==='true';
   const notas = document.getElementById('cc-notas').value;
   const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
+  // garantir que descCliente e pvpCobrado estão actualizados antes de gravar
+  syncInputs();
   const vendasComFat = cvs.map(v=>({...v, faturado, descForn:v.descForn||0, descCliente:v.descCliente||0, pvpCobrado:calcPvpCobrado(v)}));
-  const tp = cvs.reduce((s,v)=>s+(v.pvpCobrado||calcPvpCobrado(v))*v.qty,0);
-  const tl = cvs.reduce((s,v)=>s+((v.pvpCobrado||calcPvpCobrado(v))-v.custo)*v.qty,0);
+  const tp = cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
+  const tl = cvs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
   const id = 'c'+DB.ids.c++;
   DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,estado,metodoPagamento:document.getElementById('cc-metodo')?.value||'MBWay',notas,portes,vendas:vendasComFat,totalProd:tp,lucroProd:tl});
   cvs.forEach(v=>{const p=DB.produtos.find(x=>x.id===v.prodId);if(p)p.stock-=v.qty;});
