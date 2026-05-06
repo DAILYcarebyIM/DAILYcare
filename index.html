@@ -2092,7 +2092,7 @@ function renderVendasPagina(){
     {col:'produtos',fn:c=>c.vendas.length},
   ];
   const {col}=getSort('vendas');
-  const lista=col?sortArr(consultas,'vendas',defs):[...consultas].sort((a,b)=>b.data.localeCompare(a.data));
+  const lista=col?sortArr(consultas,'vendas',defs):[...consultas].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
   wrap.innerHTML=`<div style="overflow-x:auto"><table>
     <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Pendente</th><th>Estado</th><th></th></tr></thead>
     <tbody>${lista.length?lista.map(c=>{
@@ -2265,7 +2265,7 @@ function exportarListagemVendas(){
         lucro:((v.pvpCobrado||v.pvp||0)-(v.custo||0))*(v.qty||1),
         estado:c.estado||'—'
       }))
-  ).sort((a,b)=>b.data.localeCompare(a.data));
+  ).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
 
   if(!linhas.length){ alert('Sem resultados para exportar.'); return; }
 
@@ -2411,7 +2411,7 @@ function renderClientes(){
     {col:'ultimaData',fn:cl=>cl._ultimaData||''},
   ];
   let clis = DB.clientes.map(cl=>{
-    const cs   = DB.consultas.filter(c=>c.clienteId===cl.id).sort((a,b)=>b.data.localeCompare(a.data));
+    const cs   = DB.consultas.filter(c=>c.clienteId===cl.id).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
     const pks  = DB.packs.filter(p=>p.clienteId===cl.id);
     const pkAt = pks.find(p=>p.estado==='Ativo');
     const total= cs.reduce((s,c)=>s+c.valor+c.totalProd,0)+pks.reduce((s,p)=>s+p.valor,0);
@@ -2566,7 +2566,7 @@ function abrirFicha(cliId){
   const cl = DB.clientes.find(x=>x.id===cliId);
   if(!cl) return;
 
-  const consultas = DB.consultas.filter(c=>c.clienteId===cliId).sort((a,b)=>b.data.localeCompare(a.data));
+  const consultas = DB.consultas.filter(c=>c.clienteId===cliId).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
   const packs = DB.packs.filter(p=>p.clienteId===cliId);
   const vouchers = (DB.vouchers||[]).filter(v=>v.beneficiario===cl.nome||v.usadoPor===cl.nome);
   const todasVendas = consultas.flatMap(c=>c.vendas.map(v=>({...v,data:c.data,consultaId:c.id})));
@@ -2716,9 +2716,9 @@ function abrirHistoricoProd(prodId){
   const p = DB.produtos.find(x=>x.id===prodId);
   if(!p) return;
 
-  const entradas = DB.entradas.filter(e=>e.prodId===prodId).sort((a,b)=>b.data.localeCompare(a.data));
+  const entradas = DB.entradas.filter(e=>e.prodId===prodId).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
   const vendas   = DB.consultas.flatMap(c=>c.vendas.filter(v=>v.prodId===prodId).map(v=>({...v,data:c.data,cliente:cNome(c.clienteId)})))
-                               .sort((a,b)=>b.data.localeCompare(a.data));
+                               .sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
 
   const totalComprado = entradas.reduce((s,e)=>s+e.qty+(e.qtyBonus||0),0);
   const totalVendido  = vendas.reduce((s,v)=>s+(v.qty||1),0);
@@ -2840,7 +2840,7 @@ function renderPacks(){
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr><th>Cliente</th><th>Pack</th><th>Sessões</th><th>Progresso</th><th>Valor</th><th>Data</th><th>Faturado</th><th>Estado</th><th></th></tr></thead>
-        <tbody>${[...DB.packs].sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(pk=>{
+        <tbody>${[...DB.packs].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(pk=>{
           const pct=Math.round(pk.usadas/pk.incluidas*100);
           return`<tr>
             <td><strong>${cNome(pk.clienteId)}</strong></td>
@@ -3316,7 +3316,7 @@ function renderEntradasTabela(){
     {col:'fornecedor',fn:e=>e.fornecedor||''},
   ];
   const {col}=getSort('entradas');
-  let lista=col?sortArr(DB.entradas,'entradas',defs):[...DB.entradas].sort((a,b)=>b.data.localeCompare(a.data));
+  let lista=col?sortArr(DB.entradas,'entradas',defs):[...DB.entradas].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
   if(fEntradasData) lista=lista.filter(e=>e.data===fEntradasData);
   if(fEntradasTexto){
     const t=normalizar(fEntradasTexto);
@@ -3970,8 +3970,8 @@ function renderConsumo(){
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Motivo</th><th>Ações</th></tr></thead>
-        <tbody>${[...DB.consumo].sort((a,b)=>b.data.localeCompare(a.data)).length
-          ? [...DB.consumo].sort((a,b)=>b.data.localeCompare(a.data)).map(c=>rowHtml(c)).join('')
+        <tbody>${[...DB.consumo].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).length
+          ? [...DB.consumo].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(c=>rowHtml(c)).join('')
           : '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#999">Sem consumo interno registado</td></tr>'}
         </tbody>
       </table>
@@ -4008,7 +4008,7 @@ let editingCedId = null;
 
 function renderCedencias(){
   if(!DB.cedencias) DB.cedencias=[];
-  const lista = [...DB.cedencias].sort((a,b)=>b.data.localeCompare(a.data));
+  const lista = [...DB.cedencias].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
   // total recebido = valorRecebido já inclui qty (é o total da cedência, não unit.)
   const tRecebido = lista.reduce((s,c)=>s+(c.valorRecebido||0),0);
   const tQty      = lista.reduce((s,c)=>s+(c.qty||1),0);
@@ -4098,7 +4098,7 @@ function renderCedCards(lista){
     grupos[gid].tReceber+=+(c.valorRecebido||0).toFixed(2);
     grupos[gid].tCusto+=+((c.custoUnit||0)*(c.qty||1)).toFixed(2);
   });
-  wrap.innerHTML=Object.values(grupos).sort((a,b)=>b.data.localeCompare(a.data)).map(g=>{
+  wrap.innerHTML=Object.values(grupos).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(g=>{
     const tLucro=+(g.tReceber-g.tCusto).toFixed(2);
     const ids=g.items.map(c=>c.id);
     const prodRows=g.items.map(c=>{
@@ -4382,7 +4382,7 @@ function renderConsign(){
   });
 
   const allItems = [...itemsVenda, ...itemsConsInt]
-    .sort((a,b)=>b.data.localeCompare(a.data));
+    .sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
 
   const pendentes = allItems.filter(v=>!pagas.has(v.cid));
   const tCusto    = pendentes.reduce((s,v)=>s+calcCustoFarm(v)*(v.qty||1),0);
@@ -4514,7 +4514,7 @@ function exportParaNumbers(){
   // SECÇÃO 1: pagamentos pendentes
   rows.push([`PAGAMENTOS POR LIQUIDAR`]);
   rows.push(['Data','CNP','Produto','Qty','PVP unit.','Desc. forn.','PVP cobrado','A pagar (€)']);
-  pendentes.sort((a,b)=>b.data.localeCompare(a.data)).forEach(v=>{
+  pendentes.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).forEach(v=>{
     const pvc = v.pvpCobrado||v.pvp||0;
     const df  = v.descForn||0;
     const dc  = v.descCliente||0;
@@ -4600,7 +4600,7 @@ function _downloadConsignCSV(rows, filename, titulo){
 
 // ─── WORKSHOPS ───────────────────────────────────────────────────────────────
 function renderWorkshops(){
-  const ws = [...DB.workshops.filter(w=>!w.tipo||w.tipo==='Workshop'||w.tipo==='Corporativo')].sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  const ws = [...DB.workshops.filter(w=>!w.tipo||w.tipo==='Workshop'||w.tipo==='Corporativo')].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
   document.getElementById('pg-workshops').innerHTML=`
     <div class="flex-b"><h2 style="margin:0">Workshops</h2><button class="btn" onclick="showAddW()">+ Novo workshop</button></div>
     <div id="add-w-f" style="display:none" class="card">
@@ -4903,7 +4903,7 @@ function renderFormacao(){
     </div>
 
     <div style="display:flex;flex-direction:column;gap:1rem">
-    ${DB.formacoes.length ? [...DB.formacoes].sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(f=>{
+    ${DB.formacoes.length ? [...DB.formacoes].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(f=>{
       const total=calcFoTotal(f);
       const hs=f.hSinc||0, hc=f.hCont||0, ha=f.hAsinc||0;
       const ts=f.taxaSinc??TAXA_SINC, tc=f.taxaCont??TAXA_CONT, ta=f.taxaAsinc??TAXA_ASINC;
@@ -5194,7 +5194,7 @@ function renderGastos(){
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Fornecedor</th><th>Ações</th></tr></thead>
-        <tbody>${[...DB.gastos].sort((a,b)=>b.data.localeCompare(a.data)).map(g=>rowHtml(g)).join('')}
+        <tbody>${[...DB.gastos].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(g=>rowHtml(g)).join('')}
         </tbody>
       </table>
     </div>`;
@@ -6042,7 +6042,7 @@ function exportarExcel(){
     addSheet('Consultas', [
       ['ID','Cliente','Data','Tipo','Valor Serviço (€)','Total Produtos (€)','Lucro Produtos (€)','Estado','Faturado','Notas'],
       ...DB.consultas.filter(c=>c.tipo!=='Venda direta')
-        .sort((a,b)=>b.data.localeCompare(a.data))
+        .sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')))
         .map(c=>[c.id, cNome(c.clienteId), c.data, c.tipo,
           Number(c.valor.toFixed(2)), Number(c.totalProd.toFixed(2)),
           Number(c.lucroProd.toFixed(2)), c.estado, c.faturado?'Sim':'Não', c.notas||''])
@@ -6052,7 +6052,7 @@ function exportarExcel(){
     addSheet('Vendas_Produtos', [
       ['Data','Cliente','Tipo','Produto','Marca','Qty','PVP unit. (€)','PVP total (€)','Custo ef. (€)','Lucro (€)','Desc. forn. %','Consignação'],
       ...DB.consultas
-        .sort((a,b)=>b.data.localeCompare(a.data))
+        .sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')))
         .flatMap(c=>c.vendas.map(v=>[
           c.data, cNome(c.clienteId), c.tipo||'Consulta',
           v.nome, v.marca||'', v.qty||1,
@@ -6082,7 +6082,7 @@ function exportarExcel(){
     addSheet('Clientes', [
       ['Nome','Telefone','Email','Notas','Nº Consultas','Última consulta','Valor Total (€)','Crédito disponível (€)'],
       ...DB.clientes.map(cl=>{
-        const cs=DB.consultas.filter(c=>c.clienteId===cl.id).sort((a,b)=>b.data.localeCompare(a.data));
+        const cs=DB.consultas.filter(c=>c.clienteId===cl.id).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
         const tot=cs.reduce((s,c)=>s+c.valor+c.totalProd,0)+DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0);
         return[cl.nome, cl.telefone||'', cl.email||'', cl.notas||'',
           cs.length, cs[0]?.data||'', Number(tot.toFixed(2)), Number((cl.credito||0).toFixed(2))];
@@ -6138,14 +6138,14 @@ function exportarExcel(){
     // Gastos
     addSheet('Gastos', [
       ['Data','Descrição','Categoria','Valor (€)','Fornecedor','Nº Fatura'],
-      ...DB.gastos.sort((a,b)=>b.data.localeCompare(a.data))
+      ...DB.gastos.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')))
         .map(g=>[g.data, g.desc, g.cat, Number(g.valor.toFixed(2)), g.fornecedor||'', g.fatura||''])
     ]);
 
     // Entradas de Stock
     addSheet('Entradas_Stock', [
       ['Data','Produto','Qty','Qty Bónus','Custo unit. (€)','PVP (€)','Total custo (€)','Fornecedor','Consignação','Bónus','Fatura/Guia'],
-      ...DB.entradas.sort((a,b)=>b.data.localeCompare(a.data))
+      ...DB.entradas.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')))
         .map(e=>[e.data, e.prodNome, e.qty, e.qtyBonus||0,
           Number((e.custo||0).toFixed(2)), Number((e.pvp||0).toFixed(2)),
           Number((e.qty*(e.custo||0)).toFixed(2)),
