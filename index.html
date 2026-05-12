@@ -547,10 +547,10 @@ function migrarCampos(){
   if(!DB.ids.ced) DB.ids.ced = 1;
   if(!DB.ids.f) DB.ids.f = 4;
   if(!DB.ids.fo) DB.ids.fo = 1;
-  // recalcular totalProd e lucroProd com base no pvp real da venda
+  // recalcular totalProd e lucroProd — usar pvpCobrado se definido (mesmo que 0)
   (DB.consultas||[]).forEach(c=>{
-    c.totalProd = (c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado||v.pvp||0)*(v.qty||1),0);
-    c.lucroProd = (c.vendas||[]).reduce((s,v)=>s+((v.pvpCobrado||v.pvp||0)-(v.custo||0))*(v.qty||1),0);
+    c.totalProd = (c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1),0);
+    c.lucroProd = (c.vendas||[]).reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-(v.custo||0))*(v.qty||1),0);
   });
 
   // migrar produtos que têm fornecedor no campo marca — só se ainda não tiver fornecedor definido
@@ -827,7 +827,7 @@ function renderDash(){
   const mk = Object.keys(meses).sort(); const maxM = Math.max(...Object.values(meses),1);
 
   const vendas = cs.flatMap(c=>c.vendas);
-  const pp = {}; vendas.forEach(v=>{if(!pp[v.nome])pp[v.nome]={nome:v.nome,qty:0,lucro:0};pp[v.nome].qty+=v.qty||1;pp[v.nome].lucro+=((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1);});
+  const pp = {}; vendas.forEach(v=>{if(!pp[v.nome])pp[v.nome]={nome:v.nome,qty:0,lucro:0};pp[v.nome].qty+=v.qty||1;pp[v.nome].lucro+=((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1);});
   const topV = Object.values(pp).sort((a,b)=>b.qty-a.qty)[0];
   const topL = Object.values(pp).sort((a,b)=>b.lucro-a.lucro)[0];
   const packsAtivos = DB.packs.filter(p=>p.estado==='Ativo').length;
@@ -1724,7 +1724,7 @@ function renderConsultasLista(){
 
         <div id="ec-total-${c.id}" style="background:#f0fff0;border:1px solid #c3e6cb;border-radius:8px;padding:8px 12px;margin-top:8px;display:${c.vendas.length?'flex':'none'};justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
           <span style="font-size:12px;color:#888">Total produtos</span>
-          <span style="font-weight:700;font-size:15px;color:#1a6b1a" id="ec-total-val-${c.id}">${fmt(c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0))}</span>
+          <span style="font-weight:700;font-size:15px;color:#1a6b1a" id="ec-total-val-${c.id}">${fmt(c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1),0))}</span>
         </div>
         <div style="display:flex;gap:8px;margin-top:8px">
           <button class="btn pri" onclick="saveEditCons('${c.id}')">Guardar alterações</button>
@@ -1771,7 +1771,7 @@ function renderConsultasLista(){
               <td style="padding:4px 8px"><strong>${v.nome}</strong>${v.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':''}</td>
               <td>${v.qty||1}</td>
               <td>${fmt(v.pvpCobrado||v.pvp)}${v.descCliente>0?`<span style="color:#c05050;font-size:10px"> -${v.descCliente}%</span>`:''}</td>
-              <td><strong>${fmt((v.pvpCobrado||v.pvp)*(v.qty||1))}</strong></td>
+              <td><strong>${fmt((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1))}</strong></td>
             </tr>`).join('')}
             <tr style="border-top:1px solid #eee;font-weight:600;background:#f8f8f5">
               <td colspan="3" style="padding:4px 8px;text-align:right;color:#888">Total produtos:</td>
@@ -1824,7 +1824,7 @@ function syncECV(){
     v.custo = calcCustoFarm(v);
   });
   // actualizar total em tempo real
-  const total = c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0);
+  const total = c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1),0);
   const elTotal = document.getElementById('ec-total-val-'+editingConsId);
   const elBox   = document.getElementById('ec-total-'+editingConsId);
   if(elTotal) elTotal.textContent = fmt(total);
@@ -1839,7 +1839,7 @@ function remECV(idx){
   if(p) p.stock+=v.qty;
   c.vendas.splice(idx,1);
   c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*v.qty,0);
-  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
   renderConsultas();
 }
 function ddProdEC(v){
@@ -1866,7 +1866,7 @@ function addProdEC(pid){
     p.stock-=1; // baixar stock ao adicionar
   }
   c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*v.qty,0);
-  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
   document.getElementById('ec-ps').value='';
   document.getElementById('dd-ec-prod').style.display='none';
   renderConsultas();
@@ -1891,7 +1891,7 @@ function saveEditCons(id){
 
   // recalcular totais com os dados atualizados
   c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*v.qty,0);
-  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
 
   editingConsId=null; save(); withScroll(renderConsultas);
 }
@@ -2230,8 +2230,8 @@ function renderVendasPagina(){
   const wrap = document.getElementById('vendas-tabela'); if(!wrap) return;
   const defs=[
     {col:'data',fn:c=>c.data},{col:'cliente',fn:c=>cNome(c.clienteId)},
-    {col:'pvp',fn:c=>c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0)},
-    {col:'lucro',fn:c=>c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0)},
+    {col:'pvp',fn:c=>c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1),0)},
+    {col:'lucro',fn:c=>c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0)},
     {col:'produtos',fn:c=>c.vendas.length},
   ];
   const {col}=getSort('vendas');
@@ -2239,8 +2239,8 @@ function renderVendasPagina(){
   wrap.innerHTML=`<div style="overflow-x:auto"><table>
     <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Pendente</th><th>Estado</th><th></th></tr></thead>
     <tbody>${lista.length?lista.map(c=>{
-      const tp=c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0);
-      const tl=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+      const tp=c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1),0);
+      const tl=c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
       const nomes=c.vendas.map(v=>`${v.nome}${v.qty>1?' ×'+v.qty:''}`).join(', ');
       const pendente=c.valorPendente||0;
       const isEditingV = editingVendaId===c.id;
@@ -2266,7 +2266,7 @@ function renderVendasPagina(){
               <td><input type="number" id="ev-qty-${c.id}-${vi}" value="${v.qty||1}" min="1" style="width:60px;font-size:12px"/></td>
               <td><input type="number" id="ev-pvp-${c.id}-${vi}" value="${v.pvp.toFixed(2)}" step="0.01" min="0" style="width:80px;font-size:12px"/></td>
               <td><input type="number" id="ev-custo-${c.id}-${vi}" value="${v.custo.toFixed(2)}" step="0.01" min="0" style="width:80px;font-size:12px"/></td>
-              <td class="green" style="font-size:12px">${fmt(((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1))}</td>
+              <td class="green" style="font-size:12px">${fmt(((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1))}</td>
               <td><button class="btn dan sm" onclick="remVendaItem('${c.id}',${vi})">×</button></td>
             </tr>`).join('')}</tbody>
           </table></div>
@@ -2297,10 +2297,32 @@ function renderVendasPagina(){
         <td style="white-space:nowrap">
           <button class="btn sm" onclick="startEditVenda('${c.id}')" style="font-size:10px">✏ Editar</button>
         </td>
-      </tr>`;
+      </tr>
+      <tr id="vd-${c.id}" style="display:none;background:#fafaf7"><td colspan="9"></td></tr>`;
     }).join(''):'<tr><td colspan="9" style="text-align:center;padding:2rem;color:#999">Sem resultados</td></tr>'}
     </tbody>
   </table></div>`;
+  // preencher detalhes de produtos lazily
+  lista.forEach(c=>{
+    const elVD=document.getElementById('vd-'+c.id); if(!elVD) return;
+    const td=elVD.querySelector('td'); if(!td) return;
+    const tp2=c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1),0);
+    const tl2=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-(v.custo||0))*(v.qty||1),0);
+    const rows=c.vendas.map(v=>{
+      const prod=DB.produtos.find(p=>p.id===v.prodId);
+      const pvc=v.pvpCobrado||v.pvp;
+      return '<tr><td style="padding:5px 10px"><strong>'+v.nome+'</strong></td>'
+        +'<td style="font-family:monospace;font-size:10px;color:#8b6f4e">'+(prod?.cnp||v.cnp||'—')+'</td>'
+        +'<td>'+(v.qty||1)+'</td>'
+        +'<td>'+fmt(pvc)+((v.descCliente||0)>0?'<span style="color:#c05050;font-size:10px"> -'+v.descCliente+'%</span>':'')+'</td>'
+        +'<td>'+((v.descCliente||0)>0?'<span class="badge bg-a">-'+v.descCliente+'%</span>':'—')+'</td>'
+        +'<td><strong>'+fmt(pvc*(v.qty||1))+'</strong></td>'
+        +'<td class="green">'+fmt((pvc-(v.custo||0))*(v.qty||1))+'</td>'
+        +'<td>'+(v.consig?'<span class="badge bg-a">Sim</span>':'—')+'</td></tr>';
+    }).join('')+'<tr style="background:#f0f0ec;font-weight:600"><td colspan="5" style="padding:5px 10px;text-align:right;color:#888">Total:</td><td>'+fmt(tp2)+'</td><td class="green">'+fmt(tl2)+'</td><td></td></tr>';
+    td.setAttribute('colspan','9');
+    td.innerHTML='<div style="overflow-x:auto"><table style="width:100%;font-size:11px"><thead><tr style="background:#f0f0ec"><th style="padding:5px 10px">Produto</th><th>CNP</th><th>Qty</th><th>PVP cobrado</th><th>Desc. cli.</th><th>Total</th><th>Lucro</th><th>Consig.</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  });
 }
 
 function verRelatorioVendas(){
@@ -2320,8 +2342,8 @@ function verRelatorioVendas(){
       const key = v.prodId||v.nome;
       if(!porProd[key]) porProd[key]={ nome:v.nome, marca:v.marca||(DB.produtos.find(x=>x.id===v.prodId)?.marca)||'', qty:0, pvpTotal:0, lucro:0 };
       porProd[key].qty += v.qty||1;
-      porProd[key].pvpTotal += (v.pvpCobrado||v.pvp||0)*(v.qty||1);
-      porProd[key].lucro += ((v.pvpCobrado||v.pvp||0)-(v.custo||0))*(v.qty||1);
+      porProd[key].pvpTotal += (v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1);
+      porProd[key].lucro += ((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-(v.custo||0))*(v.qty||1);
     })
   );
   const linhas = Object.values(porProd).sort((a,b)=>b.qty-a.qty);
@@ -2403,9 +2425,9 @@ function exportarListagemVendas(){
         cnp:(DB.produtos.find(x=>x.id===v.prodId)?.cnp)||'',
         qty:v.qty||1,
         pvp:v.pvp||0,
-        pvpTotal:(v.pvpCobrado||v.pvp||0)*(v.qty||1),
+        pvpTotal:(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1),
         custo:v.custo||0,
-        lucro:((v.pvpCobrado||v.pvp||0)-(v.custo||0))*(v.qty||1),
+        lucro:((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-(v.custo||0))*(v.qty||1),
         estado:c.estado||'—'
       }))
   ).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
@@ -2481,8 +2503,8 @@ function addProdEV(cId, pid){
     });
     p.stock -= 1; // baixar stock
   }
-  c.totalProd = c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0);
-  c.lucroProd = c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  c.totalProd = c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1),0);
+  c.lucroProd = c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
   const inp = document.getElementById('ev-ps-'+cId);
   const dd  = document.getElementById('dd-ev-'+cId);
   if(inp) inp.value='';
@@ -2498,8 +2520,8 @@ function remVendaItem(cId, vi){
   const p=DB.produtos.find(x=>x.id===v.prodId);
   if(p) p.stock+=v.qty; // repor stock
   c.vendas.splice(vi,1);
-  c.totalProd=c.vendas.reduce((s,v)=>s+(v.pvpCobrado||v.pvp)*(v.qty||1),0);
-  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  c.totalProd=c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1),0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
   save(); renderVendasPagina();
 }
 function saveEditVenda(id){
@@ -2523,7 +2545,7 @@ function saveEditVenda(id){
     if(p && v.qty!==oldQty) p.stock+=oldQty-v.qty;
   });
   c.totalProd=c.vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
-  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
   editingVendaId=null; save(); renderVendasPagina();
 }
 function marcarVendaPaga(id){
@@ -2535,6 +2557,13 @@ function marcarVendaPaga(id){
   save(); renderVendasPagina();
 }
 
+function toggleVendaProds(cId, btn){
+  const row=document.getElementById('vd-'+cId);
+  if(!row) return;
+  const open=row.style.display==='none';
+  row.style.display=open?'table-row':'none';
+  btn.textContent=open?'📦 Fechar':'📦 Ver';
+}
 function toggleVendaDetalhe(cId, btn){
   const row = document.getElementById('vd-'+cId);
   if(!row) return;
@@ -2870,7 +2899,7 @@ function abrirHistoricoProd(prodId){
   const stockDif      = p.stock - stockCalculado;
   const totalGasto    = entradas.reduce((s,e)=>s+e.custo*e.qty,0);
   const totalRecebido = vendas.reduce((s,v)=>s+v.pvp*(v.qty||1),0);
-  const totalLucro    = vendas.reduce((s,v)=>s+((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1),0);
+  const totalLucro    = vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
 
   const custosUnicos = [...new Set(entradas.map(e=>e.custo))];
   const variacaoCusto = custosUnicos.length>1;
@@ -6202,7 +6231,7 @@ function exportarExcel(){
           Number(v.pvp.toFixed(2)),
           Number((v.pvp*(v.qty||1)).toFixed(2)),
           Number((v.custo*(v.qty||1)).toFixed(2)),
-          Number((((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1)).toFixed(2)),
+          Number((((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1)).toFixed(2)),
           v.descExtra||0,
           v.consig?'Sim':'Não'
         ]))
@@ -6303,7 +6332,7 @@ function exportarExcel(){
         return[c.data, cNome(c.clienteId), v.nome, v.qty||1,
           Number(v.pvp.toFixed(2)), Number((v.pvp*(v.qty||1)).toFixed(2)),
           Number(v.custo.toFixed(2)), Number((v.custo*(v.qty||1)).toFixed(2)),
-          Number((((v.pvpCobrado||v.pvp)-v.custo)*(v.qty||1)).toFixed(2)),
+          Number((((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1)).toFixed(2)),
           pagas.has(cid)?'Pago':'Por pagar'];
       })
     );
