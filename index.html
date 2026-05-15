@@ -247,34 +247,34 @@ tr:hover td{background:#fafaf7}
     </div>
   </div>
 </div>
-<div id="orcamento-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow-y:auto">
-  <div style="background:#fff;border-radius:12px;width:100%;max-width:460px;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.2);margin:auto;font-size:14px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-      <h3 style="margin:0;color:#7a4f28">📄 Gerar orçamento</h3>
-      <button onclick="document.getElementById('orcamento-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">×</button>
+<div id="orcamento-modal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:9999;overflow-y:auto">
+  <div style="background:#fff;border-radius:12px;width:calc(100% - 2rem);max-width:480px;margin:2rem auto;padding:0;box-shadow:0 8px 40px rgba(0,0,0,.3)">
+    <div style="padding:20px 24px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center">
+      <h3 style="margin:0;font-size:16px;color:#7a4f28">📄 Gerar orçamento</h3>
+      <button onclick="document.getElementById('orcamento-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1">×</button>
     </div>
-    <div style="margin-bottom:14px">
-      <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Incluir no orçamento:</label>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer">
-        <input type="checkbox" id="orc-produtos" checked> Lista de produtos (com PVP e desconto)
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer">
-        <input type="checkbox" id="orc-portes"> Portes de envio
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:13px;cursor:pointer">
-        <input type="checkbox" id="orc-consulta"> Valor da consulta
-      </label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
-        <input type="checkbox" id="orc-notas"> Notas da consulta
-      </label>
+    <div style="padding:20px 24px">
+      <p style="font-size:12px;font-weight:600;color:#555;margin-bottom:10px">Incluir no orçamento:</p>
+      <div style="background:#f8f8f5;border-radius:8px;padding:12px 16px;margin-bottom:16px">
+        <label style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px;cursor:pointer;border-bottom:1px solid #eee">
+          <input type="checkbox" id="orc-produtos" checked style="width:16px;height:16px"> Lista de produtos (com PVP e desconto)
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px;cursor:pointer;border-bottom:1px solid #eee">
+          <input type="checkbox" id="orc-portes" style="width:16px;height:16px"> Portes de envio
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px;cursor:pointer;border-bottom:1px solid #eee">
+          <input type="checkbox" id="orc-consulta" style="width:16px;height:16px"> Valor da consulta
+        </label>
+        <label style="display:flex;align-items:center;gap:10px;padding:6px 0;font-size:14px;cursor:pointer">
+          <input type="checkbox" id="orc-notas" style="width:16px;height:16px"> Notas da consulta
+        </label>
+      </div>
+      <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Nota de rodapé (opcional)</label>
+      <input id="orc-rodape" placeholder="ex: Válido 30 dias. IVA incluído." style="width:100%;font-size:13px;margin-bottom:0"/>
     </div>
-    <div style="margin-bottom:14px">
-      <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Nota de rodapé (opcional)</label>
-      <input id="orc-rodape" placeholder="ex: Válido 30 dias. IVA incluído." style="width:100%;font-size:12px"/>
-    </div>
-    <div style="display:flex;gap:8px;justify-content:flex-end">
+    <div style="padding:16px 24px;border-top:1px solid #eee;display:flex;gap:8px;justify-content:flex-end">
       <button class="btn" onclick="document.getElementById('orcamento-modal').style.display='none'">Cancelar</button>
-      <button class="btn pri" onclick="gerarOrcamento()" style="background:#7a4f28;color:#fff;border-color:#7a4f28">Gerar PDF</button>
+      <button class="btn pri" onclick="gerarOrcamento()" style="background:#7a4f28;color:#fff;border-color:#7a4f28;font-weight:600">Gerar PDF</button>
     </div>
   </div>
 </div>
@@ -1506,16 +1506,17 @@ function gerarOrcamento(){
       const total = pvc*(v.qty||1);
       totalProd += total;
       const temDesc = (v.descCliente||0)>0 && pvc < (v.pvp||0);
-      const pvpStr = temDesc
-        ? `<span style="text-decoration:line-through;color:#bbb;font-size:11px">${fmt2(v.pvp||0)}</span> <span style="color:#7a4f28;font-size:12px">-${v.descCliente}%</span>`
-        : '';
       prodRows += `<tr>
-        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;font-size:13px">
+        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;font-size:13px;width:55%">
           <div style="font-weight:500">${v.nome}${(v.qty||1)>1?` <span style="color:#888;font-size:11px">×${v.qty}</span>`:''}</div>
-          ${pvpStr?`<div style="margin-top:2px">${pvpStr}</div>`:''}
         </td>
-        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;text-align:right;font-size:13px;white-space:nowrap">${fmt2(pvc)}</td>
-        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;text-align:right;font-size:13px;font-weight:600;white-space:nowrap">${fmt2(total)}</td>
+        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;text-align:right;font-size:13px;white-space:nowrap;width:22%;vertical-align:top">
+          ${temDesc
+            ? `<div style="text-decoration:line-through;color:#bbb;font-size:11px">${fmt2(v.pvp||0)}</div><div style="color:#1a1a1a;font-weight:600">${fmt2(pvc)}</div><div style="color:#8b6f4e;font-size:10px">-${v.descCliente}%</div>`
+            : fmt2(pvc)
+          }
+        </td>
+        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;text-align:right;font-size:13px;font-weight:700;white-space:nowrap;width:23%;vertical-align:top">${fmt2(total)}</td>
       </tr>`;
     });
   }
@@ -1538,7 +1539,7 @@ function gerarOrcamento(){
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;padding:40px;max-width:600px;margin:0 auto}
 @media print{body{padding:20px}@page{margin:1.5cm}}
 .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;padding-bottom:24px;border-bottom:2px solid #f0ece8}
-.logo img{height:100px;max-width:220px;object-fit:contain}
+.logo img{height:130px;max-width:260px;object-fit:contain}
 .doc-info{text-align:right}
 .doc-info h1{font-size:22px;font-weight:300;color:#7a4f28;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
 .doc-info .data{font-size:12px;color:#888}
