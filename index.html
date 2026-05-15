@@ -1508,7 +1508,9 @@ function gerarOrcamento(){
           +(temDesc?'<br><span style="color:#8b6f4e;font-size:11px;font-style:italic">'+v.descCliente+'% desconto</span>':'')
         +'</td>'
         +'<td style="padding:12px 0;border-bottom:1px solid #ede8e3;text-align:right;white-space:nowrap;vertical-align:top;font-size:13px">'
-          +(temDesc?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span>':f2(pvc))
+          +(temDesc
+            ?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span><br><span style="font-size:11px;color:#888">'+f2(pvc)+'</span>'
+            :f2(pvc))
         +'</td>'
         +'<td style="padding:12px 0;border-bottom:1px solid #ede8e3;text-align:right;white-space:nowrap;vertical-align:top;font-size:13px;font-weight:600">'
           +f2(total)
