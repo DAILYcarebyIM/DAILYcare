@@ -247,8 +247,8 @@ tr:hover td{background:#fafaf7}
     </div>
   </div>
 </div>
-<div id="orcamento-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:12px;width:90%;max-width:400px;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+<div id="orcamento-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow-y:auto">
+  <div style="background:#fff;border-radius:12px;width:100%;max-width:460px;padding:24px;box-shadow:0 8px 40px rgba(0,0,0,.2);margin:auto;font-size:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
       <h3 style="margin:0;color:#7a4f28">📄 Gerar orçamento</h3>
       <button onclick="document.getElementById('orcamento-modal').style.display='none'" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">×</button>
@@ -925,10 +925,7 @@ function renderConsultaAtual(){
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
         <h2 style="margin:0">Consulta atual</h2>
-        <div style="display:flex;gap:6px">
-          <button class="btn sm" onclick="abrirModalOrcamento()" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600;font-size:11px">📄 Gerar orçamento</button>
-          <button id="btn-blur-lucro" class="btn sm" onclick="toggleLucroBlur()" title="Ocultar/mostrar valores de lucro" style="font-size:11px">🙈 Ocultar lucro</button>
-        </div>
+        <button id="btn-blur-lucro" class="btn sm" onclick="toggleLucroBlur()" title="Ocultar/mostrar valores de lucro" style="font-size:11px">🙈 Ocultar lucro</button>
       </div>
       <div class="row c2">
         <div><label>Cliente</label>
@@ -1004,7 +1001,10 @@ function renderConsultaAtual(){
       </div>
     </div>
     <div id="ca-alert" style="display:none"></div>
-    <button class="btn pri" onclick="gravarConsulta()" style="width:100%;padding:11px;font-size:14px;font-weight:600">Guardar consulta e atualizar stock</button>`;
+    <div style="display:flex;gap:8px;margin-top:0">
+      <button class="btn" onclick="abrirModalOrcamento()" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600;padding:11px 16px">📄 Orçamento</button>
+      <button class="btn pri" onclick="gravarConsulta()" style="flex:1;padding:11px;font-size:14px;font-weight:600">Guardar consulta e atualizar stock</button>
+    </div>`;
   cvs = [];
 }
 
@@ -1505,10 +1505,16 @@ function gerarOrcamento(){
       const pvc = calcPvpCobrado(v);
       const total = pvc*(v.qty||1);
       totalProd += total;
-      const descStr = (v.descCliente||0)>0 ? `<span style="color:#8b6f4e;font-size:11px"> (-${v.descCliente}%)</span>` : '';
+      const temDesc = (v.descCliente||0)>0 && pvc < (v.pvp||0);
+      const pvpStr = temDesc
+        ? `<span style="text-decoration:line-through;color:#bbb;font-size:11px">${fmt2(v.pvp||0)}</span> <span style="color:#7a4f28;font-size:12px">-${v.descCliente}%</span>`
+        : '';
       prodRows += `<tr>
-        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;font-size:13px">${v.nome}${(v.qty||1)>1?` <span style="color:#888">×${v.qty}</span>`:''}</td>
-        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;text-align:right;font-size:13px;white-space:nowrap">${fmt2(pvc)}${descStr}</td>
+        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;font-size:13px">
+          <div style="font-weight:500">${v.nome}${(v.qty||1)>1?` <span style="color:#888;font-size:11px">×${v.qty}</span>`:''}</div>
+          ${pvpStr?`<div style="margin-top:2px">${pvpStr}</div>`:''}
+        </td>
+        <td style="padding:10px 0;border-bottom:1px solid #f0ece8;text-align:right;font-size:13px;white-space:nowrap">${fmt2(pvc)}</td>
         <td style="padding:10px 0;border-bottom:1px solid #f0ece8;text-align:right;font-size:13px;font-weight:600;white-space:nowrap">${fmt2(total)}</td>
       </tr>`;
     });
@@ -1532,14 +1538,14 @@ function gerarOrcamento(){
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;color:#1a1a1a;background:#fff;padding:40px;max-width:600px;margin:0 auto}
 @media print{body{padding:20px}@page{margin:1.5cm}}
 .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:40px;padding-bottom:24px;border-bottom:2px solid #f0ece8}
-.logo img{height:60px}
+.logo img{height:100px;max-width:220px;object-fit:contain}
 .doc-info{text-align:right}
 .doc-info h1{font-size:22px;font-weight:300;color:#7a4f28;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px}
 .doc-info .data{font-size:12px;color:#888}
 .cliente-box{background:#fafaf7;border-radius:8px;padding:14px 18px;margin-bottom:32px}
 .cliente-box .label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#aaa;margin-bottom:4px}
 .cliente-box .nome{font-size:16px;font-weight:600;color:#1a1a1a}
-table{width:100%;border-collapse:collapse;margin-bottom:4px}
+table{width:100%;border-collapse:collapse;margin-bottom:4px}td,th{word-break:break-word}
 thead th{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#aaa;padding:0 0 10px;border-bottom:2px solid #7a4f28}
 thead th:last-child,thead th:nth-child(2){text-align:right}
 .total-row{border-top:2px solid #7a4f28;padding-top:12px;margin-top:12px}
@@ -1562,7 +1568,7 @@ thead th:last-child,thead th:nth-child(2){text-align:right}
 </div>
 ${inclProdutos&&prodRows?`
 <table>
-  <thead><tr><th style="text-align:left">Descrição</th><th>PVP unit.</th><th>Total</th></tr></thead>
+  <thead><tr><th style="text-align:left;width:55%">Descrição</th><th style="width:22%;text-align:right">PVP unit.</th><th style="width:23%;text-align:right">Total</th></tr></thead>
   <tbody>${prodRows}</tbody>
 </table>`:''}
 ${extrasRows?`<table><tbody>${extrasRows}</tbody></table>`:''}
