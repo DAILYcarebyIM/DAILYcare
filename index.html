@@ -1677,7 +1677,7 @@ function renderConsultasLista(){
             const mt =pvc>0?Math.round((pvc-ce)/pvc*100):0;
             return `<div class="vrow" style="align-items:flex-start;padding:8px 0;border-bottom:1px solid #f5f5f0" id="ecv-row-${i}">
               <div style="flex:1;min-width:0">
-                <div style="font-weight:600;margin-bottom:4px">${v.nome}${v.consig?' <span class="badge bg-a" style="font-size:9px">consig.</span>':''}</div>
+                <div style="font-weight:600;margin-bottom:2px">${v.nome}${v.consig?' <span class="badge bg-a" style="font-size:9px">consig.</span>':''}</div><div style="font-size:10px;font-family:monospace;color:#8b6f4e;margin-bottom:3px">${v.cnp||DB.produtos.find(p=>p.id===v.prodId)?.cnp||''}</div>
                 <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
                   <div style="display:flex;flex-direction:column;gap:1px"><span style="font-size:10px;color:#888">PVP</span>
                     <input id="ecv-pvp-${i}" type="number" value="${v.pvp.toFixed(2)}" step="0.01" style="width:72px;font-size:12px"
@@ -1733,7 +1733,7 @@ function renderConsultasLista(){
             <span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado}</span>
             ${c.faturado?'<span class="badge bg-b">Faturado</span>':'<span class="badge bg-gray">Não faturado</span>'}
           </div>
-          <div style="color:#999;font-size:11px">${c.data}</div>
+          <div style="color:#999;font-size:11px">${c.data}${c.hora?` <span style="color:#8b6f4e">${c.hora}</span>`:''}</div>
         </div>
         <div class="row c3" style="margin-bottom:0">
           <div>
@@ -2011,6 +2011,12 @@ function renderVRTabela(){
             <span style="font-size:10px;color:#888">A pagar farm.</span>
             <span style="font-size:12px;font-weight:600;color:#a83232" id="vri-custo-${v.prodId}">${fmt(ce)}</span>
           </div>` : `
+          <div style="display:flex;flex-direction:column;gap:2px">
+            <span style="font-size:10px;color:#888">Desc. cliente %</span>
+            <input id="vri-dcli-${v.prodId}" type="number" value="${v.descCliente||0}" min="0" max="100" step="0.5"
+              oninput="syncVR();atualizarTotaisVR()"
+              style="width:75px;padding:4px 6px;font-size:12px;border:1px solid #d4a0a0;border-radius:6px;background:#fff8f8"/>
+          </div>
           <div style="display:flex;flex-direction:column;gap:2px;background:#f0fff0;border-radius:6px;padding:4px 8px;border:1px solid #c3e6cb">
             <span style="font-size:10px;color:#888">Custo efectivo</span>
             <span style="font-size:12px;font-weight:600;color:#1a6b1a" id="vri-custo-${v.prodId}">${fmt(ce)}</span>
@@ -2253,7 +2259,7 @@ function renderVendasPagina(){
           <div style="overflow-x:auto"><table style="margin-bottom:8px">
             <thead><tr style="background:#f0f0ec"><th>Produto</th><th style="width:65px">Qty</th><th style="width:85px">PVP (€)</th><th style="width:85px">Custo (€)</th><th style="width:75px">Desc. forn %</th><th style="width:75px">Desc. cli %</th><th>Lucro</th><th style="width:30px"></th></tr></thead>
             <tbody id="ev-produtos-${c.id}">${c.vendas.map((v,vi)=>`<tr>
-              <td><strong>${v.nome}</strong>${v.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':''}</td>
+              <td><strong>${v.nome}</strong>${v.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':''}<br><span style="font-size:10px;font-family:monospace;color:#8b6f4e">${v.cnp||DB.produtos.find(p=>p.id===v.prodId)?.cnp||''}</span></td>
               <td><input type="number" id="ev-qty-${c.id}-${vi}" value="${v.qty||1}" min="1" style="width:58px;font-size:12px"/></td>
               <td><input type="number" id="ev-pvp-${c.id}-${vi}" value="${v.pvp.toFixed(2)}" step="0.01" min="0" style="width:78px;font-size:12px"/></td>
               <td><input type="number" id="ev-custo-${c.id}-${vi}" value="${v.custo.toFixed(2)}" step="0.01" min="0" style="width:78px;font-size:12px"/></td>
@@ -4199,7 +4205,8 @@ function renderCedencias(){
   if(!DB.cedencias) DB.cedencias=[];
   const lista = [...DB.cedencias].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
   // total recebido = valorRecebido já inclui qty (é o total da cedência, não unit.)
-  const tRecebido = lista.reduce((s,c)=>s+(c.valorRecebido||0),0);
+  const tRecebido = lista.filter(c=>c.estadoPag==='Pago').reduce((s,c)=>s+(c.valorRecebido||0),0)+lista.filter(c=>c.estadoPag==='Parcial').reduce((s,c)=>s+(c.valorRecebidoPago||0),0);
+  const tPendente  = lista.filter(c=>c.estadoPag!=='Pago').reduce((s,c)=>s+Math.max(0,(c.valorRecebido||0)-(c.valorRecebidoPago||0)),0);
   const tQty      = lista.reduce((s,c)=>s+(c.qty||1),0);
 
   const rowHtml = c => {
@@ -4234,7 +4241,8 @@ function renderCedencias(){
     <div class="metrics" style="margin-bottom:1rem">
       <div class="met"><div class="lb">Total cedências</div><div class="vl">${lista.length}</div></div>
       <div class="met"><div class="lb">Unidades cedidas</div><div class="vl">${tQty}</div></div>
-      <div class="met"><div class="lb">Montante recebido</div><div class="vl green">${fmt(tRecebido)}</div></div>
+      <div class="met"><div class="lb">Recebido</div><div class="vl green">${fmt(tRecebido)}</div></div>
+      <div class="met"><div class="lb">Pendente</div><div class="vl" style="color:${tPendente>0?'#856404':'#888'}">${fmt(tPendente)}</div></div>
     </div>
 
     <div id="add-ced-f" style="display:none" class="card">
@@ -4308,6 +4316,11 @@ function renderCedCards(lista){
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:10px">'
         +'<div><div style="font-weight:700;font-size:14px">'+g.dest+'</div>'
           +'<div style="font-size:11px;color:#888">'+g.data+(g.motivo?' · '+g.motivo:'')+'</div></div>'
+        +(g.items[0]?.estadoPag==='Pago'
+          ?'<div style="font-size:12px;margin-bottom:6px"><span style="background:#f0fff4;border:1px solid #c3e6cb;color:#1a6b1a;padding:3px 10px;border-radius:20px;font-weight:600">✓ Pago</span> <span style="font-size:11px;color:#888">'+(g.items[0]?.metodoPagamento==='Dinheiro'?'💵':'💳')+(g.items[0]?.metodoPagamento||'MBWay')+'</span></div>'
+          :g.items[0]?.estadoPag==='Parcial'
+          ?'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap"><span style="background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:3px 10px;border-radius:20px;font-weight:600">⌛ Parcial: '+fmt(g.items.reduce((s,c)=>s+(c.valorRecebidoPago||0),0))+'</span><button class="btn suc sm" data-ids="'+encodeURIComponent(JSON.stringify(ids))+'" onclick="marcarCedPaga(JSON.parse(decodeURIComponent(this.dataset.ids)))">✓ Registar pagamento</button></div>'
+          :'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span style="background:#fff3cd;border:1px solid #ffc107;color:#856404;padding:3px 10px;border-radius:20px;font-weight:600">⏳ Por pagar</span><button class="btn suc sm" data-ids="'+encodeURIComponent(JSON.stringify(ids))+'" onclick="marcarCedPaga(JSON.parse(decodeURIComponent(this.dataset.ids)))">✓ Registar pagamento</button></div>')
         +'<div style="display:flex;gap:6px">'+editBtn+delBtn+'</div></div>'
       +'<div style="overflow-x:auto"><table>'
         +'<thead><tr style="background:#fafaf7"><th>Produto</th><th>Qty</th><th>PVP</th><th>Desc.</th><th>Unit. cobrado</th><th>Total recebido</th><th>Lucro linha</th></tr></thead>'
@@ -4522,6 +4535,26 @@ function saveEditCed(id){
   editingCedId=null; save(); withScroll(renderCedencias);
 }
 
+function marcarCedPaga(ids){
+  const items=ids.map(id=>DB.cedencias.find(x=>x.id===id)).filter(Boolean);
+  const total=items.reduce((s,c)=>s+(c.valorRecebido||0),0);
+  const jaRec=items.reduce((s,c)=>s+(c.valorRecebidoPago||0),0);
+  const emDivida=Math.max(0,+(total-jaRec).toFixed(2));
+  const valorStr=window.prompt('Valor recebido agora (€):\nTotal em dívida: '+emDivida.toFixed(2)+'€',emDivida.toFixed(2));
+  if(valorStr===null) return;
+  const valor=parseFloat(valorStr);
+  if(isNaN(valor)||valor<=0){alert('Valor inválido.');return;}
+  const metodo=prompt('Método:\n1 - MBWay\n2 - Dinheiro\n3 - Outro','1');
+  if(metodo===null) return;
+  const m=metodo==='2'?'Dinheiro':metodo==='3'?'Outro':'MBWay';
+  items.forEach(c=>{
+    const prop=total>0?(c.valorRecebido||0)/total:1/items.length;
+    c.valorRecebidoPago=+((c.valorRecebidoPago||0)+valor*prop).toFixed(2);
+    c.metodoPagamento=m;
+    c.estadoPag=c.valorRecebidoPago>=(c.valorRecebido||0)-0.01?'Pago':'Parcial';
+  });
+  save(); renderCedencias();
+}
 function delCedGrupo(ids){
   confirmDel('Apagar esta cedência?', ()=>{
     ids.forEach(id=>{
