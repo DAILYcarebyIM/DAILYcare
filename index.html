@@ -1822,9 +1822,16 @@ function syncECV(){
     if(!isNaN(forn)) v.descForn=Math.max(0,Math.min(100,forn));
     if(!isNaN(cli))  v.descCliente=Math.max(0,Math.min(100,cli));
     v.custo = calcCustoFarm(v);
+    v.pvpCobrado = calcPvpCobrado(v); // recalcular pvpCobrado com novo desconto
+    // actualizar display de lucro por linha
+    const pvc=v.pvpCobrado; const ce=v.custo; const qty2=v.qty||1;
+    const lu=(pvc-ce)*qty2; const mt=pvc>0?Math.round((pvc-ce)/pvc*100):0;
+    const elL=document.getElementById('ecv-lucro-'+i);
+    if(elL){ elL.textContent=fmt(lu); const lbl=elL.previousElementSibling; if(lbl) lbl.textContent='Lucro ('+mt+'%)'; }
   });
   // actualizar total em tempo real
   const total = c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1),0);
+  const lucro = c.vendas.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*(v.qty||1),0);
   const elTotal = document.getElementById('ec-total-val-'+editingConsId);
   const elBox   = document.getElementById('ec-total-'+editingConsId);
   if(elTotal) elTotal.textContent = fmt(total);
@@ -2286,9 +2293,9 @@ function renderVendasPagina(){
               <td><input type="number" id="ev-qty-${c.id}-${vi}" value="${v.qty||1}" min="1" style="width:58px;font-size:12px"/></td>
               <td><input type="number" id="ev-pvp-${c.id}-${vi}" value="${v.pvp.toFixed(2)}" step="0.01" min="0" style="width:78px;font-size:12px"/></td>
               <td><input type="number" id="ev-custo-${c.id}-${vi}" value="${v.custo.toFixed(2)}" step="0.01" min="0" style="width:78px;font-size:12px"/></td>
-              <td><input type="number" id="ev-dforn-${c.id}-${vi}" value="${v.descForn||0}" step="0.5" min="0" max="100" style="width:68px;font-size:12px;border-color:#a8d5a8;background:#f6fff6" title="Desconto fornecedor (reduz custo)"/></td>
-              <td><input type="number" id="ev-dcli-${c.id}-${vi}" value="${v.descCliente||0}" step="0.5" min="0" max="100" style="width:68px;font-size:12px;border-color:#d4a0a0;background:#fff8f8" title="Desconto cliente (reduz PVP cobrado)"/></td>
-              <td class="green" style="font-size:12px">${fmt(((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1))}</td>
+              <td><input type="number" id="ev-dforn-${c.id}-${vi}" value="${v.descForn||0}" step="0.5" min="0" max="100" style="width:68px;font-size:12px;border-color:#a8d5a8;background:#f6fff6" title="Desconto fornecedor (reduz custo)" oninput="recalcLucroEV('${c.id}',${vi})"/></td>
+              <td><input type="number" id="ev-dcli-${c.id}-${vi}" value="${v.descCliente||0}" step="0.5" min="0" max="100" style="width:68px;font-size:12px;border-color:#d4a0a0;background:#fff8f8" title="Desconto cliente (reduz PVP cobrado)" oninput="recalcLucroEV('${c.id}',${vi})"/></td>
+              <td class="green" style="font-size:12px" id="ev-lucro-${c.id}-${vi}">${fmt(((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1))}</td>
               <td><button class="btn dan sm" onclick="remVendaItem('${c.id}',${vi})">×</button></td>
             </tr>`).join('')}</tbody>
           </table></div>
@@ -2545,6 +2552,22 @@ function remVendaItem(cId, vi){
   c.totalProd=c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp)*(v.qty||1),0);
   c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
   save(); renderVendasPagina();
+}
+function recalcLucroEV(cId, vi){
+  const c=DB.consultas.find(x=>x.id===cId); if(!c) return;
+  const v=c.vendas[vi]; if(!v) return;
+  const pvp=parseFloat(document.getElementById('ev-pvp-'+cId+'-'+vi)?.value)||v.pvp;
+  const qty=parseInt(document.getElementById('ev-qty-'+cId+'-'+vi)?.value)||v.qty;
+  const dforn=parseFloat(document.getElementById('ev-dforn-'+cId+'-'+vi)?.value)||0;
+  const dcli=parseFloat(document.getElementById('ev-dcli-'+cId+'-'+vi)?.value)||0;
+  // temporário para calcular
+  const vTemp={...v,pvp,pvpBase:pvp,qty,descForn:dforn,descCliente:dcli};
+  const pvc=calcPvpCobrado(vTemp);
+  const ce=calcCustoFarm(vTemp);
+  const lu=(pvc-ce)*qty;
+  const mt=pvc>0?Math.round((pvc-ce)/pvc*100):0;
+  const elL=document.getElementById('ev-lucro-'+cId+'-'+vi);
+  if(elL){ elL.textContent=fmt(lu); const lbl=elL.previousElementSibling; if(lbl) lbl.textContent='Lucro ('+mt+'%)'; }
 }
 function saveEditVenda(id){
   const c=DB.consultas.find(x=>x.id===id); if(!c) return;
