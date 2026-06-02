@@ -550,7 +550,7 @@ function migrarCampos(){
   // recalcular totalProd e lucroProd — usar pvpCobrado se definido (mesmo que 0)
   (DB.consultas||[]).forEach(c=>{
     c.totalProd = (c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1),0);
-    c.lucroProd = (c.vendas||[]).reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-(v.custo||0))*(v.qty||1),0);
+    c.lucroProd = (c.vendas||[]).reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-(v.custo||0))*(v.qty||1),0)-(c.descFinal||0);
   });
 
   // migrar produtos que têm fornecedor no campo marca — só se ainda não tiver fornecedor definido
@@ -1293,7 +1293,8 @@ function calcTotais(){
   const tl  = cvs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty, 0);
   const sv  = parseFloat(document.getElementById('cc-val')?.value)||0;
   const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
-  return {tp, tDesc, tl, sv, portes, total: tp+sv, totalComPortes: tp+sv+portes};
+  const descFinal2=parseFloat(document.getElementById('cc-desc-final')?.value)||0;
+  return {tp, tDesc, tl:tl-descFinal2, sv, portes, descFinal:descFinal2, total:tp+sv, totalComPortes:Math.max(0,tp+sv+portes-descFinal2)};
 }
 
 function renderVendasTabela(){
@@ -1433,13 +1434,14 @@ function gravarConsulta(){
   const faturado = document.getElementById('cc-fat').value==='true';
   const notas = document.getElementById('cc-notas').value;
   const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
+  const descFinal = parseFloat(document.getElementById('cc-desc-final')?.value)||0;
   // garantir que descCliente e pvpCobrado estão actualizados antes de gravar
   syncInputs();
   const vendasComFat = cvs.map(v=>({...v, faturado, descForn:v.descForn||0, descCliente:v.descCliente||0, pvpCobrado:calcPvpCobrado(v)}));
   const tp = cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
   const tl = cvs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
   const id = 'c'+DB.ids.c++;
-  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,estado,metodoPagamento:document.getElementById('cc-metodo')?.value||'MBWay',notas,portes,vendas:vendasComFat,totalProd:tp,lucroProd:tl});
+  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,estado,metodoPagamento:document.getElementById('cc-metodo')?.value||'MBWay',notas,portes,descFinal,vendas:vendasComFat,totalProd:tp,lucroProd:tl-(descFinal||0)});
   cvs.forEach(v=>{const p=DB.produtos.find(x=>x.id===v.prodId);if(p)p.stock-=v.qty;});
   if(tipo==='Pack'){
     const pk = DB.packs.find(p=>p.clienteId===cId&&p.estado==='Ativo');
@@ -1477,6 +1479,7 @@ function gravarConsulta(){
   document.getElementById('cc-cli').value='';document.getElementById('cc-cli-id').value='';
   document.getElementById('cc-val').value='';document.getElementById('cc-notas').value='';
   const portesEl=document.getElementById('cc-portes'); if(portesEl) portesEl.value='0';
+  const dfEl=document.getElementById('cc-desc-final'); if(dfEl) dfEl.value='0';
   const ncEl=document.getElementById('cc-notas-cli'); if(ncEl) ncEl.value='';
   cvs=[];renderVendasTabela();
   setTimeout(()=>{al.style.display='none'},5000);
@@ -1660,6 +1663,7 @@ function renderConsultasLista(){
           </select></div>
           <div><label>Faturado?</label><select id="ec-fat"><option value="false" ${!c.faturado?'selected':''}>Não faturado</option><option value="true" ${c.faturado?'selected':''}>Faturado</option></select></div>
           <div><label>Notas</label><input id="ec-notas" value="${c.notas||''}"/></div>
+          <div><label style="color:#c05050">Desc. final (€)</label><input id="ec-desc-final" type="number" value="${(c.descFinal||0).toFixed(2)}" step="0.01" min="0" style="max-width:120px;border-color:#d4a0a0;background:#fff8f8"/></div>
           <div><label>Valor pendente (€)</label><input id="ec-pendente" type="number" step="0.01" min="0" value="${(c.valorPendente||0).toFixed(2)}"/></div>
         </div>
 
@@ -1691,12 +1695,12 @@ function renderConsultasLista(){
                     <input id="ecv-dforn-${i}" type="number" value="${v.descForn||0}" step="0.5" min="0" max="100" style="width:66px;font-size:12px;border:1px solid #a8d5a8;background:#f6fff6"
                       onblur="syncECV()" onkeydown="if(event.key==='Enter')this.blur()"/>
                     <span style="font-size:9px;color:#6b8e6b">farm. total: 10%+${v.descForn||0}%=${10+(v.descForn||0)}%</span>
-                  </div>
+                  </div>` : ''}
                   <div style="display:flex;flex-direction:column;gap:1px">
                     <span style="font-size:10px;color:#888">▼ Desc. cliente %</span>
                     <input id="ecv-dcli-${i}" type="number" value="${v.descCliente||0}" step="0.5" min="0" max="100" style="width:66px;font-size:12px;border:1px solid #d4a0a0;background:#fff8f8"
                       onblur="syncECV()" onkeydown="if(event.key==='Enter')this.blur()"/>
-                  </div>` : ''}
+                  </div>
                   <div style="background:#f0fff0;border-radius:4px;padding:3px 7px;border:1px solid #c3e6cb">
                     <span style="font-size:10px;color:#888">Lucro (${mt}%)</span><br>
                     <span style="font-size:12px;font-weight:600;color:#1a6b1a">${fmt(lu)}</span>
@@ -1877,6 +1881,8 @@ function saveEditCons(id){
   c.metodoPagamento=document.getElementById('ec-metodo')?.value||c.metodoPagamento||'MBWay';
   c.faturado=document.getElementById('ec-fat').value==='true';
   c.notas=document.getElementById('ec-notas').value;
+  c.descFinal=parseFloat(document.getElementById('ec-desc-final')?.value)||0;
+  c.lucroProd=(c.vendas||[]).reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-(v.custo||0))*(v.qty||1),0)-(c.descFinal||0);
   c.valorPendente=parseFloat(document.getElementById('ec-pendente')?.value)||0;
   c.valorPendente=parseFloat(document.getElementById('ec-pendente')?.value)||0;
 
@@ -2070,8 +2076,9 @@ function guardarVendaRapida(){
   const estado   = document.getElementById('vr-estado').value;
   const metodoPagamento = document.getElementById('vr-metodo')?.value||'MBWay';
   const portesVR = parseFloat(document.getElementById('vr-portes')?.value)||0;
+  const vrDescFinalVal = parseFloat(document.getElementById('vr-desc-final')?.value)||0;
   const tp = vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
-  const tl = vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
+  const tl = vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0)-(vrDescFinalVal||0);
   const vendas = vrs.map(v=>({
     prodId:v.prodId, nome:v.nome, pvp:v.pvp, pvpBase:v.pvpBase||v.pvp,
     custoOriginal:v.custoOriginal, custo:v.custo,
@@ -2092,6 +2099,7 @@ function guardarVendaRapida(){
     metodoPagamento,
     notas:'',
     portes:portesVR,
+    descFinal:vrDescFinalVal,
     vendas,
     totalProd:tp,
     lucroProd:tl
@@ -2155,10 +2163,17 @@ function renderVendas(){
         </div>
       </div>
       <div id="vr-items" style="margin-bottom:8px"></div>
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <label style="font-size:12px;color:#888;white-space:nowrap">Portes de envio (€):</label>
-        <input id="vr-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-          oninput="atualizarTotaisVR()" style="width:90px;font-size:13px"/>
+            <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
+          <input id="vr-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
+            oninput="atualizarTotaisVR()" style="width:80px;font-size:13px"/>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <label style="font-size:12px;color:#c05050;white-space:nowrap">Desc. final (€):</label>
+          <input id="vr-desc-final" type="number" placeholder="0.00" step="0.01" min="0" value="0"
+            oninput="atualizarTotaisVR()" style="width:80px;font-size:13px;border-color:#d4a0a0;background:#fff8f8"/>
+        </div>
       </div>
       <div id="vr-total-line" style="font-size:13px;font-weight:600;color:#8b6f4e;margin-bottom:10px;padding:8px;background:#f8f8f5;border-radius:6px"></div>
       <div style="display:flex;gap:8px">
