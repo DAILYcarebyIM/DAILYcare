@@ -1001,13 +1001,18 @@ function renderConsultaAtual(){
           <div><div class="lb">Lucro líquido produtos</div><div style="font-weight:600;color:#1a6b1a" class="lucro-val" id="vt-l">0€</div></div>
           <div><div class="lb">Total a pagar (cliente)</div><div style="font-weight:600;font-size:15px" id="vt-t">0€</div></div>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;border-top:1px solid #f0e8d0;padding-top:8px">
-          <label style="font-size:12px;color:#888;white-space:nowrap">Portes de envio (€):</label>
-          <input id="cc-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-            oninput="atualizarTotais()"
-            style="width:90px;font-size:13px"/>
-          <div style="font-size:11px;color:#888">— adicionado ao total a pagar pelo cliente</div>
-          <div style="margin-left:auto;font-size:13px;font-weight:600;color:#8b6f4e">Total c/ portes: <span id="vt-portes">0€</span></div>
+        <div style="display:flex;align-items:center;gap:12px;border-top:1px solid #f0e8d0;padding-top:8px;flex-wrap:wrap">
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
+            <input id="cc-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
+              oninput="atualizarTotais()" style="width:80px;font-size:13px"/>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <label style="font-size:12px;color:#c05050;white-space:nowrap">Desc. final (€):</label>
+            <input id="cc-desc-final" type="number" placeholder="0.00" step="0.01" min="0" value="0"
+              oninput="atualizarTotais()" style="width:80px;font-size:13px;border-color:#d4a0a0;background:#fff8f8"/>
+          </div>
+          <div style="margin-left:auto;font-size:13px;font-weight:600;color:#8b6f4e">Total a pagar: <span id="vt-portes">0€</span></div>
         </div>
       </div>
     </div>
@@ -1404,7 +1409,7 @@ function atualizarTotais(){
   if(vtd) vtd.textContent=tDesc>0?'-'+fmt(tDesc):fmt(0);
   if(vtl) vtl.textContent=fmt(tl);
   if(vtt) vtt.textContent=fmt(total);
-  if(vtp2) vtp2.textContent=portes>0?fmt(totalComPortes):fmt(total);
+  if(vtp2) vtp2.textContent=fmt(totalComPortes); // sempre mostra total com portes e desc. final
   // reaplicar blur se activo (os textContent repõem mas não afectam o style)
   if(lucroBlur) aplicarBlurLucro();
 }
@@ -1964,10 +1969,13 @@ function atualizarTotaisVR(){
     if(et) et.textContent=fmt(pvc*v.qty);
   });
   const tp=vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
-  const tl=vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
+  const tlBruto=vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
   const tot=document.getElementById('vr-total-line');
   const portes=parseFloat(document.getElementById('vr-portes')?.value)||0;
-  if(tot) tot.innerHTML=vrs.length?`Total produtos: <strong>${fmt(tp)}</strong> &nbsp;·&nbsp; Lucro: <strong class="green">${fmt(tl)}</strong>${portes>0?` &nbsp;·&nbsp; Portes: <strong>${fmt(portes)}</strong> &nbsp;·&nbsp; <strong style="color:#8b6f4e">Total c/ portes: ${fmt(tp+portes)}</strong>`:''}`:'';
+  const dfVR=parseFloat(document.getElementById('vr-desc-final')?.value)||0;
+  const tl=tlBruto-dfVR;
+  const totalFinal=Math.max(0,tp+portes-dfVR);
+  if(tot) tot.innerHTML=vrs.length?`Total produtos: <strong>${fmt(tp)}</strong> &nbsp;·&nbsp; Lucro: <strong class="green">${fmt(tl)}</strong>${(portes>0||dfVR>0)?` &nbsp;·&nbsp; <strong style="color:#8b6f4e">Total final: ${fmt(totalFinal)}</strong>`:''}`:'';
 }
 
 function renderVRTabela(){
