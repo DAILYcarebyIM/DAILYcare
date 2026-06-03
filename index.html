@@ -735,8 +735,11 @@ function sortArr(arr, tbl, defs){
   if(!def) return arr;
   return [...arr].sort((a,b)=>{
     const va=def.fn(a), vb=def.fn(b);
-    if(va===vb) return 0;
-    return (va<vb ? -1 : 1) * dir;
+    if(va!==vb) return (va<vb ? -1 : 1) * dir;
+    // desempate: hora descendente, depois id descendente (mais recente primeiro)
+    const ha=a.hora||'', hb=b.hora||'';
+    if(ha!==hb) return hb.localeCompare(ha)*dir;
+    return (parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')))*dir;
   });
 }
 function thSort(tbl, col, label){
