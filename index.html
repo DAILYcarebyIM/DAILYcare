@@ -772,168 +772,119 @@ function nav(page, btn){
 let dashMes = ''; // '' = todos os meses
 
 function renderDash(){
-  // obter todos os meses disponíveis
-  const todosMeses = [...new Set([
-    ...DB.consultas.map(c=>c.data.substring(0,7)),
-    ...DB.packs.map(p=>p.data?.substring(0,7)).filter(Boolean),
-    ...DB.workshops.map(w=>w.data?.substring(0,7)).filter(Boolean),
-    ...(DB.formacoes||[]).map(f=>f.data?.substring(0,7)).filter(Boolean)
-  ])].sort().reverse();
+  const mes = new Date().toISOString().substring(0,7);
+  const mesLabel = new Date(mes+'-01').toLocaleDateString('pt-PT',{month:'long',year:'numeric'});
 
-  // filtrar por mês selecionado
-  const cs   = dashMes ? DB.consultas.filter(c=>c.data.startsWith(dashMes)) : DB.consultas;
-  const packs= dashMes ? DB.packs.filter(p=>p.data?.startsWith(dashMes))    : DB.packs;
-  const works= dashMes ? DB.workshops.filter(w=>w.data?.startsWith(dashMes)): DB.workshops;
-  const fos  = dashMes ? (DB.formacoes||[]).filter(f=>f.data?.startsWith(dashMes)) : (DB.formacoes||[]);
-  const gastos= dashMes ? DB.gastos.filter(g=>g.data?.startsWith(dashMes))  : DB.gastos;
-
-  const tServ  = cs.reduce((s,c)=>s+c.valor,0);
-  const tProd  = cs.reduce((s,c)=>s+c.totalProd,0);
+  // ── dados do mês actual ───────────────────────────────────────────────────
+  const cs      = DB.consultas.filter(c=>c.data?.startsWith(mes));
+  const csReais = cs.filter(c=>c.tipo!=='Venda direta');
   const calcLucroC=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0);
-  const tLucro = cs.reduce((s,c)=>s+calcLucroC(c),0);
-  const tPacks = packs.reduce((s,p)=>s+p.valor,0);
-  const tWork  = works.reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
-  const tFo    = fos.reduce((s,f)=>s+calcFoTotal(f),0);
-  const tGasto = gastos.reduce((s,g)=>s+g.valor,0);
-  const tFatServ  = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
-  const tFatPacks = packs.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
-  const tFatWork  = works.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
-  const tFatFo    = fos.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
-  const totalFaturado = tFatServ+tFatPacks+tFatWork+tFatFo;
-  const totalNaoFat   = (tServ+tPacks+tWork+tFo)-totalFaturado;
-  const ticket  = cs.length ? (tServ+tProd)/cs.length : 0;
-  const stockB  = DB.produtos.filter(p=>p.ativo!==false && (p.stockMin??0)>0 && p.stock<(p.stockMin??0));
-  // SS ENI — só sobre receitas FATURADAS
-  // serviços faturados → 70%; produtos faturados → 20%; taxa 25,2%
-  const tFatProd   = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.totalProd,0);
-  const rendRelvServ = (tFatServ+tFatPacks+tFatWork+tFatFo)*0.70;
-  const rendRelvProd = tFatProd*0.20;
-  const rendRelevante = rendRelvServ+rendRelvProd;
-  const ss            = rendRelevante*0.252;
+  const tServ   = csReais.reduce((s,c)=>s+c.valor,0);
+  const tProd   = cs.reduce((s,c)=>s+c.totalProd,0);
+  const tLucro  = cs.reduce((s,c)=>s+calcLucroC(c),0);
+  const tGasto  = DB.gastos.filter(g=>g.data?.startsWith(mes)).reduce((s,g)=>s+g.valor,0);
+  const liquido = tServ+tLucro-tGasto;
+  const packs   = DB.packs.filter(p=>p.data?.startsWith(mes));
+  const tPacks  = packs.reduce((s,p)=>s+p.valor,0);
 
-  // stock imobilizado — só produtos próprios (não consignação)
-  const prodProprios = DB.produtos.filter(p=>p.ativo!==false && !p.consig && (p.stock||0)>0);
-  const stockCusto   = prodProprios.reduce((s,p)=>s+p.custo*(p.stock||0), 0);
-  const stockPVP     = prodProprios.reduce((s,p)=>s+p.pvp*(p.stock||0), 0);
-  const stockLucroP  = stockPVP - stockCusto;
-  const nProdStock   = prodProprios.length;
-  // consignação: lucro mínimo potencial (vender ao PVP com 10% fixo)
-  const prodConsig   = DB.produtos.filter(p=>p.ativo!==false && p.consig && (p.stock||0)>0);
-  const consigLucroMin = prodConsig.reduce((s,p)=>s+(p.pvp*0.9 - p.pvp*(1-0.10))*(p.stock||0), 0);
-  // simplificando: lucro = PVP - custo_farm = PVP - PVP*90% ... não
-  // custo farm = PVP * (1 - 10%) = PVP * 90% → lucro mín = PVP - PVP*90% = PVP*10%
-  const consigLucroMinReal = prodConsig.reduce((s,p)=>s+(p.pvp - p.custo)*(p.stock||0), 0);
-  const consigPVP  = prodConsig.reduce((s,p)=>s+p.pvp*(p.stock||0), 0);
-  const nConsig    = prodConsig.length;
+  // ── alertas stock ─────────────────────────────────────────────────────────
+  const ativos  = DB.produtos.filter(p=>p.ativo!==false);
+  const stockBaixo = ativos.filter(p=>(p.stockMin??0)>0 && p.stock<=(p.stockMin??0));
 
-  // gráfico — sempre todos os meses
-  const meses = {}; DB.consultas.forEach(c=>{const m=c.data.substring(0,7);if(!meses[m])meses[m]=0;meses[m]+=c.valor+c.totalProd;});
-  const mk = Object.keys(meses).sort(); const maxM = Math.max(...Object.values(meses),1);
+  // ── cedências por pagar ───────────────────────────────────────────────────
+  const cedPendentes = (DB.cedencias||[]).filter(c=>c.estadoPag!=='Pago');
+  const grupos={};
+  cedPendentes.forEach(c=>{
+    const gid=c.grupoId||c.id;
+    if(!grupos[gid]) grupos[gid]={dest:c.destinatario||'—',data:c.data,val:0};
+    grupos[gid].val+=Math.max(0,(c.valorRecebido||0)-(c.valorRecebidoPago||0));
+  });
+  const cedGrupos=Object.values(grupos).sort((a,b)=>b.data.localeCompare(a.data));
 
-  const vendas = cs.flatMap(c=>c.vendas);
-  const pp = {}; vendas.forEach(v=>{if(!pp[v.nome])pp[v.nome]={nome:v.nome,qty:0,lucro:0};pp[v.nome].qty+=v.qty||1;pp[v.nome].lucro+=((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1);});
-  const topV = Object.values(pp).sort((a,b)=>b.qty-a.qty)[0];
-  const topL = Object.values(pp).sort((a,b)=>b.lucro-a.lucro)[0];
-  const packsAtivos = DB.packs.filter(p=>p.estado==='Ativo').length;
-
-  const mesLabel = dashMes ? new Date(dashMes+'-01').toLocaleDateString('pt-PT',{month:'long',year:'numeric'}) : 'Todos os períodos';
+  // ── consultas com pagamento pendente ─────────────────────────────────────
+  const consPendentes = DB.consultas.filter(c=>(c.valorPendente||0)>0 && c.estado!=='Pago')
+    .sort((a,b)=>b.data.localeCompare(a.data)).slice(0,5);
 
   document.getElementById('pg-dashboard').innerHTML=`
-    <!-- filtro de mês -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:8px">
       <h2 style="margin:0">Dashboard</h2>
-      <select onchange="dashMes=this.value;renderDash()" style="font-weight:600;color:#8b6f4e;border-color:#d4a97a;background:#fffbf5">
-        <option value="">Todos os períodos</option>
-        ${todosMeses.map(m=>`<option value="${m}" ${dashMes===m?'selected':''}>${new Date(m+'-01').toLocaleDateString('pt-PT',{month:'long',year:'numeric'})}</option>`).join('')}
-      </select>
-      ${dashMes?`<span style="font-size:12px;color:#8b6f4e;font-weight:600">A mostrar: ${mesLabel}</span><button class="btn sm" onclick="dashMes='';renderDash()">× Limpar filtro</button>`:''}
+      <div style="font-size:13px;color:#8b6f4e;font-weight:600">${mesLabel}</div>
     </div>
 
-    <div class="metrics">
+    <!-- métricas do mês -->
+    <div class="metrics" style="margin-bottom:1.2rem">
+      <div class="met"><div class="lb">Consultas</div><div class="vl">${csReais.length}</div></div>
       <div class="met"><div class="lb">Receita serviços</div><div class="vl">${fmt(tServ)}</div></div>
       <div class="met"><div class="lb">Receita produtos</div><div class="vl">${fmt(tProd)}</div></div>
-      <div class="met"><div class="lb">Lucro produtos</div><div class="vl green">${fmt(tLucro)}</div></div>
       <div class="met"><div class="lb">Packs</div><div class="vl">${fmt(tPacks)}</div></div>
-      <div class="met"><div class="lb">Workshops</div><div class="vl">${fmt(tWork)}</div></div>
-      <div class="met"><div class="lb">Formação</div><div class="vl blue">${fmt(tFo)}</div></div>
-      <div class="met"><div class="lb">Gastos</div><div class="vl red">${fmt(tGasto)}</div></div>
-      <div class="met"><div class="lb">Ticket médio</div><div class="vl">${fmt(ticket)}</div></div>
+      <div class="met"><div class="lb">Lucro produtos</div><div class="vl lucro-val green">${fmt(tLucro)}</div></div>
+      <div class="met"><div class="lb">Gastos</div><div class="vl red">${tGasto>0?'− '+fmt(tGasto):'0€'}</div></div>
+      <div class="met" style="background:#f0fff4;border:1px solid #c3e6cb"><div class="lb">💶 Líquido estimado</div><div class="vl lucro-val" style="color:#1a6b1a">${fmt(liquido)}</div></div>
     </div>
 
-
-    <div class="card" style="margin-bottom:1rem;border-color:#d4a97a;background:#fffbf5">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
-        <div>
-          <h3 style="margin:0;color:#7a4f28">📦 Stock imobilizado</h3>
-          <div style="font-size:11px;color:#888;margin-top:2px">Produtos próprios comprados e ainda não vendidos · Consignação não conta (dinheiro da farmácia)</div>
+    <div class="row c2" style="align-items:flex-start">
+      <!-- alertas stock -->
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between">
+          <h3 style="margin:0;font-size:13px">⚠️ Stock baixo</h3>
+          <span style="font-size:11px;color:#888">${stockBaixo.length} produto${stockBaixo.length!==1?'s':''}</span>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:11px;color:#888">Custo total em stock</div>
-          <div style="font-size:22px;font-weight:700;color:#7a4f28">${fmt(stockCusto)}</div>
+        ${stockBaixo.length
+          ?`<div style="overflow-x:auto"><table>
+            <thead><tr style="background:#fff8f8"><th>Produto</th><th>Marca</th><th>Stock</th><th>Mín.</th><th>Em falta</th></tr></thead>
+            <tbody>${stockBaixo.map(p=>`<tr>
+              <td><strong>${p.nome}</strong>${p.cnp?`<div style="font-size:10px;font-family:monospace;color:#8b6f4e">${p.cnp}</div>`:''}</td>
+              <td><span class="tag">${p.marca||'—'}</span></td>
+              <td><span class="badge bg-${p.stock<=0?'r':'a'}">${p.stock}</span></td>
+              <td>${p.stockMin}</td>
+              <td><strong class="red">${Math.max(0,(p.stockMin??0)-p.stock)}</strong></td>
+            </tr>`).join('')}
+            </tbody></table></div>`
+          :`<div style="padding:1rem;text-align:center;color:#888;font-size:12px">✓ Todos os produtos com stock suficiente</div>`
+        }
+      </div>
+
+      <!-- pendentes -->
+      <div style="display:flex;flex-direction:column;gap:1rem">
+        <!-- cedências por pagar -->
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between">
+            <h3 style="margin:0;font-size:13px">⏳ Cedências por pagar</h3>
+            <span style="font-size:11px;color:#888">${cedGrupos.length} pendente${cedGrupos.length!==1?'s':''}</span>
+          </div>
+          ${cedGrupos.length
+            ?`<table><thead><tr style="background:#fffbf5"><th>Destinatário</th><th>Data</th><th>Em dívida</th></tr></thead>
+              <tbody>${cedGrupos.map(g=>`<tr>
+                <td><strong>${g.dest}</strong></td>
+                <td style="font-size:11px;color:#888">${g.data}</td>
+                <td><span style="font-weight:600;color:#856404">${fmt(g.val)}</span></td>
+              </tr>`).join('')}</tbody></table>`
+            :`<div style="padding:1rem;text-align:center;color:#888;font-size:12px">✓ Sem cedências por cobrar</div>`
+          }
+        </div>
+
+        <!-- consultas pendentes -->
+        <div class="card" style="padding:0;overflow:hidden">
+          <div style="padding:12px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between">
+            <h3 style="margin:0;font-size:13px">💳 Consultas por pagar</h3>
+            <span style="font-size:11px;color:#888">${consPendentes.length} pendente${consPendentes.length!==1?'s':''}</span>
+          </div>
+          ${consPendentes.length
+            ?`<table><thead><tr style="background:#fffbf5"><th>Cliente</th><th>Data</th><th>Pendente</th></tr></thead>
+              <tbody>${consPendentes.map(c=>`<tr>
+                <td><strong>${cNome(c.clienteId)}</strong></td>
+                <td style="font-size:11px;color:#888">${c.data}</td>
+                <td><span style="font-weight:600;color:#856404">${fmt(c.valorPendente)}</span></td>
+              </tr>`).join('')}</tbody></table>`
+            :`<div style="padding:1rem;text-align:center;color:#888;font-size:12px">✓ Sem consultas por cobrar</div>`
+          }
         </div>
       </div>
-      <div class="metrics" style="margin-bottom:0">
-        <div class="met" style="border-color:#d4a97a"><div class="lb">💰 Dinheiro parado (custo)</div><div class="vl" style="color:#7a4f28">${fmt(stockCusto)}</div><div style="font-size:10px;color:#aaa;margin-top:2px">produtos próprios em stock</div></div>
-        <div class="met"><div class="lb">PVP potencial (próprios)</div><div class="vl">${fmt(stockPVP)}</div></div>
-        <div class="met"><div class="lb">Lucro potencial (próprios)</div><div class="vl green">${fmt(stockLucroP)}</div></div>
-        <div class="met"><div class="lb">Referências em stock</div><div class="vl">${nProdStock}</div></div>
-        ${nConsig>0?`
-        <div class="met" style="border-color:#c3e6cb"><div class="lb">Lucro mín. consignação</div><div class="vl green">${fmt(consigLucroMinReal)}</div><div style="font-size:10px;color:#aaa;margin-top:2px">${nConsig} ref. · PVP ${fmt(consigPVP)}</div></div>`:''}
-      </div>
-    </div>
+    </div>`;
 
-    <div class="ss-box" style="margin-bottom:1rem">
-      <h3 style="margin-bottom:10px">Segurança Social — estimativa ENI ${dashMes?'('+mesLabel+')':''}</h3>
-      <div class="metrics" style="margin-bottom:10px">
-        <div class="met"><div class="lb">Serviços fat. (70%)</div><div class="vl">${fmt(rendRelvServ)}</div></div>
-        <div class="met"><div class="lb">Produtos fat. (20%)</div><div class="vl">${fmt(rendRelvProd)}</div></div>
-        <div class="met"><div class="lb">Rendimento relevante</div><div class="vl blue">${fmt(rendRelevante)}</div></div>
-        <div class="met"><div class="lb">SS a reservar (25,2%)</div><div class="vl amber">${fmt(ss)}</div></div>
-      </div>
-      <table>
-        <tr><td style="color:#888">Serviços faturados (consultas+packs+workshops+formação)</td><td style="text-align:right">${fmt(tFatServ+tFatPacks+tFatWork+tFatFo)}</td></tr>
-        <tr><td style="color:#888">Base serviços (70%)</td><td style="text-align:right">${fmt(rendRelvServ)}</td></tr>
-        <tr><td style="color:#888">Produtos faturados (PVP)</td><td style="text-align:right">${fmt(tFatProd)}</td></tr>
-        <tr><td style="color:#888">Base produtos (20%)</td><td style="text-align:right">${fmt(rendRelvProd)}</td></tr>
-        <tr><td style="color:#888">Rendimento relevante total</td><td style="text-align:right">${fmt(rendRelevante)}</td></tr>
-        <tr style="border-top:1px solid #f0e8d0"><td><strong>Contribuição SS (25,2%)</strong></td><td style="text-align:right;font-weight:600" class="amber">${fmt(ss)}</td></tr>
-      </table>
-      <div style="font-size:11px;color:#999;margin-top:6px">Só receitas <strong>faturadas</strong> entram no cálculo · Serviços→70% · Produtos→20% · Taxa 25,2% · Declaração trimestral · Pagamento até dia 20</div>
-    </div>
-
-    ${!dashMes?`<div class="card">
-      <h3>Receita por mês (consultas + produtos)</h3>
-      <div class="bar-chart">
-        ${mk.length ? mk.map(m=>`<div class="bar-col" onclick="dashMes='${m}';renderDash()" style="cursor:pointer">
-          <div class="bar-val">${fmt(meses[m])}</div>
-          <div class="bar-fill" style="height:${Math.round((meses[m]/maxM)*52+8)}px;background:${dashMes===m?'#8b6f4e':'#d4a97a'}"></div>
-          <div class="bar-lbl">${m.substring(5)}/${m.substring(2,4)}</div>
-        </div>`).join('') : '<div style="color:#999;font-size:12px;align-self:center">Sem dados</div>'}
-      </div>
-      <div style="font-size:11px;color:#999;margin-top:4px">Clica numa barra para filtrar por esse mês</div>
-    </div>`:''}
-
-    <div class="row c2">
-      <div class="card"><h3>Produto mais vendido ${dashMes?'('+mesLabel+')':''}</h3>${topV?`<div style="font-weight:600;margin-bottom:4px">${topV.nome}</div><span class="tag">${topV.qty} unidades</span>`:'<span style="color:#999">Sem dados</span>'}</div>
-      <div class="card"><h3>Produto mais lucrativo ${dashMes?'('+mesLabel+')':''}</h3>${topL?`<div style="font-weight:600;margin-bottom:4px">${topL.nome}</div><span class="tag">${fmt(topL.lucro)} margem total</span>`:'<span style="color:#999">Sem dados</span>'}</div>
-    </div>
-    ${dashMes?`<div class="card" style="margin-bottom:1rem">
-        <h3>Consultas em ${mesLabel} <span style="font-size:12px;font-weight:400;color:#888">(${cs.filter(c=>c.tipo!=='Venda direta').length})</span></h3>
-        ${cs.filter(c=>c.tipo!=='Venda direta').length
-          ?`<div style="overflow-x:auto"><table><thead><tr><th>Data</th><th>Cliente</th><th>Tipo</th><th>Serviço</th><th>Produtos</th><th>Estado</th></tr></thead><tbody>
-            ${cs.filter(c=>c.tipo!=='Venda direta').map(c=>`<tr><td>${c.data}</td><td>${cNome(c.clienteId)}</td><td>${c.tipo}</td><td>${fmt(c.valor)}</td><td>${fmt(c.totalProd)}</td><td><span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado}</span></td></tr>`).join('')}
-          </tbody></table></div>`
-          :'<div style="color:#999;text-align:center;padding:1rem">Sem consultas neste mês</div>'}
-      </div>
-      ${cs.filter(c=>c.tipo==='Venda direta').length?`
-      <div class="card">
-        <h3>Vendas directas em ${mesLabel} <span style="font-size:12px;font-weight:400;color:#888">(${cs.filter(c=>c.tipo==='Venda direta').length})</span></h3>
-        <div style="overflow-x:auto"><table><thead><tr><th>Data</th><th>Cliente</th><th>Produtos</th><th>Estado</th></tr></thead><tbody>
-          ${cs.filter(c=>c.tipo==='Venda direta').map(c=>`<tr><td>${c.data}</td><td>${cNome(c.clienteId)}</td><td>${fmt(c.totalProd)}</td><td><span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado}</span></td></tr>`).join('')}
-        </tbody></table></div>
-      </div>`:''}
-    </div>`:''}`;
+  if(lucroBlur) aplicarBlurLucro();
 }
+
 // ─── CONSULTA ATUAL ──────────────────────────────────────────────────────────
 function renderConsultaAtual(){
   document.getElementById('pg-consulta_atual').innerHTML=`
@@ -3147,7 +3098,7 @@ function abrirCorrecaoStock(pid){
   document.getElementById('stock-modal-prod').textContent = p.nome + (p.cnp?' — CNP: '+p.cnp:'');
   document.getElementById('stock-modal-atual').textContent = p.stock;
   const inp = document.getElementById('stock-modal-novo');
-  inp.value = p.stock;
+  inp.value = ''; // campo vazio — utilizador insere o valor da contagem física
   document.getElementById('stock-modal-motivo').value = '';
   document.getElementById('stock-modal-diff').style.display='none';
   const modal = document.getElementById('stock-modal');
@@ -5624,7 +5575,7 @@ let encFiltroMarca='', encFiltroForn='', encOrdem='nome', encGraficoId=null;
 function renderEncomendas(){
   if(!DB.encomendados) DB.encomendados=[];
   const ativos = DB.produtos.filter(p=>p.ativo!==false);
-  const baixo  = ativos.filter(p=>(p.stockMin??0)>0 && p.stock<(p.stockMin??0));
+  const baixo  = ativos.filter(p=>(p.stockMin??0)>0 && p.stock<=(p.stockMin??0));
   DB.encomendados = DB.encomendados.filter(id=>baixo.find(p=>p.id===id));
 
   // média mensal desde que o produto entrou em stock (primeira entrada)
