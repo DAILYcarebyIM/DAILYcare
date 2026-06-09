@@ -278,6 +278,32 @@ tr:hover td{background:#fafaf7}
     </div>
   </div>
 </div>
+<div id="venda-pag-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;width:90%;max-width:380px;padding:20px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="margin:0;color:#1a6b1a">✓ Registar pagamento</h3>
+      <button onclick="fecharVendaPagModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:#888">×</button>
+    </div>
+    <div style="background:#f0fff4;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#1a6b1a" id="venda-pag-info"></div>
+    <div style="margin-bottom:12px">
+      <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Valor pago agora (€)</label>
+      <input id="venda-pag-valor" type="number" step="0.01" min="0.01" style="width:100%;font-size:16px;font-weight:600;border:2px solid #c3e6cb;border-radius:8px;padding:8px 10px"/>
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px">Método de pagamento</label>
+      <select id="venda-pag-metodo" style="width:100%;font-size:14px;padding:8px 10px;border-radius:8px;border:1px solid #ddd">
+        <option value="MBWay">💳 MBWay</option>
+        <option value="Dinheiro">💵 Dinheiro</option>
+        <option value="Transferência">🏦 Transferência</option>
+        <option value="Outro">Outro</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="fecharVendaPagModal()">Cancelar</button>
+      <button class="btn pri" onclick="confirmarVendaPag()" style="background:#1a6b1a;border-color:#1a6b1a;color:#fff">Confirmar</button>
+    </div>
+  </div>
+</div>
 <div id="ced-pag-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:center;justify-content:center">
   <div style="background:#fff;border-radius:12px;width:90%;max-width:380px;padding:20px;box-shadow:0 8px 40px rgba(0,0,0,.2)">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
@@ -2322,7 +2348,7 @@ function renderVendasPagina(){
         <td>${pendente>0?`<span class="badge bg-a">${fmt(pendente)}</span>`:'<span style="color:#bbb;font-size:11px">—</span>'}</td>
         <td>
           <span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado||'—'}</span>
-          ${c.estado!=='Pago'?`<button class="btn suc sm" onclick="marcarVendaPaga('${c.id}')" style="font-size:10px;margin-top:3px;display:block">✓ Pago</button>`:''}
+          ${c.estado!=='Pago'?`<div style="margin-top:3px"><button class="btn suc sm" onclick="marcarVendaPaga('${c.id}')" style="font-size:10px;display:block;width:100%">✓ Registar pagamento</button>${(c.valorPendente||0)>0?`<div style="font-size:10px;color:#856404;margin-top:2px">Em dívida: ${fmt(c.valorPendente)}</div>`:''}</div>`:''}
         </td>
         <td style="white-space:nowrap">
           <button class="btn sm" onclick="startEditVenda('${c.id}')" style="font-size:10px">✏ Editar</button>
@@ -2600,12 +2626,40 @@ function saveEditVenda(id){
   c.lucroProd=c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp)-v.custo)*(v.qty||1),0);
   editingVendaId=null; save(); renderVendasPagina();
 }
+let _vendaPagId=null;
 function marcarVendaPaga(id){
   const c=DB.consultas.find(x=>x.id===id); if(!c) return;
-  const metodo = prompt('Método de pagamento:\n1 - MBWay\n2 - Dinheiro\n3 - Outro\n\nEscreve 1, 2 ou 3:','1');
-  if(metodo===null) return;
-  c.metodoPagamento = metodo==='2'?'Dinheiro':metodo==='3'?'Outro':'MBWay';
-  c.estado='Pago'; c.valorPendente=0;
+  _vendaPagId=id;
+  const total=c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0);
+  const pago=c.valorRecebido||0;
+  const emDivida=Math.max(0,+(total-pago).toFixed(2));
+  const cli=cNome(c.clienteId);
+  document.getElementById('venda-pag-info').textContent='Cliente: '+cli+' · Em dívida: '+fmt(emDivida);
+  const inp=document.getElementById('venda-pag-valor');
+  inp.value=emDivida.toFixed(2);
+  if(c.metodoPagamento){
+    const sel=document.getElementById('venda-pag-metodo');
+    if(sel) sel.value=c.metodoPagamento;
+  }
+  document.getElementById('venda-pag-modal').style.display='flex';
+  setTimeout(()=>inp.select(),80);
+}
+function fecharVendaPagModal(){
+  document.getElementById('venda-pag-modal').style.display='none';
+  _vendaPagId=null;
+}
+function confirmarVendaPag(){
+  const c=DB.consultas.find(x=>x.id===_vendaPagId); if(!c) return;
+  const valor=parseFloat(document.getElementById('venda-pag-valor').value);
+  if(isNaN(valor)||valor<=0){alert('Valor inválido.');return;}
+  const m=document.getElementById('venda-pag-metodo').value;
+  c.metodoPagamento=m;
+  c.valorRecebido=(c.valorRecebido||0)+valor;
+  const total=c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0);
+  const divida=Math.max(0,total-c.valorRecebido);
+  c.valorPendente=+divida.toFixed(2);
+  c.estado=divida<=0.01?'Pago':'Pendente';
+  fecharVendaPagModal();
   save(); renderVendasPagina();
 }
 
@@ -5855,6 +5909,9 @@ function renderRelatorio(){
   const tProd  = rCs.reduce((s,c)=>s+c.totalProd,0);
   const calcLucroCRel=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0);
   const tLucro = rCs.reduce((s,c)=>s+calcLucroCRel(c),0);
+  // receitas por método de pagamento
+  const recDinheiro = rCs.filter(c=>c.metodoPagamento==='Dinheiro').reduce((s,c)=>s+c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0),0);
+  const recMBWay    = rCs.filter(c=>c.metodoPagamento!=='Dinheiro').reduce((s,c)=>s+c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0),0);
   const tPacks = rPacks.reduce((s,p)=>s+p.valor,0);
   const tWork  = rWorks.reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
   const tFo    = rFos.reduce((s,f)=>s+calcFoTotal(f),0);
@@ -5919,7 +5976,8 @@ function renderRelatorio(){
     const fatWk  = ws.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
     const fatFo  = fs.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
     const ssM = ((fatServ+fatPk+fatWk+fatFo)*0.70 + fatProd*0.20)*0.252;
-    return {m, serv, prod, lucP, pk, wk, fo, gasto, total, fat, custos, ssM, nCons:csReais.length};
+    const nVendas=cs.filter(c=>c.tipo==='Venda direta').length;
+    return {m, serv, prod, lucP, pk, wk, fo, gasto, total, fat, custos, ssM, nCons:csReais.length, nVendas};
   });
 
   document.getElementById('pg-relatorio').innerHTML=`
@@ -5965,6 +6023,8 @@ function renderRelatorio(){
           <tr><td>Lucro produtos vendidos</td><td style="text-align:right" class="green">+ ${fmt(lucProdRel)}</td></tr>
           <tr><td>Outros gastos</td><td style="text-align:right" class="red">− ${fmt(tGasto)}</td></tr>
           <tr style="border-top:1px solid #eee"><td><strong>Lucro real estimado</strong></td><td style="text-align:right;font-weight:700;font-size:15px" class="green">${fmt(lucroReal)}</td></tr>
+          <tr><td style="color:#888;font-size:11px">↳ Recebido em dinheiro</td><td style="text-align:right;font-size:11px">💵 ${fmt(recDinheiro)}</td></tr>
+          <tr><td style="color:#888;font-size:11px">↳ Recebido em MBWay/outro</td><td style="text-align:right;font-size:11px">💳 ${fmt(recMBWay)}</td></tr>
         </table>
       </div>
       <div class="card">
@@ -5982,13 +6042,14 @@ function renderRelatorio(){
       <table>
         <thead>
           <tr>
-            <th>Mês</th><th>Consultas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th style="background:#f0fff4;color:#155724">💶 Líquido</th><th>SS est.</th>
+            <th>Mês</th><th>Consultas</th><th>Vendas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th style="background:#f0fff4;color:#155724">💶 Líquido</th><th>SS est.</th>
           </tr>
         </thead>
         <tbody>
           ${porMes.map(r=>`<tr>
             <td style="white-space:nowrap;font-weight:600">${new Date(r.m+'-01').toLocaleDateString('pt-PT',{month:'short',year:'2-digit'})}</td>
             <td style="text-align:center">${r.nCons}</td>
+            <td style="text-align:center">${r.nVendas>0?r.nVendas:'—'}</td>
             <td>${fmt(r.serv)}</td>
             <td>${fmt(r.prod)}</td>
             <td>${r.pk>0?fmt(r.pk):'—'}</td>
@@ -6003,6 +6064,7 @@ function renderRelatorio(){
           </tr>`).join('')}
           <tr style="border-top:2px solid #eee;font-weight:600;background:#fafaf7">
             <td>TOTAL</td><td style="text-align:center">${DB.consultas.filter(c=>c.tipo!=='Venda direta').length}</td>
+            <td style="text-align:center">${DB.consultas.filter(c=>c.tipo==='Venda direta').length||'—'}</td>
             <td>${fmt(tServ)}</td><td>${fmt(tProd)}</td><td>${fmt(tPacks)}</td><td>${fmt(tWork)}</td><td>${fmt(tFo)}</td>
             <td><strong>${fmt(receitaTotal)}</strong></td><td class="blue">${fmt(tFat)}</td>
             <td class="red">${fmt(tGasto)}</td><td class="green">${fmt(tLucro)}</td>
