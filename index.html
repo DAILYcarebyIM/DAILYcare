@@ -391,6 +391,15 @@ tr:hover td{background:#fafaf7}
   <div id="pg-clientes" class="pg"></div>
   <div id="pg-packs" class="pg"></div>
   <div id="pg-produtos" class="pg"></div>
+  <div id="enc-ver-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow-y:auto">
+    <div style="background:#fff;border-radius:12px;width:100%;max-width:680px;padding:0;box-shadow:0 8px 40px rgba(0,0,0,.2);margin:auto">
+      <div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0" id="enc-ver-titulo">Encomenda</h3>
+        <button onclick="document.getElementById('enc-ver-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888">×</button>
+      </div>
+      <div id="enc-ver-body" style="padding:20px"></div>
+    </div>
+  </div>
   <div id="pg-entradas" class="pg"></div>
   <div id="pg-consumo" class="pg"></div>
   <div id="pg-cedencias" class="pg"></div>
@@ -2682,6 +2691,7 @@ function toggleVendaDetalhe(cId, btn){
 let editingCliId = null;
 
 let cliSearch='';
+function renderClientesTabela(){ renderClientes(); }
 function renderClientes(){
   const defs=[
     {col:'nome',      fn:cl=>cl.nome},
@@ -2754,9 +2764,8 @@ function renderClientes(){
     </tr>`;
   };
 
-  document.getElementById('pg-clientes').innerHTML=`
-    <div class="flex-b"><h2 style="margin:0">Clientes</h2>
-      <input placeholder="Pesquisar cliente..." value="${cliSearch}" oninput="cliSearch=this.value;renderClientes()" style="max-width:220px;font-size:13px" autofocus/><button class="btn" onclick="showAddCli()">+ Novo cliente</button></div>
+  // input fixo no HTML — só actualizar a tabela
+  document.getElementById('cli-tabela').innerHTML=`
     <div id="add-cli-f" style="display:none" class="card">
       <h3>Novo cliente</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px">
@@ -3237,6 +3246,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(m) m.addEventListener('click',e=>{ if(e.target===m) fecharCorrecaoStock(); });
   const m2=document.getElementById('ced-pag-modal');
   if(m2) m2.addEventListener('click',e=>{ if(e.target===m2) fecharCedPagModal(); });
+  const m3=document.getElementById('enc-ver-modal');
+  if(m3) m3.addEventListener('click',e=>{ if(e.target===m3) m3.style.display='none'; });
 });
 
 let editingProdId = null;
@@ -3553,6 +3564,59 @@ function calcProdFromMargPct(pfx){
 }
 
 // ─── ENTRADAS STOCK ──────────────────────────────────────────────────────────
+function verEncomenda(encomendaId){
+  const linhas=DB.entradas.filter(e=>e.encomendaId===encomendaId);
+  if(!linhas.length){ alert('Encomenda não encontrada.'); return; }
+  const l0=linhas[0];
+  const totalCusto=linhas.reduce((s,e)=>s+e.custo*e.qty,0);
+  const portes=linhas.reduce((s,e)=>s+(e.portes||0),0);
+  document.getElementById('enc-ver-titulo').textContent='Encomenda — '+l0.data+' · '+(l0.fornecedor||'—')+(l0.fatura?' · '+l0.fatura:'');
+  document.getElementById('enc-ver-body').innerHTML=
+    '<table style="width:100%;font-size:13px"><thead><tr style="background:#fafaf7">'
+    +'<th style="padding:8px">Produto</th><th>CNP</th><th>Qty</th><th>Custo unit.</th><th>PVP</th><th>Total linha</th></tr></thead><tbody>'
+    +linhas.map(e=>{
+      const prod=DB.produtos.find(x=>x.id===e.prodId);
+      return '<tr><td style="padding:8px"><strong>'+e.prodNome+'</strong></td>'
+        +'<td style="font-family:monospace;font-size:11px;color:#8b6f4e">'+(prod?.cnp||e.cnp||'—')+'</td>'
+        +'<td>'+e.qty+(e.qtyBonus>0?' <span style="color:#1a6b1a;font-size:10px">+'+e.qtyBonus+'B</span>':'')+'</td>'
+        +'<td>'+fmt(e.custo)+'</td>'
+        +'<td>'+(e.pvp?fmt(e.pvp):'—')+'</td>'
+        +'<td><strong>'+fmt(e.custo*e.qty)+'</strong></td></tr>';
+    }).join('')
+    +'</tbody></table>'
+    +'<div style="border-top:2px solid #eee;padding:12px 8px;display:flex;gap:20px;flex-wrap:wrap">'
+    +(portes>0?'<div><div style="font-size:10px;color:#888">Portes</div><div style="font-weight:600">'+fmt(portes)+'</div></div>':'')
+    +'<div><div style="font-size:10px;color:#888">Total encomenda</div><div style="font-size:18px;font-weight:700">'+fmt(totalCusto+portes)+'</div></div>'
+    +'<div><div style="font-size:10px;color:#888">Produtos</div><div style="font-weight:600">'+linhas.length+'</div></div>'
+    +'</div>';
+  document.getElementById('enc-ver-modal').style.display='flex';
+}
+
+function pesquisarProdEncomendas(texto){
+  const dd=document.getElementById('fe-prod-results');
+  if(!texto||texto.length<2){dd.style.display='none';return;}
+  const t=normalizar(texto);
+  // encontrar entradas que correspondem
+  const entradasMatch=DB.entradas.filter(e=>normalizar(e.prodNome||'').includes(t));
+  // agrupar por encomendaId (ou id se sem encomenda)
+  const grupos={};
+  entradasMatch.forEach(e=>{
+    const gid=e.encomendaId||e.id;
+    if(!grupos[gid]) grupos[gid]={gid,data:e.data,forn:e.fornecedor||'—',fatura:e.fatura||'',prods:[],comEncomenda:!!e.encomendaId};
+    grupos[gid].prods.push(e.prodNome);
+  });
+  const lista=Object.values(grupos).sort((a,b)=>b.data.localeCompare(a.data)).slice(0,15);
+  if(!lista.length){dd.innerHTML='<div style="padding:12px;color:#999;font-size:12px">Sem resultados</div>';dd.style.display='block';return;}
+  dd.innerHTML=lista.map(g=>{
+    const onclick=g.comEncomenda?'verEncomenda('+JSON.stringify(g.gid)+')'  :'startEditE('+JSON.stringify(g.gid)+')';
+    return '<div style="padding:10px 14px;border-bottom:1px solid #f5f5f0;cursor:pointer" onmousedown="'+onclick+';document.getElementById(\"fe-prod-results\").style.display=\"none\"">'
+      +'<div style="font-size:12px;font-weight:600">'+g.data+' · '+g.forn+(g.fatura?' · '+g.fatura:'')+'</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:2px">'+[...new Set(g.prods)].join(' · ')+'</div>'
+      +'</div>';
+  }).join('');
+  dd.style.display='block';
+}
+
 function renderEntradas(){
   document.getElementById('pg-entradas').innerHTML=`
     <div class="flex-b">
@@ -3598,6 +3662,14 @@ function renderEntradas(){
     <div class="card" style="padding:0;overflow:hidden">
       <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap">
         <input id="fe-texto" placeholder="Filtrar por produto, fornecedor ou fatura..." value="${fEntradasTexto}" oninput="fEntradasTexto=this.value;dRenderEntradas()" style="max-width:280px"/>
+        <div style="height:1px;width:100%;background:#eee;margin:4px 0"></div>
+        <div style="display:flex;align-items:center;gap:6px;width:100%">
+          <span style="font-size:11px;color:#888;white-space:nowrap">🔍 Produto:</span>
+          <div class="dd-wrap" style="flex:1;max-width:320px">
+            <input id="fe-prod-search" placeholder="Pesquisar produto em encomendas..." oninput="pesquisarProdEncomendas(this.value)" autocomplete="off" style="font-size:12px"/>
+            <div id="fe-prod-results" style="display:none;position:absolute;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.1);z-index:100;max-height:320px;overflow-y:auto;min-width:400px;top:100%;left:0"></div>
+          </div>
+        </div>
         <input type="date" value="${fEntradasData}" onchange="fEntradasData=this.value;renderEntradasTabela()" title="Filtrar por data" style="width:140px"/>
         <button class="btn sm" onclick="fEntradasTexto='';fEntradasData='';if(document.getElementById('fe-texto'))document.getElementById('fe-texto').value='';renderEntradasTabela()">× Limpar</button>
       </div>
@@ -3677,6 +3749,7 @@ function renderEntradasTabela(){
         <td style="font-size:11px;color:#8b6f4e;font-family:monospace">${e.fatura||'—'}</td>
         <td>${e.consig?'<span class="badge bg-a">Sim</span>':'<span class="badge bg-gray">Não</span>'}</td>
         <td style="white-space:nowrap">
+          ${e.encomendaId?`<button class="btn sm" onclick="verEncomenda('${e.encomendaId}')" style="margin-bottom:2px">👁 Ver encomenda</button><br>`:''}
           <button class="btn sm" onclick="startEditE('${e.id}')">Editar linha</button>
           ${e.encomendaId?`<button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28;margin-top:2px" onclick="abrirEditEncomenda('${e.encomendaId}')">Editar encomenda</button>`:''}
           <button class="btn sm" style="background:#f3e8da;border-color:#d4a97a;color:#7a4f28;margin-top:2px" onclick="abrirHistoricoProd('${e.prodId}')">Histórico</button>
