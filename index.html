@@ -410,6 +410,7 @@ tr:hover td{background:#fafaf7}
   <div id="pg-encomendas" class="pg"></div>
   <div id="pg-relatorio" class="pg"></div>
   <div id="pg-fornecedores" class="pg"></div>
+  <div id="pg-fiscal" class="pg"></div>
   <div id="pg-vouchers" class="pg"></div>
 </div>
 
@@ -3617,6 +3618,164 @@ function pesquisarProdEncomendas(texto){
   dd.style.display='block';
 }
 
+// ─── CONTROLO FISCAL ────────────────────────────────────────────────────────
+let fiscalAno = new Date().getFullYear().toString();
+
+function renderFiscal(){
+  const anos=[...new Set(DB.entradas.map(e=>e.data?.substring(0,4)).filter(Boolean))].sort().reverse();
+  if(anos.length && !anos.includes(fiscalAno)) fiscalAno=anos[0];
+  const entAnno = DB.entradas.filter(e=>e.data?.startsWith(fiscalAno));
+  const encomendas={};
+  entAnno.forEach(e=>{
+    const gid=e.encomendaId||e.id;
+    if(!encomendas[gid]) encomendas[gid]={gid,data:e.data,forn:e.fornecedor||'—',fatura:e.fatura||'',fiscal:e.fiscal||false,total:0};
+    encomendas[gid].total+=e.custo*(e.qty||1);
+  });
+  const prodMap={};
+  entAnno.forEach(e=>{
+    const key=e.prodId||e.prodNome;
+    if(!prodMap[key]) prodMap[key]={prodId:e.prodId,nome:e.prodNome,cnp:'',qty:0,qtyBonus:0,totalCusto:0};
+    const prod=DB.produtos.find(x=>x.id===e.prodId);
+    if(prod?.cnp) prodMap[key].cnp=prod.cnp;
+    prodMap[key].qty+=e.qty||0;
+    prodMap[key].qtyBonus+=e.qtyBonus||0;
+    prodMap[key].totalCusto+=e.custo*(e.qty||1);
+  });
+  const prodList=Object.values(prodMap).sort((a,b)=>b.totalCusto-a.totalCusto);
+  const csAnno=DB.consultas.filter(c=>c.data?.startsWith(fiscalAno));
+  const totalReceita=csAnno.reduce((s,c)=>s+c.valor+(c.totalProd||0),0);
+  const totalCusto=entAnno.reduce((s,e)=>s+e.custo*(e.qty||1),0);
+  const totalPortes=entAnno.filter(e=>e.portes>0).reduce((s,e)=>s+e.portes,0);
+  const totalCustoComPortes=totalCusto+totalPortes;
+  const totalSubmFiscal=entAnno.filter(e=>e.fiscal).reduce((s,e)=>s+e.custo*(e.qty||1),0);
+  const totalNaoSubm=+(totalCusto-totalSubmFiscal).toFixed(2);
+  const listEnc=Object.values(encomendas).sort((a,b)=>b.data.localeCompare(a.data));
+  document.getElementById('pg-fiscal').innerHTML=`
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:1rem;flex-wrap:wrap">
+      <h2 style="margin:0">Controlo fiscal</h2>
+      <select onchange="fiscalAno=this.value;renderFiscal()" style="font-size:13px;border-color:#d4a97a">
+        ${anos.map(a=>`<option value="${a}" ${fiscalAno===a?'selected':''}>${a}</option>`).join('')}
+      </select>
+    </div>
+    <div class="metrics" style="margin-bottom:1.2rem">
+      <div class="met"><div class="lb">Total compras</div><div class="vl">${fmt(totalCustoComPortes)}</div></div>
+      <div class="met"><div class="lb">Submetido finanças</div><div class="vl green">${fmt(totalSubmFiscal)}</div></div>
+      <div class="met"><div class="lb">Não submetido</div><div class="vl" style="color:${totalNaoSubm>0?'#856404':'#888'}">${fmt(totalNaoSubm)}</div></div>
+      <div class="met"><div class="lb">Total receita</div><div class="vl">${fmt(totalReceita)}</div></div>
+      <div class="met" style="background:#f0fff4;border:1px solid #c3e6cb"><div class="lb">Rácio custo/receita</div><div class="vl">${totalReceita>0?Math.round(totalCustoComPortes/totalReceita*100):0}%</div></div>
+    </div>
+    <div class="row c2" style="align-items:flex-start">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:10px 16px;border-bottom:1px solid #eee;font-weight:600;font-size:13px">Encomendas ${fiscalAno}</div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr style="background:#fafaf7"><th>Data</th><th>Fornecedor</th><th>Fatura</th><th>Total</th><th>Finanças</th></tr></thead>
+          <tbody>${listEnc.map(g=>`<tr>
+            <td style="font-size:11px">${g.data}</td><td style="font-size:11px">${g.forn}</td>
+            <td style="font-size:11px;font-family:monospace;color:#8b6f4e">${g.fatura||'—'}</td>
+            <td><strong>${fmt(g.total)}</strong></td>
+            <td><label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px">
+              <input type="checkbox" ${g.fiscal?'checked':''} onchange="toggleFiscalEnc('${g.gid}',this.checked)"/>
+              ${g.fiscal?'<span style="color:#1a6b1a;font-weight:600">✓ Sim</span>':'<span style="color:#888">Não</span>'}
+            </label></td>
+          </tr>`).join('')}
+          <tr style="background:#f8f8f5;font-weight:600;border-top:2px solid #eee">
+            <td colspan="3">Total</td><td>${fmt(totalCusto)}</td><td style="font-size:11px;color:#1a6b1a">${fmt(totalSubmFiscal)} subm.</td>
+          </tr></tbody>
+        </table></div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:10px 16px;border-bottom:1px solid #eee;font-weight:600;font-size:13px">Produtos comprados ${fiscalAno}</div>
+        <div style="overflow-x:auto"><table>
+          <thead><tr style="background:#fafaf7"><th>CNP</th><th>Produto</th><th>Qty</th><th>Bónus</th><th>Total custo</th></tr></thead>
+          <tbody>${prodList.map(p=>`<tr>
+            <td style="font-family:monospace;font-size:10px;color:#8b6f4e">${p.cnp||'—'}</td>
+            <td style="font-size:12px"><strong>${p.nome}</strong></td>
+            <td style="text-align:center">${p.qty}</td>
+            <td style="text-align:center;color:#1a6b1a">${p.qtyBonus>0?'+'+p.qtyBonus:'—'}</td>
+            <td><strong>${fmt(p.totalCusto)}</strong></td>
+          </tr>`).join('')}
+          <tr style="background:#f8f8f5;font-weight:600;border-top:2px solid #eee">
+            <td colspan="2">Total</td>
+            <td style="text-align:center">${prodList.reduce((s,p)=>s+p.qty,0)}</td>
+            <td style="text-align:center;color:#1a6b1a">+${prodList.reduce((s,p)=>s+p.qtyBonus,0)}</td>
+            <td>${fmt(totalCusto)}</td>
+          </tr></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- cruzamento compras vs vendas por produto -->
+    <div class="card" style="padding:0;overflow:hidden;margin-top:1rem">
+      <div style="padding:10px 16px;border-bottom:1px solid #eee;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-weight:600;font-size:13px">Cruzamento compras / vendas por produto</div>
+          <div style="font-size:11px;color:#888;margin-top:2px">Entradas submetidas nas finanças vs unidades saídas por fatura (receitas faturadas)</div>
+        </div>
+        <div style="font-size:11px;color:#888">${fiscalAno}</div>
+      </div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr style="background:#fafaf7">
+          <th>CNP</th>
+          <th>Produto</th>
+          <th title="Unidades entradas em encomendas submetidas nas finanças">Compradas (fat.)</th>
+          <th title="Custo total das unidades submetidas">Custo subm.</th>
+          <th title="Unidades saídas em consultas/vendas faturadas">Vendidas (fat.)</th>
+          <th title="Receita total faturada deste produto">Receita fat.</th>
+          <th title="Diferença: compradas - vendidas">Δ Unidades</th>
+          <th title="Diferença: receita faturada - custo submetido">Δ Valor</th>
+        </tr></thead>
+        <tbody>${(()=>{
+          // produtos comprados em encomendas submetidas
+          const compMap={};
+          entAnno.filter(e=>e.fiscal).forEach(e=>{
+            const key=e.prodId||e.prodNome;
+            if(!compMap[key]) compMap[key]={nome:e.prodNome,cnp:'',qtyComp:0,custoSubm:0,qtyVend:0,receitaFat:0};
+            const prod=DB.produtos.find(x=>x.id===e.prodId);
+            if(prod?.cnp) compMap[key].cnp=prod.cnp;
+            compMap[key].qtyComp+=e.qty||0;
+            compMap[key].custoSubm+=e.custo*(e.qty||1);
+          });
+          // produtos vendidos em consultas faturadas (fatProd ou faturado)
+          csAnno.filter(c=>c.fatProd||c.faturado).forEach(c=>{
+            (c.vendas||[]).forEach(v=>{
+              const key=v.prodId||v.nome;
+              if(!compMap[key]) compMap[key]={nome:v.nome,cnp:'',qtyComp:0,custoSubm:0,qtyVend:0,receitaFat:0};
+              const prod=DB.produtos.find(x=>x.id===v.prodId);
+              if(prod?.cnp) compMap[key].cnp=prod.cnp;
+              compMap[key].qtyVend+=v.qty||1;
+              compMap[key].receitaFat+=(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1);
+            });
+          });
+          const rows=Object.values(compMap).sort((a,b)=>b.custoSubm-a.custoSubm);
+          if(!rows.length) return '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem dados — submete encomendas nas finanças e regista receitas faturadas.</td></tr>';
+          return rows.map(r=>{
+            const dQty=r.qtyComp-r.qtyVend;
+            const dVal=r.receitaFat-r.custoSubm;
+            const dQtyCol=dQty===0?'<span style="color:#888">0</span>':dQty>0?'<span style="color:#856404;font-weight:600">+'+dQty+' em stock</span>':'<span style="color:#c0392b;font-weight:600">'+dQty+' em falta</span>';
+            const dValCol=dVal===0?'<span style="color:#888">0€</span>':dVal>0?'<span style="color:#1a6b1a;font-weight:600">+'+fmt(dVal)+'</span>':'<span style="color:#c0392b;font-weight:600">'+fmt(dVal)+'</span>';
+            return '<tr>'
+              +'<td style="font-family:monospace;font-size:10px;color:#8b6f4e">'+(r.cnp||'—')+'</td>'
+              +'<td style="font-size:12px"><strong>'+r.nome+'</strong></td>'
+              +'<td style="text-align:center">'+(r.qtyComp||'<span style="color:#bbb">0</span>')+'</td>'
+              +'<td>'+fmt(r.custoSubm)+'</td>'
+              +'<td style="text-align:center">'+(r.qtyVend||'<span style="color:#bbb">0</span>')+'</td>'
+              +'<td>'+fmt(r.receitaFat)+'</td>'
+              +'<td>'+dQtyCol+'</td>'
+              +'<td>'+dValCol+'</td>'
+              +'</tr>';
+          }).join('');
+        })()}
+        </tbody>
+      </table></div>
+    </div>`;
+}
+
+function toggleFiscalEnc(encomendaId, checked){
+  DB.entradas.filter(e=>e.encomendaId===encomendaId).forEach(e=>e.fiscal=checked);
+  save(); renderFiscal();
+}
+
+
 function renderEntradas(){
   document.getElementById('pg-entradas').innerHTML=`
     <div class="flex-b">
@@ -6734,6 +6893,7 @@ const ALL_TABS = [
   {id:'encomendas',label:'Lista encomendas'},
   {id:'relatorio',label:'Relatório'},
   {id:'fornecedores',label:'Fornecedores'},
+  {id:'fiscal',label:'Controlo fiscal'},
   {id:'vouchers',label:'Vouchers'},
 ];
 
