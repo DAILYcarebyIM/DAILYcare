@@ -789,7 +789,8 @@ function renderDash(){
 
   const tServ  = cs.reduce((s,c)=>s+c.valor,0);
   const tProd  = cs.reduce((s,c)=>s+c.totalProd,0);
-  const tLucro = cs.reduce((s,c)=>s+c.lucroProd,0);
+  const calcLucroC=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0);
+  const tLucro = cs.reduce((s,c)=>s+calcLucroC(c),0);
   const tPacks = packs.reduce((s,p)=>s+p.valor,0);
   const tWork  = works.reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
   const tFo    = fos.reduce((s,f)=>s+calcFoTotal(f),0);
@@ -972,12 +973,13 @@ function renderConsultaAtual(){
       </div>
       <div class="row c2">
         <div>
-          <label>Faturado? (aplica-se ao serviço e aos produtos)</label>
+          <label>Faturação</label>
           <select id="cc-fat">
-            <option value="false">Não faturado</option>
-            <option value="true">Faturado</option>
+            <option value="none">Não faturado</option>
+            <option value="consulta">Só consulta</option>
+            <option value="produtos">Só produtos</option>
+            <option value="ambos">Consulta + produtos</option>
           </select>
-          <div style="font-size:10px;color:#888;margin-top:3px">Os produtos assumem automaticamente o mesmo estado de faturação do serviço.</div>
         </div>
         <div><label>Notas da consulta</label><input id="cc-notas" placeholder="Opcional"/></div>
       </div>
@@ -1439,7 +1441,9 @@ function gravarConsulta(){
   const valor = parseFloat(document.getElementById('cc-val').value)||0;
   const estado = document.getElementById('cc-est').value;
   const metodoPagamento = document.getElementById('cc-metodo')?.value||'MBWay';
-  const faturado = document.getElementById('cc-fat').value==='true';
+  const fatVal = document.getElementById('cc-fat').value;
+  const faturado = fatVal==='ambos'||fatVal==='consulta'; // faturado=true se serviço faturado
+  const fatProd  = fatVal==='ambos'||fatVal==='produtos';  // produtos faturados
   const notas = document.getElementById('cc-notas').value;
   const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
   const descFinal = parseFloat(document.getElementById('cc-desc-final')?.value)||0;
@@ -1449,7 +1453,7 @@ function gravarConsulta(){
   const tp = cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
   const tl = cvs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
   const id = 'c'+DB.ids.c++;
-  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,estado,metodoPagamento:document.getElementById('cc-metodo')?.value||'MBWay',notas,portes,descFinal,vendas:vendasComFat,totalProd:tp,lucroProd:tl-(descFinal||0)});
+  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,fatProd,estado,metodoPagamento:document.getElementById('cc-metodo')?.value||'MBWay',notas,portes,descFinal,vendas:vendasComFat,totalProd:tp,lucroProd:tl-(descFinal||0)});
   cvs.forEach(v=>{const p=DB.produtos.find(x=>x.id===v.prodId);if(p)p.stock-=v.qty;});
   if(tipo==='Pack'){
     const pk = DB.packs.find(p=>p.clienteId===cId&&p.estado==='Ativo');
@@ -1669,7 +1673,14 @@ function renderConsultasLista(){
             <option value="Dinheiro" ${c.metodoPagamento==='Dinheiro'?'selected':''}>💵 Dinheiro</option>
             <option value="Outro" ${c.metodoPagamento==='Outro'?'selected':''}>Outro</option>
           </select></div>
-          <div><label>Faturado?</label><select id="ec-fat"><option value="false" ${!c.faturado?'selected':''}>Não faturado</option><option value="true" ${c.faturado?'selected':''}>Faturado</option></select></div>
+          <div><label>Faturação</label>
+            <select id="ec-fat">
+              <option value="none" ${(!c.faturado&&!c.fatProd)?'selected':''}>Não faturado</option>
+              <option value="consulta" ${(c.faturado&&!c.fatProd)?'selected':''}>Só consulta</option>
+              <option value="produtos" ${(!c.faturado&&c.fatProd)?'selected':''}>Só produtos</option>
+              <option value="ambos" ${(c.faturado&&c.fatProd)?'selected':''}>Consulta + produtos</option>
+            </select>
+          </div>
           <div><label>Notas</label><input id="ec-notas" value="${c.notas||''}"/></div>
           <div><label style="color:#c05050">Desc. final (€)</label><input id="ec-desc-final" type="number" value="${(c.descFinal||0).toFixed(2)}" step="0.01" min="0" style="max-width:120px;border-color:#d4a0a0;background:#fff8f8"/></div>
           <div><label>Valor pendente (€)</label><input id="ec-pendente" type="number" step="0.01" min="0" value="${(c.valorPendente||0).toFixed(2)}"/></div>
@@ -1743,7 +1754,7 @@ function renderConsultasLista(){
             <strong>${cNome(c.clienteId)}</strong>
             <span class="badge bg-gray">${c.tipo}</span>
             <span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado}</span>
-            ${c.faturado?'<span class="badge bg-b">Faturado</span>':'<span class="badge bg-gray">Não faturado</span>'}
+            ${c.faturado&&c.fatProd?'<span class="badge bg-b">Fat. completo</span>':c.faturado?'<span class="badge bg-b">Fat. consulta</span>':c.fatProd?'<span class="badge bg-b">Fat. produtos</span>':'<span class="badge bg-gray">Não faturado</span>'}
           </div>
           <div style="color:#999;font-size:11px">${c.data}${c.hora?` <span style="color:#8b6f4e">${c.hora}</span>`:''}</div>
         </div>
@@ -1894,7 +1905,9 @@ function saveEditCons(id){
   c.valor=parseFloat(document.getElementById('ec-val').value)||0;
   c.estado=document.getElementById('ec-est').value;
   c.metodoPagamento=document.getElementById('ec-metodo')?.value||c.metodoPagamento||'MBWay';
-  c.faturado=document.getElementById('ec-fat').value==='true';
+  const ecFatVal=document.getElementById('ec-fat').value;
+  c.faturado=ecFatVal==='ambos'||ecFatVal==='consulta';
+  c.fatProd =ecFatVal==='ambos'||ecFatVal==='produtos';
   c.notas=document.getElementById('ec-notas').value;
   c.descFinal=parseFloat(document.getElementById('ec-desc-final')?.value)||0;
   c.lucroProd=(c.vendas||[]).reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-(v.custo||0))*(v.qty||1),0)-(c.descFinal||0);
@@ -2090,7 +2103,9 @@ function guardarVendaRapida(){
   if(!cliId){ alert('Seleciona um cliente.'); return; }
   if(!vrs.length){ alert('Adiciona pelo menos um produto.'); return; }
   if(!DB.ids.c) DB.ids.c=1;
-  const faturado = document.getElementById('vr-fat').value==='true';
+  const vrFatVal = document.getElementById('vr-fat').value;
+  const faturado = false; // venda directa não tem serviço
+  const fatProd  = vrFatVal==='produtos';
   const estado   = document.getElementById('vr-estado').value;
   const metodoPagamento = document.getElementById('vr-metodo')?.value||'MBWay';
   const portesVR = parseFloat(document.getElementById('vr-portes')?.value)||0;
@@ -2113,6 +2128,7 @@ function guardarVendaRapida(){
     tipo:'Venda direta',
     valor:0,
     faturado,
+    fatProd,
     estado,
     metodoPagamento,
     notas:'',
@@ -2143,9 +2159,9 @@ function renderVendas(){
     );
   }
   const tPVP   = consultas.reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+v.pvp*(v.qty||1),0),0);
-  const tLucro = consultas.reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+(v.pvp-v.custo)*(v.qty||1),0),0);
+  const tLucro = consultas.reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-v.custo)*(v.qty||1),0),0);
   const tPVPAll   = DB.consultas.filter(c=>c.vendas?.length>0).reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+v.pvp*(v.qty||1),0),0);
-  const tLucroAll = DB.consultas.filter(c=>c.vendas?.length>0).reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+(v.pvp-v.custo)*(v.qty||1),0),0);
+  const tLucroAll = DB.consultas.filter(c=>c.vendas?.length>0).reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-v.custo)*(v.qty||1),0),0);
   const temFiltro = fVendasTexto||fVendasData||fVendasDe||fVendasAte;
 
   document.getElementById('pg-vendas').innerHTML=`
@@ -2170,7 +2186,10 @@ function renderVendas(){
           <select id="vr-metodo"><option value="MBWay">💳 MBWay</option><option value="Dinheiro">💵 Dinheiro</option><option value="Outro">Outro</option></select>
         </div>
         <div><label>Faturado?</label>
-          <select id="vr-fat"><option value="false">Não faturado</option><option value="true">Faturado</option></select>
+          <select id="vr-fat">
+            <option value="none">Não faturado</option>
+            <option value="produtos">Produtos faturados</option>
+          </select>
         </div>
       </div>
       <div style="margin-bottom:8px">
@@ -2244,9 +2263,9 @@ function renderVendasPagina(){
     }));
   }
   const tPVP   = consultas.reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+v.pvp*(v.qty||1),0),0);
-  const tLucro = consultas.reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+(v.pvp-v.custo)*(v.qty||1),0),0);
+  const tLucro = consultas.reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-v.custo)*(v.qty||1),0),0);
   const tPVPAll   = DB.consultas.filter(c=>c.vendas?.length>0).reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+v.pvp*(v.qty||1),0),0);
-  const tLucroAll = DB.consultas.filter(c=>c.vendas?.length>0).reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+(v.pvp-v.custo)*(v.qty||1),0),0);
+  const tLucroAll = DB.consultas.filter(c=>c.vendas?.length>0).reduce((s,c)=>s+c.vendas.reduce((ss,v)=>ss+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-v.custo)*(v.qty||1),0),0);
   const temFiltro = fVendasTexto||fVendasData||fVendasDe||fVendasAte;
 
   const met = document.getElementById('vendas-metricas');
@@ -5839,7 +5858,8 @@ function renderRelatorio(){
 
   const tServ  = rCs.reduce((s,c)=>s+c.valor,0);
   const tProd  = rCs.reduce((s,c)=>s+c.totalProd,0);
-  const tLucro = rCs.reduce((s,c)=>s+c.lucroProd,0);
+  const calcLucroCRel=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0);
+  const tLucro = rCs.reduce((s,c)=>s+calcLucroCRel(c),0);
   const tPacks = rPacks.reduce((s,p)=>s+p.valor,0);
   const tWork  = rWorks.reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
   const tFo    = rFos.reduce((s,f)=>s+calcFoTotal(f),0);
@@ -5851,10 +5871,10 @@ function renderRelatorio(){
                + rWorks.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0)
                + rFos.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
   const tNFat  = (tServ+tPacks+tWork+tFo)-tFat;
-  const custosProd = rCs.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
+  const lucProdRel = rCs.reduce((s,c)=>s+calcLucroCRel(c),0);
   const receitaTotal = tServ+tProd+tPacks+tWork+tFo;
   const tCedRel = (DB.cedencias||[]).filter(c=>!relMes||c.data?.startsWith(relMes)).reduce((s,c)=>s+(c.valorRecebido||0),0);
-  const lucroReal    = receitaTotal-tGasto-custosProd;
+  const lucroReal    = tServ+lucProdRel+tPacks+tWork+tFo-tGasto;
   // SS ENI — só sobre receitas FATURADAS
   const tFatServRel = rCs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
   const tFatProdRel = rCs.filter(c=>c.faturado).reduce((s,c)=>s+c.totalProd,0);
@@ -5889,7 +5909,8 @@ function renderRelatorio(){
     const gs   = DB.gastos.filter(g=>g.data?.startsWith(m));
     const serv = cs.reduce((s,c)=>s+c.valor,0);
     const prod = cs.reduce((s,c)=>s+c.totalProd,0);
-    const lucP = cs.reduce((s,c)=>s+c.lucroProd,0);
+    const calcLucroM=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0);
+    const lucP = cs.reduce((s,c)=>s+calcLucroM(c),0);
     const pk   = pks.reduce((s,p)=>s+p.valor,0);
     const wk   = ws.reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
     const fo   = fs.reduce((s,f)=>s+calcFoTotal(f),0);
@@ -5898,7 +5919,7 @@ function renderRelatorio(){
     const fat  = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)+pks.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
     const custos = cs.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
     const fatServ= cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
-    const fatProd= cs.filter(c=>c.faturado).reduce((s,c)=>s+c.totalProd,0);
+    const fatProd= cs.filter(c=>c.fatProd||c.faturado).reduce((s,c)=>s+c.totalProd,0);
     const fatPk  = pks.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
     const fatWk  = ws.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
     const fatFo  = fs.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
@@ -5946,7 +5967,7 @@ function renderRelatorio(){
         <h3>Custos e lucro real (total)</h3>
         <table>
           <tr><td>Receita total</td><td style="text-align:right">${fmt(receitaTotal)}</td></tr>
-          <tr><td>Custo produtos vendidos</td><td style="text-align:right" class="red">− ${fmt(custosProd)}</td></tr>
+          <tr><td>Lucro produtos vendidos</td><td style="text-align:right" class="green">+ ${fmt(lucProdRel)}</td></tr>
           <tr><td>Outros gastos</td><td style="text-align:right" class="red">− ${fmt(tGasto)}</td></tr>
           <tr style="border-top:1px solid #eee"><td><strong>Lucro real estimado</strong></td><td style="text-align:right;font-weight:700;font-size:15px" class="green">${fmt(lucroReal)}</td></tr>
         </table>
