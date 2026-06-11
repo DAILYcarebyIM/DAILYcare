@@ -6142,8 +6142,10 @@ function renderRelatorio(){
   const calcLucroCRel=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0);
   const tLucro = rCs.reduce((s,c)=>s+calcLucroCRel(c),0);
   // receitas por método de pagamento
-  const recDinheiro = rCs.filter(c=>c.metodoPagamento==='Dinheiro').reduce((s,c)=>s+c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0),0);
-  const recMBWay    = rCs.filter(c=>c.metodoPagamento!=='Dinheiro').reduce((s,c)=>s+c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0),0);
+  const recDinheiro   = rCs.filter(c=>c.metodoPagamento==='Dinheiro').reduce((s,c)=>s+c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0),0);
+  const recMBWay      = rCs.filter(c=>c.metodoPagamento!=='Dinheiro').reduce((s,c)=>s+c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0),0);
+  const lucroDinheiro = rCs.filter(c=>c.metodoPagamento==='Dinheiro').reduce((s,c)=>s+c.valor+calcLucroCRel(c),0);
+  const lucroMBWay    = rCs.filter(c=>c.metodoPagamento!=='Dinheiro').reduce((s,c)=>s+c.valor+calcLucroCRel(c),0);
   const tPacks = rPacks.reduce((s,p)=>s+p.valor,0);
   const tWork  = rWorks.reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
   const tFo    = rFos.reduce((s,f)=>s+calcFoTotal(f),0);
@@ -6255,8 +6257,10 @@ function renderRelatorio(){
           <tr><td>Lucro produtos vendidos</td><td style="text-align:right" class="green">+ ${fmt(lucProdRel)}</td></tr>
           <tr><td>Outros gastos</td><td style="text-align:right" class="red">− ${fmt(tGasto)}</td></tr>
           <tr style="border-top:1px solid #eee"><td><strong>Lucro real estimado</strong></td><td style="text-align:right;font-weight:700;font-size:15px" class="green">${fmt(lucroReal)}</td></tr>
-          <tr><td style="color:#888;font-size:11px">↳ Recebido em dinheiro</td><td style="text-align:right;font-size:11px">💵 ${fmt(recDinheiro)}</td></tr>
-          <tr><td style="color:#888;font-size:11px">↳ Recebido em MBWay/outro</td><td style="text-align:right;font-size:11px">💳 ${fmt(recMBWay)}</td></tr>
+          <tr><td style="color:#888;font-size:11px">↳ Receita em dinheiro</td><td style="text-align:right;font-size:11px">💵 ${fmt(recDinheiro)}</td></tr>
+          <tr><td style="color:#888;font-size:11px;padding-left:24px">↳ Lucro em dinheiro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroDinheiro)}</td></tr>
+          <tr><td style="color:#888;font-size:11px">↳ Receita em MBWay/outro</td><td style="text-align:right;font-size:11px">💳 ${fmt(recMBWay)}</td></tr>
+          <tr><td style="color:#888;font-size:11px;padding-left:24px">↳ Lucro em MBWay/outro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroMBWay)}</td></tr>
         </table>
       </div>
       <div class="card">
