@@ -1800,12 +1800,16 @@ function renderConsultasLista(){
               <td class="lucro-val" style="color:#1a6b1a;font-weight:600">${fmt(ll)}</td>
               <td class="lucro-val" style="color:#1a6b1a">${mg}%</td>
             </tr>`}).join('')}
-            <tr style="border-top:1px solid #eee;font-weight:600;background:#f8f8f5">
-              <td colspan="4" style="padding:4px 8px;text-align:right;color:#888">Total produtos:</td>
-              <td><strong>${fmt(c.totalProd)}</strong></td>
-              <td class="lucro-val" style="color:#1a6b1a">${fmt(c.lucroProd)}</td>
-              <td class="lucro-val" style="color:#1a6b1a">${c.totalProd>0?Math.round(c.lucroProd/c.totalProd*100):0}%</td>
-            </tr>
+            ${(()=>{
+              const tProd=c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1),0);
+              const tLucro=c.vendas.reduce((s,v)=>s+((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-(v.custo||0))*(v.qty||1),0)-(c.descFinal||0);
+              return `<tr style="border-top:1px solid #eee;font-weight:600;background:#f8f8f5">
+                <td colspan="4" style="padding:4px 8px;text-align:right;color:#888">Total produtos:</td>
+                <td><strong>\${fmt(tProd)}</strong></td>
+                <td class="lucro-val" style="color:#1a6b1a">\${fmt(tLucro)}</td>
+                <td class="lucro-val" style="color:#1a6b1a">\${tProd>0?Math.round(tLucro/tProd*100):0}%</td>
+              </tr>`;
+            })()}
             </tbody>
           </table></div>
         </div>`:''}
