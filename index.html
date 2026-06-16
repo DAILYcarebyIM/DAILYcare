@@ -4594,19 +4594,24 @@ function renderConsumo(){
     </div>`:''}
     <div id="add-ci-f" style="display:none" class="card">
       <h3>Novo consumo interno</h3>
-      <div class="row c3">
-        <div><label>Produto</label>
-          <div class="dd-wrap">
+      <div class="row c2" style="margin-bottom:8px">
+        <div><label>Data</label><input id="ci-d" type="date" value="${today()}"/></div>
+        <div><label>Motivo</label><input id="ci-m" placeholder="ex: uso próprio, demo em consulta, oferta, amostra"/></div>
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="margin-bottom:4px;display:block;font-weight:600;font-size:12px">Produtos</label>
+        <div id="ci-linhas"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;padding-top:8px;border-top:1px solid #ede8e3">
+          <div style="flex:1" class="dd-wrap">
             <input id="ci-p" placeholder="Pesquisar produto..." oninput="ddProdCI(this.value)" autocomplete="off"/>
             <input type="hidden" id="ci-p-id"/>
             <div class="dropdown" id="dd-ci" style="display:none"></div>
           </div>
+          <div style="width:90px"><label style="font-size:11px">Qty</label><input id="ci-q" type="number" placeholder="1" min="1" style="width:100%"/></div>
+          <button class="btn" onclick="addLinhaCI()" style="white-space:nowrap;align-self:flex-end">+ Adicionar</button>
         </div>
-        <div><label>Quantidade</label><input id="ci-q" type="number" placeholder="0"/></div>
-        <div><label>Data</label><input id="ci-d" type="date" value="${today()}"/></div>
       </div>
-      <div><label>Motivo</label><input id="ci-m" placeholder="ex: uso próprio, demo em consulta, oferta, amostra"/></div>
-      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addCI()">Guardar</button><button class="btn" onclick="showAddCI()">Cancelar</button></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="guardarCI()">Guardar tudo</button><button class="btn" onclick="cancelarCI()">Cancelar</button></div>
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
@@ -4618,17 +4623,91 @@ function renderConsumo(){
       </table>
     </div>`;
 }
-function showAddCI(){const f=document.getElementById('add-ci-f');f.style.display=f.style.display==='none'?'block':'none';}
-function ddProdCI(v){const dd=document.getElementById('dd-ci');const m=DB.produtos.filter(p=>matchProd(p,v));dd.innerHTML=m.map(p=>`<div class="ddi" onclick="selProdCI('${p.id}','${p.nome.replace(/'/g,"\\'")}')"><strong>${p.nome}</strong>${p.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':''}</div>`).join('');dd.style.display=m.length?'block':'none';}
-function selProdCI(id,nome){document.getElementById('ci-p').value=nome;document.getElementById('ci-p-id').value=id;document.getElementById('dd-ci').style.display='none';}
-function addCI(){
-  const pid=document.getElementById('ci-p-id').value;
-  const qty=parseInt(document.getElementById('ci-q').value)||0;
-  if(!pid||!qty)return;
-  const p=DB.produtos.find(x=>x.id===pid);if(p)p.stock-=qty;
-  DB.consumo.push({id:'ci'+DB.ids.ci++,prodId:pid,prodNome:document.getElementById('ci-p').value,qty,data:document.getElementById('ci-d').value,motivo:document.getElementById('ci-m').value});
-  save();showAddCI();renderConsumo();
+let _ciLinhas = [];
+
+function showAddCI(){
+  const f=document.getElementById('add-ci-f');
+  const visible=f.style.display!=='none'&&f.style.display!=='';
+  if(!visible){
+    _ciLinhas=[];
+    f.style.display='block';
+    renderLinhasCI();
+    setTimeout(()=>document.getElementById('ci-p')?.focus(),50);
+  } else {
+    f.style.display='none';
+    _ciLinhas=[];
+  }
 }
+function cancelarCI(){
+  _ciLinhas=[];
+  document.getElementById('add-ci-f').style.display='none';
+}
+function ddProdCI(v){
+  const dd=document.getElementById('dd-ci');
+  const m=DB.produtos.filter(p=>matchProd(p,v));
+  dd.innerHTML=m.map(p=>'<div class="ddi" onclick="selProdCI(\''+p.id+'\',\''+p.nome.replace(/'/g,"\\'")+'\')"><strong>'+p.nome+'</strong>'+(p.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':'')+'</div>').join('');
+  dd.style.display=m.length?'block':'none';
+}
+function selProdCI(id,nome){
+  document.getElementById('ci-p').value=nome;
+  document.getElementById('ci-p-id').value=id;
+  document.getElementById('dd-ci').style.display='none';
+  setTimeout(()=>document.getElementById('ci-q')?.focus(),50);
+}
+function addLinhaCI(){
+  const pid=document.getElementById('ci-p-id').value;
+  const nome=document.getElementById('ci-p').value.trim();
+  const qty=parseInt(document.getElementById('ci-q').value)||0;
+  if(!pid||!nome||!qty)return;
+  const exist=_ciLinhas.find(l=>l.prodId===pid);
+  if(exist){ exist.qty+=qty; } else { _ciLinhas.push({prodId:pid,prodNome:nome,qty}); }
+  document.getElementById('ci-p').value='';
+  document.getElementById('ci-p-id').value='';
+  document.getElementById('ci-q').value='';
+  document.getElementById('dd-ci').style.display='none';
+  renderLinhasCI();
+  setTimeout(()=>document.getElementById('ci-p')?.focus(),50);
+}
+function removeLinhaCI(i){
+  _ciLinhas.splice(i,1);
+  renderLinhasCI();
+}
+function renderLinhasCI(){
+  const el=document.getElementById('ci-linhas');
+  if(!el)return;
+  if(!_ciLinhas.length){
+    el.innerHTML='<div style="color:#aaa;font-size:12px;padding:6px 0">Nenhum produto adicionado ainda.</div>';
+    return;
+  }
+  el.innerHTML='<table style="width:100%;font-size:13px;margin-bottom:4px"><thead><tr>'
+    +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:#888">Produto</th>'
+    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:60px">Qty</th>'
+    +'<th style="width:36px"></th></tr></thead><tbody>'
+    +_ciLinhas.map(function(l,i){
+      const p=DB.produtos.find(function(x){return x.id===l.prodId;});
+      return '<tr>'
+        +'<td style="padding:5px 6px"><strong>'+l.prodNome+'</strong>'+(p&&p.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':'')+'</td>'
+        +'<td style="text-align:center;padding:5px 6px">'+l.qty+'</td>'
+        +'<td style="padding:5px 4px"><button class="btn dan sm" onclick="removeLinhaCI('+i+')" style="padding:2px 7px;font-size:11px">×</button></td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table>';
+}
+function guardarCI(){
+  if(!_ciLinhas.length)return;
+  const data=document.getElementById('ci-d').value;
+  const motivo=document.getElementById('ci-m').value;
+  _ciLinhas.forEach(function(l){
+    const p=DB.produtos.find(function(x){return x.id===l.prodId;});
+    if(p) p.stock-=l.qty;
+    DB.consumo.push({id:'ci'+DB.ids.ci++,prodId:l.prodId,prodNome:l.prodNome,qty:l.qty,data:data,motivo:motivo});
+  });
+  _ciLinhas=[];
+  save();
+  document.getElementById('add-ci-f').style.display='none';
+  renderConsumo();
+}
+function addCI(){ addLinhaCI(); }
 function startEditCI(id){ editingConsumoId=id; renderConsumo(); setTimeout(()=>document.getElementById('eci-q')?.focus(),50); }
 function cancelEditCI(){ editingConsumoId=null; renderConsumo(); }
 function saveEditCI(id){
