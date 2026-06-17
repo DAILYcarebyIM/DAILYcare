@@ -4093,40 +4093,6 @@ function renderFiscal(){
       <div class="met"><div class="lb">Total receita</div><div class="vl">${fmt(totalReceita)}</div></div>
       <div class="met" style="background:#f0fff4;border:1px solid #c3e6cb"><div class="lb">Rácio custo/receita</div><div class="vl">${totalReceita>0?Math.round(totalCustoComPortes/totalReceita*100):0}%</div></div>
     </div>
-    <div class="row c2" style="align-items:flex-start">
-      <div class="card" style="padding:0;overflow:hidden">
-        <div style="padding:10px 16px;border-bottom:1px solid #eee;font-weight:600;font-size:13px">Encomendas ${fiscalAno}</div>
-        <div style="overflow-x:auto"><table>
-          <thead><tr style="background:#fafaf7"><th>Data</th><th>Fornecedor</th><th>Fatura</th><th>Total</th><th>Finanças</th></tr></thead>
-          <tbody>${listEnc.length?listEnc.map(g=>`<tr>
-            <td style="font-size:11px">${g.data}</td><td style="font-size:11px">${g.forn}</td>
-            <td style="font-size:11px;font-family:monospace;color:#8b6f4e">${g.fatura||'—'}</td>
-            <td><strong>${fmt(g.total)}</strong></td>
-            <td><label style="cursor:pointer;display:flex;align-items:center;gap:4px;font-size:12px">
-              <input type="checkbox" ${g.fiscal?'checked':''} onchange="toggleFiscalEnc('${g.gid}',this.checked)"/>
-              ${g.fiscal?'<span style="color:#1a6b1a;font-weight:600">✓ Sim</span>':'<span style="color:#888">Não</span>'}
-            </label></td>
-          </tr>`).join(''):'<tr><td colspan="5" style="text-align:center;padding:2rem;color:#999">Sem encomendas registadas em '+fiscalAno+'.</td></tr>'}
-          ${listEnc.length?'<tr style="background:#f8f8f5;font-weight:600;border-top:2px solid #eee"><td colspan="3">Total</td><td>'+fmt(totalCusto)+'</td><td style="font-size:11px;color:#1a6b1a">'+fmt(totalSubmFiscal)+' subm.</td></tr>':''}
-          </tbody>
-        </table></div>
-      </div>
-      <div class="card" style="padding:0;overflow:hidden">
-        <div style="padding:10px 16px;border-bottom:1px solid #eee;font-weight:600;font-size:13px">Produtos comprados ${fiscalAno}</div>
-        <div style="overflow-x:auto"><table>
-          <thead><tr style="background:#fafaf7"><th>CNP</th><th>Produto</th><th>Qty</th><th>Bónus</th><th>Total custo</th></tr></thead>
-          <tbody>${prodList.length?prodList.map(p=>`<tr>
-            <td style="font-family:monospace;font-size:10px;color:#8b6f4e">${p.cnp||'—'}</td>
-            <td style="font-size:12px"><strong>${p.nome}</strong></td>
-            <td style="text-align:center">${p.qty}</td>
-            <td style="text-align:center;color:#1a6b1a">${p.qtyBonus>0?'+'+p.qtyBonus:'—'}</td>
-            <td><strong>${fmt(p.totalCusto)}</strong></td>
-          </tr>`).join(''):'<tr><td colspan="5" style="text-align:center;padding:2rem;color:#999">Sem produtos comprados em '+fiscalAno+'.</td></tr>'}
-          ${prodList.length?'<tr style="background:#f8f8f5;font-weight:600;border-top:2px solid #eee"><td colspan="2">Total</td><td style="text-align:center">'+prodList.reduce((s,p)=>s+p.qty,0)+'</td><td style="text-align:center;color:#1a6b1a">+'+prodList.reduce((s,p)=>s+p.qtyBonus,0)+'</td><td>'+fmt(totalCusto)+'</td></tr>':''}
-          </tbody>
-        </table></div>
-      </div>
-    </div>
 
     <!-- cruzamento compras vs vendas por produto -->
     <div class="card" style="padding:0;overflow:hidden;margin-top:1rem">
