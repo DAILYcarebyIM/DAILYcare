@@ -3029,10 +3029,13 @@ function saveEditVenda(id){
   editingVendaId=null; save(); renderVendasPagina();
 }
 let _vendaPagId=null;
+function marcarConsultaPaga(id){
+  marcarVendaPaga(id); // mesma lógica e modal servem para consultas e vendas (ambas são DB.consultas)
+}
 function marcarVendaPaga(id){
   const c=DB.consultas.find(x=>x.id===id); if(!c) return;
   _vendaPagId=id;
-  const total=c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0);
+  const total=c.valor+(c.totalProd||0)+(c.portes||0);
   const pago=c.valorRecebido||0;
   const emDivida=Math.max(0,+(total-pago).toFixed(2));
   const cli=cNome(c.clienteId);
@@ -3057,7 +3060,7 @@ function confirmarVendaPag(){
   const m=document.getElementById('venda-pag-metodo').value;
   c.metodoPagamento=m;
   c.valorRecebido=(c.valorRecebido||0)+valor;
-  const total=c.valor+(c.totalProd||0)+(c.portes||0)-(c.descFinal||0);
+  const total=c.valor+(c.totalProd||0)+(c.portes||0);
   const divida=Math.max(0,total-c.valorRecebido);
   c.valorPendente=+divida.toFixed(2);
   c.estado=divida<=0.01?'Pago':'Pendente';
