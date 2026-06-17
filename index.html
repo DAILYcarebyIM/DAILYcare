@@ -874,7 +874,7 @@ function nav(page, btn){
     workshops:renderWorkshops, formacao:renderFormacao,
     gastos:renderGastos, encomendas:renderEncomendas,
     relatorio:renderRelatorio, fornecedores:renderFornecedores,
-    vouchers:renderVouchers
+    vouchers:renderVouchers, fiscal:renderFiscal
   };
   renders[page]?.();
 }
@@ -4185,19 +4185,6 @@ function renderFiscal(){
         })()}
         </tbody>
       </table></div>
-    </div>
-
-    <!-- DIAGNÓSTICO TEMPORÁRIO -->
-    <div class="card" style="padding:0;overflow:hidden;margin-top:1rem;border-color:#d4a97a">
-      <div style="padding:10px 16px;border-bottom:1px solid #eee;font-weight:600;font-size:12px;color:#8b6f4e">🔍 Diagnóstico — entradas submetidas e vendas faturadas em ${fiscalAno}</div>
-      <div style="padding:12px 16px;font-size:11px">
-        <div style="margin-bottom:10px"><strong>Entradas marcadas como fiscal (${entAnno.filter(e=>e.fiscal).length}):</strong>
-          ${entAnno.filter(e=>e.fiscal).length?'<table style="width:100%;margin-top:6px"><thead><tr style="background:#fafaf7"><th>Produto</th><th>prodId</th><th>Qty</th></tr></thead><tbody>'+entAnno.filter(e=>e.fiscal).map(e=>'<tr><td>'+e.prodNome+'</td><td style="font-family:monospace">'+(e.prodId||'<span style="color:#c0392b">SEM prodId</span>')+'</td><td>'+e.qty+'</td></tr>').join('')+'</tbody></table>':'<div style="color:#999">Nenhuma.</div>'}
-        </div>
-        <div><strong>Vendas em consultas faturadas (${csAnno.filter(c=>c.fatProd||c.faturado).length} consultas):</strong>
-          ${csAnno.filter(c=>c.fatProd||c.faturado).length?'<table style="width:100%;margin-top:6px"><thead><tr style="background:#fafaf7"><th>Data</th><th>fatProd</th><th>faturado</th><th>Produto</th><th>prodId</th><th>Qty</th></tr></thead><tbody>'+csAnno.filter(c=>c.fatProd||c.faturado).flatMap(c=>(c.vendas||[]).map(v=>'<tr><td>'+c.data+'</td><td>'+(c.fatProd?'sim':'não')+'</td><td>'+(c.faturado?'sim':'não')+'</td><td>'+v.nome+'</td><td style="font-family:monospace">'+(v.prodId||'<span style="color:#c0392b">SEM prodId</span>')+'</td><td>'+(v.qty||1)+'</td></tr>')).join('')+'</tbody></table>':'<div style="color:#999">Nenhuma consulta faturada com produtos este ano.</div>'}
-        </div>
-      </div>
     </div>`;
 }
 
