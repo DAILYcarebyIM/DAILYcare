@@ -439,6 +439,15 @@ tr:hover td{background:#fafaf7}
       <div id="enc-ver-body" style="padding:20px"></div>
     </div>
   </div>
+  <div id="venda-ver-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:600;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow-y:auto">
+    <div style="background:#fff;border-radius:12px;width:100%;max-width:720px;padding:0;box-shadow:0 8px 40px rgba(0,0,0,.2);margin:auto">
+      <div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0" id="venda-ver-titulo">Venda</h3>
+        <button onclick="document.getElementById('venda-ver-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888">×</button>
+      </div>
+      <div id="venda-ver-body" style="padding:20px"></div>
+    </div>
+  </div>
   <div id="pg-entradas" class="pg"></div>
   <div id="pg-consumo" class="pg"></div>
   <div id="pg-cedencias" class="pg"></div>
@@ -1013,8 +1022,9 @@ function renderConsultaAtual(){
         <div><label>Estado</label>
           <select id="cc-est" onchange="togglePendenteField()"><option>Pago</option><option>Por pagar</option></select>
         </div>
-        <div><label>Método pagamento</label>
-          <select id="cc-metodo"><option value="MBWay">💳 MBWay</option><option value="Dinheiro">💵 Dinheiro</option><option value="Outro">Outro</option></select>
+        <div>
+          <label>Método pagamento</label>
+          <div id="pag-cc"></div>
         </div>
       </div>
       <div class="row c2">
@@ -1074,6 +1084,7 @@ function renderConsultaAtual(){
       <button class="btn pri" onclick="gravarConsulta()" style="flex:1;padding:11px;font-size:14px;font-weight:600">Guardar consulta e atualizar stock</button>
     </div>`;
   cvs = [];
+  initPagamentos('cc', null, 'MBWay');
 }
 
 function ddCli(v){ ddCliGenerico(v,'dd-cli','cc-cli','cc-cli-id','checkPkOuVoucher()'); }
@@ -1359,6 +1370,102 @@ function recalcTotaisC(c){
   c.totalProd = Math.max(0, somaVendas - (c.descFinal||0));
   c.lucroProd = somaLucro - (c.descFinal||0);
 }
+// ===== SISTEMA DE PAGAMENTOS MÚLTIPLOS =====
+// Cada contexto (cc=consulta nova, ec=edição consulta, vr=venda rápida, ev=edição venda) tem o seu próprio array em memória
+const _pagamentosState = { cc:[], ec:[], vr:[], ev:[] };
+
+function pagamentosTotal(ctx){
+  return (_pagamentosState[ctx]||[]).reduce((s,p)=>s+(p.valor||0),0);
+}
+function initPagamentos(ctx, pagamentosExistentes, metodoFallback){
+  if(pagamentosExistentes && pagamentosExistentes.length){
+    _pagamentosState[ctx] = pagamentosExistentes.map(p=>({valor:p.valor||0, metodo:p.metodo||'MBWay'}));
+  } else {
+    _pagamentosState[ctx] = [];
+  }
+  renderPagamentosUI(ctx, metodoFallback);
+}
+function addPagamento(ctx, totalEsperado){
+  const restante = Math.max(0, (totalEsperado||0) - pagamentosTotal(ctx));
+  _pagamentosState[ctx].push({valor: restante>0?restante:0, metodo:'MBWay'});
+  renderPagamentosUI(ctx, null, totalEsperado);
+}
+function remPagamento(ctx, idx, totalEsperado){
+  _pagamentosState[ctx].splice(idx,1);
+  renderPagamentosUI(ctx, null, totalEsperado);
+}
+function updPagamentoValor(ctx, idx, val, totalEsperado){
+  _pagamentosState[ctx][idx].valor = parseFloat(val)||0;
+  renderPagamentosUI(ctx, null, totalEsperado);
+}
+function updPagamentoMetodo(ctx, idx, val){
+  _pagamentosState[ctx][idx].metodo = val;
+}
+function renderPagamentosUI(ctx, metodoFallback, totalEsperado){
+  const wrap = document.getElementById('pag-'+ctx);
+  if(!wrap) return;
+  const lista = _pagamentosState[ctx]||[];
+  // se não há nenhum pagamento ainda, mostrar o select simples tradicional (caso de uso mais comum: 1 método só)
+  if(!lista.length){
+    wrap.innerHTML = '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">'
+      +'<div style="flex:1;min-width:140px"><select id="'+ctx+'-metodo-unico" onchange="syncMetodoUnico(\''+ctx+'\')">'
+        +'<option value="MBWay" '+(metodoFallback==='MBWay'||!metodoFallback?'selected':'')+'>💳 MBWay</option>'
+        +'<option value="Dinheiro" '+(metodoFallback==='Dinheiro'?'selected':'')+'>💵 Dinheiro</option>'
+        +'<option value="Transferência" '+(metodoFallback==='Transferência'?'selected':'')+'>🏦 Transferência</option>'
+        +'<option value="Outro" '+(metodoFallback==='Outro'?'selected':'')+'>Outro</option>'
+      +'</select></div>'
+      +'<button class="btn sm" type="button" onclick="addPagamento(\''+ctx+'\','+(totalEsperado||0)+')" style="white-space:nowrap">+ Dividir por métodos</button>'
+      +'</div>';
+    return;
+  }
+  const total = pagamentosTotal(ctx);
+  const diff = (totalEsperado!=null) ? Math.round((totalEsperado-total)*100)/100 : null;
+  wrap.innerHTML = '<div style="border:1px solid #eee;border-radius:8px;padding:10px;background:#fafaf7">'
+    +lista.map((p,i)=>'<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'
+      +'<input type="number" step="0.01" value="'+p.valor+'" placeholder="0.00" style="width:90px" onchange="updPagamentoValor(\''+ctx+'\','+i+',this.value,'+(totalEsperado||0)+')"/>'
+      +'<select style="flex:1" onchange="updPagamentoMetodo(\''+ctx+'\','+i+',this.value)">'
+        +'<option value="MBWay" '+(p.metodo==='MBWay'?'selected':'')+'>💳 MBWay</option>'
+        +'<option value="Dinheiro" '+(p.metodo==='Dinheiro'?'selected':'')+'>💵 Dinheiro</option>'
+        +'<option value="Transferência" '+(p.metodo==='Transferência'?'selected':'')+'>🏦 Transferência</option>'
+        +'<option value="Outro" '+(p.metodo==='Outro'?'selected':'')+'>Outro</option>'
+      +'</select>'
+      +'<button type="button" class="btn dan sm" onclick="remPagamento(\''+ctx+'\','+i+','+(totalEsperado||0)+')" style="padding:2px 8px">×</button>'
+      +'</div>').join('')
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:11px">'
+      +'<button type="button" class="btn sm" onclick="addPagamento(\''+ctx+'\','+(totalEsperado||0)+')">+ Adicionar método</button>'
+      +'<span style="color:'+(diff!=null&&Math.abs(diff)>0.01?'#c0392b':'#1a6b1a')+';font-weight:600">'
+        +'Total: '+total.toFixed(2).replace('.',',')+'€'
+        +(diff!=null&&Math.abs(diff)>0.01?'  ('+(diff>0?'falta '+diff.toFixed(2).replace('.',','):'excede '+Math.abs(diff).toFixed(2).replace('.',','))+'€)':'')
+      +'</span>'
+    +'</div>'
+    +'</div>';
+}
+function syncMetodoUnico(ctx){ /* no-op: valor lido directamente do select no momento de guardar */ }
+function getMetodoPagamentoSimples(ctx){
+  // usado quando não há divisão: devolve o método único seleccionado
+  const el = document.getElementById(ctx+'-metodo-unico');
+  return el ? el.value : 'MBWay';
+}
+function getPagamentosParaGravar(ctx, totalEsperado){
+  const lista = _pagamentosState[ctx]||[];
+  if(!lista.length){
+    return { metodoPagamento: getMetodoPagamentoSimples(ctx), pagamentos: null };
+  }
+  return { metodoPagamento: lista[0].metodo, pagamentos: lista.filter(p=>p.valor>0).map(p=>({valor:p.valor,metodo:p.metodo})) };
+}
+function metodoPagamentoDisplay(c){
+  if(c.pagamentos && c.pagamentos.length>1){
+    return c.pagamentos.map(p=>{
+      const icon = p.metodo==='Dinheiro'?'💵':p.metodo==='Transferência'?'🏦':'💳';
+      return icon+' '+fmt(p.valor)+' '+p.metodo;
+    }).join(' + ');
+  }
+  const m = c.metodoPagamento||'MBWay';
+  const icon = m==='Dinheiro'?'💵':m==='Transferência'?'🏦':'💳';
+  return icon+' '+m;
+}
+// ===== FIM SISTEMA DE PAGAMENTOS MÚLTIPLOS =====
+
 function calcTotais(){
   const tp  = cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty, 0);
   const tDesc = cvs.reduce((s,v)=>s+(v.custoOriginal-calcCustoFarm(v))*v.qty, 0);
@@ -1502,7 +1609,9 @@ function gravarConsulta(){
   const tipo = document.getElementById('cc-tipo').value;
   const valor = parseFloat(document.getElementById('cc-val').value)||0;
   const estado = document.getElementById('cc-est').value;
-  const metodoPagamento = document.getElementById('cc-metodo')?.value||'MBWay';
+  const totalGeral = valor + Math.max(0, cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (parseFloat(document.getElementById('cc-desc-final')?.value)||0)) + (parseFloat(document.getElementById('cc-portes')?.value)||0);
+  const pagInfo = getPagamentosParaGravar('cc', totalGeral);
+  const metodoPagamento = pagInfo.metodoPagamento;
   const fatVal = document.getElementById('cc-fat').value;
   const faturado = fatVal==='ambos'||fatVal==='consulta'; // faturado=true se serviço faturado
   const fatProd  = fatVal==='ambos'||fatVal==='produtos';  // produtos faturados
@@ -1515,7 +1624,7 @@ function gravarConsulta(){
   const tp = Math.max(0, cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (descFinal||0));
   const tl = cvs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0) - (descFinal||0);
   const id = 'c'+DB.ids.c++;
-  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,fatProd,estado,metodoPagamento:document.getElementById('cc-metodo')?.value||'MBWay',notas,portes,descFinal,vendas:vendasComFat,totalProd:tp,lucroProd:tl});
+  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,fatProd,estado,metodoPagamento,pagamentos:pagInfo.pagamentos,notas,portes,descFinal,vendas:vendasComFat,totalProd:tp,lucroProd:tl});
   cvs.forEach(v=>{const p=DB.produtos.find(x=>x.id===v.prodId);if(p)p.stock-=v.qty;});
   if(tipo==='Pack'){
     const pk = DB.packs.find(p=>p.clienteId===cId&&p.estado==='Ativo');
@@ -1556,6 +1665,7 @@ function gravarConsulta(){
   const dfEl=document.getElementById('cc-desc-final'); if(dfEl) dfEl.value='0';
   const ncEl=document.getElementById('cc-notas-cli'); if(ncEl) ncEl.value='';
   cvs=[];renderVendasTabela();
+  initPagamentos('cc', null, 'MBWay');
   setTimeout(()=>{al.style.display='none'},5000);
 }
 
@@ -1583,7 +1693,9 @@ function gerarRecibo(){
   const portesVal=parseFloat(document.getElementById('cc-portes').value)||0;
   const descFinalVal=parseFloat(document.getElementById('cc-desc-final')?.value)||0;
   const notasVal=document.getElementById('cc-notas').value;
-  const metodo=document.getElementById('cc-metodo')?.value||'MBWay';
+  const _pagAtual = _pagamentosState['cc']||[];
+  const metodo = _pagAtual.length ? _pagAtual[0].metodo : (getMetodoPagamentoSimples('cc')||'MBWay');
+  const metodoExtra = _pagAtual.length>1 ? _pagAtual : null;
   const f2=n=>(Math.round((n||0)*100)/100).toFixed(2).replace('.',',')+'€';
   const fD=d=>d?d.split('-').reverse().join('/'):'';
   let prodRows='',totalReal=0;
@@ -1602,7 +1714,9 @@ function gerarRecibo(){
   if(inclConsulta&&valorCons>0){totalReal+=valorCons;prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Consulta</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(valorCons)+'</td></tr>';}
   const subtotalAntesDesc=totalReal;
   if(descFinalVal>0) totalReal=Math.max(0,totalReal-descFinalVal);
-  const metodoLabel=metodo==='Dinheiro'?'💵 Dinheiro':metodo==='Transferência'?'🏦 Transferência':'💳 '+metodo;
+  const metodoLabel=metodoExtra
+    ? metodoExtra.map(p=>{const ic=p.metodo==='Dinheiro'?'💵':p.metodo==='Transferência'?'🏦':'💳';return ic+' '+f2(p.valor)+' '+p.metodo;}).join(' + ')
+    : (metodo==='Dinheiro'?'💵 Dinheiro':metodo==='Transferência'?'🏦 Transferência':'💳 '+metodo);
   const LOGO='data:image/png;base64,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';
   const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>Recibo DAILYcare</title><style>'
     +'*{margin:0;padding:0;box-sizing:border-box}'
@@ -1800,11 +1914,7 @@ function renderConsultasLista(){
         </div>
         <div class="row c3">
           <div><label>Estado</label><select id="ec-est"><option ${c.estado==='Pago'?'selected':''}>Pago</option><option ${c.estado==='Por pagar'?'selected':''}>Por pagar</option></select></div>
-          <div><label>Método pagamento</label><select id="ec-metodo">
-            <option value="MBWay" ${(c.metodoPagamento||'MBWay')==='MBWay'?'selected':''}>💳 MBWay</option>
-            <option value="Dinheiro" ${c.metodoPagamento==='Dinheiro'?'selected':''}>💵 Dinheiro</option>
-            <option value="Outro" ${c.metodoPagamento==='Outro'?'selected':''}>Outro</option>
-          </select></div>
+          <div><label>Método pagamento</label><div id="pag-ec"></div></div>
           <div><label>Faturação</label>
             <select id="ec-fat">
               <option value="none" ${(!c.faturado&&!c.fatProd)?'selected':''}>Não faturado</option>
@@ -1905,7 +2015,7 @@ function renderConsultasLista(){
           </div>
           <div>
             <div class="lb">Pagamento</div>
-            <strong style="font-size:12px">${c.metodoPagamento==='Dinheiro'?'💵 Dinheiro':c.metodoPagamento==='MBWay'?'💳 MBWay':'💳 '+(c.metodoPagamento||'MBWay')}</strong>
+            <strong style="font-size:12px">${metodoPagamentoDisplay(c)}</strong>
           </div>
         </div>
         ${c.vendas.length?`
@@ -1964,6 +2074,8 @@ function toggleProdDetail(id, btn){
 function startEditCons(id){
   editingConsId=id;
   renderConsultas();
+  const c=DB.consultas.find(x=>x.id===id);
+  if(c) initPagamentos('ec', c.pagamentos, c.metodoPagamento);
   setTimeout(()=>document.getElementById('ec-data')?.focus(),50);
 }
 function cancelEditCons(){ editingConsId=null; renderConsultas(); }
@@ -2049,7 +2161,10 @@ function saveEditCons(id){
   c.tipo=document.getElementById('ec-tipo').value;
   c.valor=parseFloat(document.getElementById('ec-val').value)||0;
   c.estado=document.getElementById('ec-est').value;
-  c.metodoPagamento=document.getElementById('ec-metodo')?.value||c.metodoPagamento||'MBWay';
+  const totalGeralEc = c.valor + (c.totalProd||0) + (parseFloat(document.getElementById('ec-portes')?.value)||c.portes||0);
+  const pagInfoEc = getPagamentosParaGravar('ec', totalGeralEc);
+  c.metodoPagamento=pagInfoEc.metodoPagamento;
+  c.pagamentos=pagInfoEc.pagamentos;
   const ecFatVal=document.getElementById('ec-fat').value;
   c.faturado=ecFatVal==='ambos'||ecFatVal==='consulta';
   c.fatProd =ecFatVal==='ambos'||ecFatVal==='produtos';
@@ -2218,7 +2333,7 @@ function showVendaRapida(){
   if(!f) return;
   const open=f.style.display==='none';
   f.style.display=open?'block':'none';
-  if(open){ vrs=[]; renderVRTabela(); }
+  if(open){ vrs=[]; renderVRTabela(); initPagamentos('vr', null, 'MBWay'); }
 }
 
 function ddCliVR(v){ ddCliGenerico(v,'dd-vr-cli','vr-cli','vr-cli-id'); }
@@ -2247,10 +2362,11 @@ function guardarVendaRapida(){
   const faturado = false; // venda directa não tem serviço
   const fatProd  = vrFatVal==='produtos';
   const estado   = document.getElementById('vr-estado').value;
-  const metodoPagamento = document.getElementById('vr-metodo')?.value||'MBWay';
   const portesVR = parseFloat(document.getElementById('vr-portes')?.value)||0;
   const vrDescFinalVal = parseFloat(document.getElementById('vr-desc-final')?.value)||0;
-  const tp = vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
+  const tp = Math.max(0, vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (vrDescFinalVal||0));
+  const pagInfoVR = getPagamentosParaGravar('vr', tp+portesVR);
+  const metodoPagamento = pagInfoVR.metodoPagamento;
   const tl = vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0)-(vrDescFinalVal||0);
   const vendas = vrs.map(v=>({
     prodId:v.prodId, nome:v.nome, pvp:v.pvp, pvpBase:v.pvpBase||v.pvp,
@@ -2271,6 +2387,7 @@ function guardarVendaRapida(){
     fatProd,
     estado,
     metodoPagamento,
+    pagamentos:pagInfoVR.pagamentos,
     notas:'',
     portes:portesVR,
     descFinal:vrDescFinalVal,
@@ -2287,15 +2404,63 @@ function guardarVendaRapida(){
 }
 
 
+function verVenda(cid){
+  const c=DB.consultas.find(x=>x.id===cid); if(!c) return;
+  const fD=d=>d?d.split('-').reverse().join('/'):'';
+  const estadoFat = c.faturado&&c.fatProd?'<span class="badge bg-b">Faturado: consulta + produtos</span>'
+    :c.faturado?'<span class="badge bg-b">Faturado: só consulta</span>'
+    :c.fatProd?'<span class="badge bg-b">Faturado: só produtos</span>'
+    :'<span class="badge bg-gray">Não faturado</span>';
+  const metodoLabel=metodoPagamentoDisplay(c);
+  const rows=(c.vendas||[]).map(v=>{
+    const prod=DB.produtos.find(p=>p.id===v.prodId);
+    const pvc=v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0;
+    const ll=(pvc-(v.custo||0))*(v.qty||1);
+    const totalLinha=pvc*(v.qty||1);
+    return '<tr>'
+      +'<td style="padding:7px 8px"><strong>'+v.nome+'</strong>'+(v.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':'')+'</td>'
+      +'<td style="font-family:monospace;font-size:10px;color:#8b6f4e">'+(prod?.cnp||v.cnp||'—')+'</td>'
+      +'<td style="text-align:center">'+(v.qty||1)+'</td>'
+      +'<td>'+fmt(pvc)+((v.descCliente||0)>0?'<div style="font-size:10px;color:#c05050">-'+v.descCliente+'%</div>':'')+'</td>'
+      +'<td><strong>'+fmt(totalLinha)+'</strong></td>'
+      +'<td class="green">'+fmt(ll)+'</td>'
+      +'</tr>';
+  }).join('');
+  const bruto=(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1),0);
+  document.getElementById('venda-ver-titulo').textContent='Venda — '+cNome(c.clienteId)+' · '+fD(c.data);
+  document.getElementById('venda-ver-body').innerHTML=
+    '<div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+estadoFat+'<span style="font-size:12px;color:#888">'+metodoLabel+'</span>'
+    +(c.estado&&c.estado!=='Pago'?'<span class="badge bg-a">'+c.estado+'</span>':'<span class="badge bg-g">Pago</span>')+'</div>'
+    +'<table style="width:100%;font-size:13px"><thead><tr style="background:#fafaf7">'
+    +'<th style="padding:7px 8px;text-align:left">Produto</th><th>CNP</th><th>Qty</th><th>PVP cobrado</th><th>Total</th><th>Lucro</th></tr></thead><tbody>'
+    +rows
+    +'</tbody></table>'
+    +'<div style="border-top:2px solid #eee;padding:12px 8px;display:flex;gap:20px;flex-wrap:wrap;margin-top:4px">'
+    +(c.descFinal>0?'<div><div style="font-size:10px;color:#888">Subtotal</div><div style="font-weight:600">'+fmt(bruto)+'</div></div><div><div style="font-size:10px;color:#c05050">Desconto</div><div style="font-weight:600;color:#c05050">- '+fmt(c.descFinal)+'</div></div>':'')
+    +'<div><div style="font-size:10px;color:#888">Total pago</div><div style="font-size:18px;font-weight:700">'+fmt(c.totalProd)+'</div></div>'
+    +'<div><div style="font-size:10px;color:#888">Lucro total</div><div style="font-size:18px;font-weight:700" class="green">'+fmt(c.lucroProd)+'</div></div>'
+    +(c.portes>0?'<div><div style="font-size:10px;color:#888">Portes</div><div style="font-weight:600">'+fmt(c.portes)+'</div></div>':'')
+    +'</div>'
+    +(c.notas?'<div style="font-size:12px;color:#666;margin-top:8px;padding:8px 10px;background:#fafaf7;border-left:3px solid #d4a97a;border-radius:0 6px 6px 0">📝 '+c.notas+'</div>':'')
+    +'<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
+    +'<button class="btn pri" onclick="document.getElementById(\'venda-ver-modal\').style.display=\'none\';startEditVenda(\''+c.id+'\')">✏ Editar venda</button>'
+    +'<button class="btn" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28" onclick="gerarDocVenda(\''+c.id+'\',\'orcamento\')">📄 Orçamento</button>'
+    +'<button class="btn" style="background:#f0fff4;border-color:#c3e6cb;color:#1a6b1a" onclick="gerarDocVenda(\''+c.id+'\',\'recibo\')">🧾 Recibo</button>'
+    +'</div>';
+  document.getElementById('venda-ver-modal').style.display='flex';
+}
+
 function gerarDocVendaRapida(tipo){
   syncVR();
   if(!vrs.length){ alert('Adiciona pelo menos um produto primeiro.'); return; }
   const cliId = document.getElementById('vr-cli-id').value;
   const cliNomeVal = document.getElementById('vr-cli').value || 'Cliente';
   const data = document.getElementById('vr-data').value;
-  const metodo = document.getElementById('vr-metodo')?.value||'MBWay';
   const portesVR = parseFloat(document.getElementById('vr-portes')?.value)||0;
   const descFinalVal = parseFloat(document.getElementById('vr-desc-final')?.value)||0;
+  const tpPreview = Math.max(0, vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (descFinalVal||0));
+  const pagInfoPreview = getPagamentosParaGravar('vr', tpPreview+portesVR);
+  const metodo = pagInfoPreview.metodoPagamento;
   // construir objecto temporário compatível com gerarDocVenda
   const vendas = vrs.map(function(v){ return {
     nome:v.nome, pvp:v.pvp, pvpBase:v.pvpBase||v.pvp,
@@ -2309,6 +2474,7 @@ function gerarDocVendaRapida(tipo){
     data: data,
     hora: '',
     metodoPagamento: metodo,
+    pagamentos: pagInfoPreview.pagamentos,
     portes: portesVR,
     descFinal: descFinalVal,
     vendas: vendas
@@ -2322,7 +2488,9 @@ function gerarDocVenda(cid, tipo, cOverride){
   const f2=n=>(Math.round((n||0)*100)/100).toFixed(2).replace('.',',')+'€';
   const fD=d=>d?d.split('-').reverse().join('/'):'';
   const metodo=c.metodoPagamento||'MBWay';
-  const metodoLabel=metodo==='Dinheiro'?'💵 Dinheiro':metodo==='Transferência'?'🏦 Transferência':'💳 '+metodo;
+  const metodoLabel=(c.pagamentos&&c.pagamentos.length>1)
+    ? c.pagamentos.map(p=>{const ic=p.metodo==='Dinheiro'?'💵':p.metodo==='Transferência'?'🏦':'💳';return ic+' '+f2(p.valor)+' '+p.metodo;}).join(' + ')
+    : (metodo==='Dinheiro'?'💵 Dinheiro':metodo==='Transferência'?'🏦 Transferência':'💳 '+metodo);
   const cliNome=c._cliNome||(cNome(c.clienteId)||'Cliente');
   const descFinalVal=c.descFinal||0;
   let prodRows='',totalReal=0;
@@ -2414,7 +2582,7 @@ function renderVendas(){
           <select id="vr-estado"><option value="Pago">Pago</option><option value="Pendente">Pendente</option></select>
         </div>
         <div><label>Método pagamento</label>
-          <select id="vr-metodo"><option value="MBWay">💳 MBWay</option><option value="Dinheiro">💵 Dinheiro</option><option value="Outro">Outro</option></select>
+          <div id="pag-vr"></div>
         </div>
         <div><label>Faturado?</label>
           <select id="vr-fat">
@@ -2519,7 +2687,7 @@ function renderVendasPagina(){
   const {col}=getSort('vendas');
   const lista=col?sortArr(consultas,'vendas',defs):[...consultas].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
   wrap.innerHTML=`<div style="overflow-x:auto"><table>
-    <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Pagamento</th><th>Pendente</th><th>Estado</th><th></th></tr></thead>
+    <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Pagamento</th><th>Faturação</th><th>Pendente</th><th>Estado</th><th></th></tr></thead>
     <tbody>${lista.length?lista.map(c=>{
       const tp=c.totalProd;
       const tl=c.lucroProd;
@@ -2532,11 +2700,7 @@ function renderVendasPagina(){
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:10px">
             <div><label>Data</label><input id="ev-data" type="date" value="${c.data}"/></div>
             <div><label>Estado</label><select id="ev-estado"><option ${c.estado==='Pago'?'selected':''}>Pago</option><option ${c.estado==='Por pagar'?'selected':''}>Por pagar</option></select></div>
-            <div><label>Método pagamento</label><select id="ev-metodo">
-              <option value="MBWay" ${(c.metodoPagamento||'MBWay')==='MBWay'?'selected':''}>💳 MBWay</option>
-              <option value="Dinheiro" ${c.metodoPagamento==='Dinheiro'?'selected':''}>💵 Dinheiro</option>
-              <option value="Outro" ${c.metodoPagamento==='Outro'?'selected':''}>Outro</option>
-            </select></div>
+            <div><label>Método pagamento</label><div id="pag-ev"></div></div>
             <div><label>Valor pendente (€)</label><input id="ev-pendente" type="number" step="0.01" min="0" value="${pendente.toFixed(2)}" placeholder="0.00"/></div>
             <div><label>Faturado?</label><select id="ev-fat"><option value="false" ${!c.faturado?'selected':''}>Não</option><option value="true" ${c.faturado?'selected':''}>Sim</option></select></div>
           </div>
@@ -2573,20 +2737,21 @@ function renderVendasPagina(){
         <td style="font-size:11px;color:#888;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nomes}">${nomes}</td>
         <td>${c.descFinal>0?`<div><strong>${fmt(tp)}</strong></div><div style="font-size:10px;color:#c05050">-${fmt(c.descFinal)} desc.</div>`:`<strong>${fmt(tp)}</strong>`}</td>
         <td class="green"><strong>${fmt(tl)}</strong></td>
-        <td style="font-size:11px">${c.metodoPagamento==='Dinheiro'?'💵 Dinheiro':c.metodoPagamento==='MBWay'?'💳 MBWay':'💳 '+(c.metodoPagamento||'MBWay')}</td>
+        <td style="font-size:11px">${metodoPagamentoDisplay(c)}</td>
+        <td>${c.faturado&&c.fatProd?'<span class="badge bg-b" style="font-size:10px">Consulta+produtos</span>':c.faturado?'<span class="badge bg-b" style="font-size:10px">Só consulta</span>':c.fatProd?'<span class="badge bg-b" style="font-size:10px">Só produtos</span>':'<span class="badge bg-gray" style="font-size:10px">Não faturado</span>'}</td>
         <td>${pendente>0?`<span class="badge bg-a">${fmt(pendente)}</span>`:'<span style="color:#bbb;font-size:11px">—</span>'}</td>
         <td>
           <span class="badge ${c.estado==='Pago'?'bg-g':'bg-a'}">${c.estado||'—'}</span>
           ${c.estado!=='Pago'?`<div style="margin-top:3px"><button class="btn suc sm" onclick="marcarVendaPaga('${c.id}')" style="font-size:10px;display:block;width:100%">✓ Registar pagamento</button>${(c.valorPendente||0)>0?`<div style="font-size:10px;color:#856404;margin-top:2px">Em dívida: ${fmt(c.valorPendente)}</div>`:''}</div>`:''}
         </td>
         <td style="white-space:nowrap">
-          <button class="btn sm" onclick="startEditVenda('${c.id}')" style="font-size:10px">✏ Editar</button>
-          <button class="btn sm" onclick="gerarDocVenda('${c.id}','orcamento')" style="font-size:10px;margin-top:3px;background:#fffbf5;border-color:#d4a97a;color:#7a4f28;display:block;width:100%">📄 Orçamento</button>
+          <button class="btn sm" onclick="verVenda('${c.id}')" style="font-size:10px;display:block;width:100%">👁 Ver</button>
+          <button class="btn sm" onclick="startEditVenda('${c.id}')" style="font-size:10px;margin-top:3px;display:block;width:100%">✏ Editar</button>
           <button class="btn sm" onclick="gerarDocVenda('${c.id}','recibo')" style="font-size:10px;margin-top:3px;background:#f0fff4;border-color:#c3e6cb;color:#1a6b1a;display:block;width:100%">🧾 Recibo</button>
         </td>
       </tr>
-      <tr id="vd-${c.id}" style="display:none;background:#fafaf7"><td colspan="9"></td></tr>`;
-    }).join(''):'<tr><td colspan="9" style="text-align:center;padding:2rem;color:#999">Sem resultados</td></tr>'}
+      <tr id="vd-${c.id}" style="display:none;background:#fafaf7"><td colspan="10"></td></tr>`;
+    }).join(''):'<tr><td colspan="10" style="text-align:center;padding:2rem;color:#999">Sem resultados</td></tr>'}
     </tbody>
   </table></div>`;
   // preencher detalhes de produtos lazily
@@ -2609,7 +2774,7 @@ function renderVendasPagina(){
         +'<td>'+(v.consig?'<span class="badge bg-a">Sim</span>':'—')+'</td></tr>';
     }).join('')+(c.descFinal>0?'<tr style="background:#fff8f0"><td colspan="5" style="padding:3px 10px;text-align:right;color:#888;font-size:11px">Subtotal:</td><td style="font-size:11px;color:#888">'+fmt(bruto2)+'</td><td></td><td></td></tr>'+'<tr style="background:#fff8f0"><td colspan="5" style="padding:3px 10px;text-align:right;color:#c05050;font-size:11px">Desconto:</td><td style="font-size:11px;color:#c05050">- '+fmt(c.descFinal)+'</td><td></td><td></td></tr>':'')
 +'<tr style="background:#f0f0ec;font-weight:600"><td colspan="5" style="padding:5px 10px;text-align:right;color:#888">Total pago:</td><td>'+fmt(tp2)+'</td><td class="green">'+fmt(tl2)+'</td><td></td></tr>';
-    td.setAttribute('colspan','9');
+    td.setAttribute('colspan','10');
     td.innerHTML='<div style="overflow-x:auto"><table style="width:100%;font-size:11px"><thead><tr style="background:#f0f0ec"><th style="padding:5px 10px">Produto</th><th>CNP</th><th>Qty</th><th>PVP cobrado</th><th>Desc. cli.</th><th>Total</th><th>Lucro</th><th>Consig.</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
   });
 }
@@ -2800,7 +2965,12 @@ function addProdEV(cId, pid){
   // re-renderizar só a tabela de produtos dentro do form de edição
   withScroll(renderVendasPagina);
 }
-function startEditVenda(id){ editingVendaId=id; withScroll(renderVendasPagina); }
+function startEditVenda(id){
+  editingVendaId=id;
+  withScroll(renderVendasPagina);
+  const c=DB.consultas.find(x=>x.id===id);
+  if(c) setTimeout(()=>initPagamentos('ev', c.pagamentos, c.metodoPagamento), 60);
+}
 function cancelEditVenda(){ editingVendaId=null; renderVendasPagina(); }
 function remVendaItem(cId, vi){
   const c=DB.consultas.find(x=>x.id===cId); if(!c) return;
@@ -2831,7 +3001,9 @@ function saveEditVenda(id){
   const c=DB.consultas.find(x=>x.id===id); if(!c) return;
   c.data    = document.getElementById('ev-data')?.value||c.data;
   c.estado  = document.getElementById('ev-estado')?.value||c.estado;
-  c.metodoPagamento = document.getElementById('ev-metodo')?.value||c.metodoPagamento||'MBWay';
+  const pagInfoEv = getPagamentosParaGravar('ev', (c.totalProd||0));
+  c.metodoPagamento = pagInfoEv.metodoPagamento;
+  c.pagamentos = pagInfoEv.pagamentos;
   c.faturado= document.getElementById('ev-fat')?.value==='true';
   c.valorPendente = parseFloat(document.getElementById('ev-pendente')?.value)||0;
   // actualizar cada produto
@@ -6523,11 +6695,29 @@ function renderRelatorio(){
   const tProd  = rCs.reduce((s,c)=>s+c.totalProd,0);
   const calcLucroCRel=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0);
   const tLucro = rCs.reduce((s,c)=>s+calcLucroCRel(c),0);
-  // receitas por método de pagamento
-  const recDinheiro   = rCs.filter(c=>c.metodoPagamento==='Dinheiro').reduce((s,c)=>s+c.valor+(c.totalProd||0)+(c.portes||0),0);
-  const recMBWay      = rCs.filter(c=>c.metodoPagamento!=='Dinheiro').reduce((s,c)=>s+c.valor+(c.totalProd||0)+(c.portes||0),0);
-  const lucroDinheiro = rCs.filter(c=>c.metodoPagamento==='Dinheiro').reduce((s,c)=>s+c.valor+calcLucroCRel(c),0);
-  const lucroMBWay    = rCs.filter(c=>c.metodoPagamento!=='Dinheiro').reduce((s,c)=>s+c.valor+calcLucroCRel(c),0);
+  // receitas e lucro por método de pagamento — considera divisão por c.pagamentos quando existir
+  let recDinheiro=0, recMBWay=0, recOutro=0, lucroDinheiro=0, lucroMBWay=0, lucroOutro=0;
+  rCs.forEach(c=>{
+    const totalC = c.valor + (c.totalProd||0) + (c.portes||0);
+    const lucroC = c.valor + calcLucroCRel(c);
+    if(c.pagamentos && c.pagamentos.length){
+      // distribui receita e lucro proporcionalmente ao peso de cada parcela no total
+      const somaPag = c.pagamentos.reduce((s,p)=>s+(p.valor||0),0) || totalC || 1;
+      c.pagamentos.forEach(p=>{
+        const peso = (p.valor||0)/somaPag;
+        const recParte = totalC*peso;
+        const lucroParte = lucroC*peso;
+        if(p.metodo==='Dinheiro'){ recDinheiro+=recParte; lucroDinheiro+=lucroParte; }
+        else if(p.metodo==='MBWay'){ recMBWay+=recParte; lucroMBWay+=lucroParte; }
+        else { recOutro+=recParte; lucroOutro+=lucroParte; }
+      });
+    } else {
+      if(c.metodoPagamento==='Dinheiro'){ recDinheiro+=totalC; lucroDinheiro+=lucroC; }
+      else if(c.metodoPagamento==='MBWay'||!c.metodoPagamento){ recMBWay+=totalC; lucroMBWay+=lucroC; }
+      else { recOutro+=totalC; lucroOutro+=lucroC; }
+    }
+  });
+  recMBWay += recOutro; lucroMBWay += lucroOutro; // "Outro" agrupado com MBWay para manter os dois totais existentes
   const tPacks = rPacks.reduce((s,p)=>s+p.valor,0);
   const tWork  = rWorks.reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
   const tFo    = rFos.reduce((s,f)=>s+calcFoTotal(f),0);
