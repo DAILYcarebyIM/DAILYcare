@@ -821,7 +821,7 @@ document.addEventListener('keydown', e=>{
 });
 
 let cvs = [];
-let fP='', fM='';
+let fP='', fM='', fF='';
 let fVendasTexto='', fVendasData='', fVendasDe='', fVendasAte='', fVendasMarca='';
 let fEntradasTexto='', fEntradasData='';
 let fConsultasTexto='', fConsultasData='';
@@ -3731,6 +3731,14 @@ function renderProdutos(){
           <option value="">Todas as marcas</option>
           ${getMarcas().map(m=>`<option ${fM===m?'selected':''}>${m}</option>`).join('')}
         </select>
+        <select id="prod-filtro-forn" onchange="fF=this.value;renderProdutosTabela()" style="max-width:200px">
+          <option value="">Todos os fornecedores</option>
+          ${getFornecedores().map(f=>`<option ${fF===f?'selected':''}>${f}</option>`).join('')}
+        </select>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button class="btn sm" onclick="exportarProdutosCSV()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel (CSV)</button>
+          <button class="btn sm" onclick="exportarProdutosPDF()" style="background:#fdeeee;border-color:#e8a0a0;color:#a83232">↓ PDF</button>
+        </div>
       </div>
       <div id="prod-tbody-wrap"></div>
     </div>`;
@@ -3742,6 +3750,90 @@ function renderProdutos(){
   setTimeout(renderProdutosTabela, 0);
 }
 
+function _produtosFiltradosParaExport(){
+  let ps = DB.produtos;
+  if(fP) ps=ps.filter(p=>matchProd(p,fP));
+  if(fM) ps=ps.filter(p=>p.marca===fM);
+  if(fF) ps=ps.filter(p=>p.fornecedor===fF);
+  return [...ps].sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
+}
+function exportarProdutosCSV(){
+  const ps = _produtosFiltradosParaExport();
+  if(!ps.length){ alert('Sem resultados para exportar.'); return; }
+  const partes=[];
+  if(fF) partes.push('Fornecedor: '+fF);
+  if(fM) partes.push('Marca: '+fM);
+  if(fP) partes.push('Filtro: '+fP);
+  const titulo = partes.length ? partes.join(' · ') : 'Todos os produtos';
+  const totalCusto = ps.reduce((s,p)=>s+(p.custo||0)*(p.stock||0),0);
+  const totalPvp = ps.reduce((s,p)=>s+(p.pvp||0)*(p.stock||0),0);
+  const nl='\n';
+  const rows=[
+    ['DAILYcare — Listagem de produtos'],
+    [titulo],
+    ['Exportado em: '+today()],
+    [],
+    ['Nome','CNP','Marca','Fornecedor','Categoria','Custo','PVP','Margem €','Margem %','Stock','Stock mín.','Valor stock (custo)','Valor stock (PVP)'],
+    ...ps.map(p=>{
+      const custo=p.custo||0, pvp=p.pvp||0, marg=pvp-custo, margPct=pvp>0?Math.round(marg/pvp*100):0;
+      return [p.nome||'',p.cnp||'',p.marca||'',p.fornecedor||'',p.cat||'',custo.toFixed(2),pvp.toFixed(2),marg.toFixed(2),margPct,p.stock??0,p.stockMin??0,((p.custo||0)*(p.stock||0)).toFixed(2),((p.pvp||0)*(p.stock||0)).toFixed(2)];
+    }),
+    [],
+    ['','','','','','','','','','','TOTAL:',totalCusto.toFixed(2),totalPvp.toFixed(2)]
+  ];
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join(nl);
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='produtos_'+(fF||fM||'todos').replace(/\s/g,'_')+'_'+today()+'.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function exportarProdutosPDF(){
+  const ps = _produtosFiltradosParaExport();
+  if(!ps.length){ alert('Sem resultados para exportar.'); return; }
+  const partes=[];
+  if(fF) partes.push('Fornecedor: '+fF);
+  if(fM) partes.push('Marca: '+fM);
+  if(fP) partes.push('Filtro: '+fP);
+  const titulo = partes.length ? partes.join(' · ') : 'Todos os produtos';
+  const totalCusto = ps.reduce((s,p)=>s+(p.custo||0)*(p.stock||0),0);
+  const totalPvp = ps.reduce((s,p)=>s+(p.pvp||0)*(p.stock||0),0);
+  const rows = ps.map(p=>{
+    const custo=p.custo||0, pvp=p.pvp||0, marg=pvp-custo, margPct=pvp>0?Math.round(marg/pvp*100):0;
+    return '<tr>'
+      +'<td style="padding:6px 8px"><strong>'+(p.nome||'')+'</strong></td>'
+      +'<td style="font-family:monospace;font-size:10px;color:#8b6f4e">'+(p.cnp||'—')+'</td>'
+      +'<td>'+(p.marca||'—')+'</td>'
+      +'<td>'+(p.fornecedor||'—')+'</td>'
+      +'<td style="text-align:right">'+fmt(custo)+'</td>'
+      +'<td style="text-align:right">'+fmt(pvp)+'</td>'
+      +'<td style="text-align:right">'+fmt(marg)+' ('+margPct+'%)</td>'
+      +'<td style="text-align:center">'+(p.stock??0)+'</td>'
+      +'</tr>';
+  }).join('');
+  const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>Produtos DAILYcare</title><style>'
+    +'*{margin:0;padding:0;box-sizing:border-box}'
+    +'body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:32px}'
+    +'@media print{body{padding:16px}@page{margin:1.2cm}}'
+    +'h1{font-size:20px;font-weight:600;margin-bottom:4px}'
+    +'.sub{font-size:12px;color:#888;margin-bottom:20px}'
+    +'table{width:100%;border-collapse:collapse;font-size:12px}'
+    +'thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;padding:6px 8px;border-bottom:2px solid #d4a97a}'
+    +'tbody tr:nth-child(even){background:#fafaf7}'
+    +'tfoot td{padding:10px 8px;font-weight:700;border-top:2px solid #333}'
+    +'</style></head><body>'
+    +'<h1>Listagem de produtos — DAILYcare</h1>'
+    +'<div class="sub">'+titulo+' · Exportado em '+today().split('-').reverse().join('/')+' · '+ps.length+' produto'+(ps.length!==1?'s':'')+'</div>'
+    +'<table><thead><tr><th>Nome</th><th>CNP</th><th>Marca</th><th>Fornecedor</th><th style="text-align:right">Custo</th><th style="text-align:right">PVP</th><th style="text-align:right">Margem</th><th style="text-align:center">Stock</th></tr></thead>'
+    +'<tbody>'+rows+'</tbody>'
+    +'<tfoot><tr><td colspan="4">Total ('+ps.reduce((s,p)=>s+(p.stock||0),0)+' unidades em stock)</td><td style="text-align:right">'+fmt(totalCusto)+'</td><td style="text-align:right">'+fmt(totalPvp)+'</td><td colspan="2"></td></tr></tfoot>'
+    +'</table></body></html>';
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>{w.print();},500);
+}
 function renderProdutosTabela(){
   const wrap = document.getElementById('prod-tbody-wrap'); if(!wrap) return;
   const cats=['Limpeza','Sérum','Hidratante','SPF','Suplemento','Maquilhagem','Outro'];
@@ -3754,6 +3846,7 @@ function renderProdutosTabela(){
   let ps = DB.produtos;
   if(fP) ps=ps.filter(p=>matchProd(p,fP));
   if(fM) ps=ps.filter(p=>p.marca===fM);
+  if(fF) ps=ps.filter(p=>p.fornecedor===fF);
   const {col} = getSort('produtos');
   ps = col ? sortArr(ps,'produtos',defs) : ps;
 
