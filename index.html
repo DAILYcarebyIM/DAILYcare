@@ -1290,7 +1290,8 @@ function addV(pid){
     // margemPct = margem habitual em %
     const margemPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     const descConsigCV = p.consig ? 10 : 0; // 10% = desconto fixo habitual da farmácia
-    cvs.push({prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp, custoOriginal:p.custo, custo:p.custo, qty:1, marca:p.marca, consig:p.consig||false, margemBase:margemPct, descExtra:0, descConsig:descConsigCV, descForn:0, descCliente:0});
+    const custoMedio = p.consig ? p.custo : calcCustoMedioProduto(pid);
+    cvs.push({prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp, custoOriginal:custoMedio, custo:custoMedio, qty:1, marca:p.marca, consig:p.consig||false, margemBase:margemPct, descExtra:0, descConsig:descConsigCV, descForn:0, descCliente:0});
   }
   document.getElementById('ps-inp').value='';
   document.getElementById('dd-prod').style.display='none';
@@ -1336,6 +1337,19 @@ function withScroll(fn){
 // Para consignação: custoFarm = pvpBase × (1 - (descConsig + descForn) / 100)
 // Para não-consig:  custoFarm = custoOriginal × (1 - descForn / 100)
 // pvpCobrado = pvpBase × (1 - descCliente / 100)
+function calcCustoMedioProduto(prodId){
+  // custo médio ponderado a partir de todas as entradas de stock deste produto
+  // reflete bónus a custo zero, descontos diferentes por encomenda, etc.
+  if(!prodId) return 0;
+  const entradas = (DB.entradas||[]).filter(e=>e.prodId===prodId && !e.consig);
+  if(!entradas.length){
+    const p = DB.produtos.find(x=>x.id===prodId);
+    return p?.custo||0;
+  }
+  const totalQty = entradas.reduce((s,e)=>s+(e.qty||0),0);
+  const totalCusto = entradas.reduce((s,e)=>s+(e.custo||0)*(e.qty||0),0);
+  return totalQty>0 ? totalCusto/totalQty : 0;
+}
 function calcCustoFarm(v){
   if(v.consig){
     // A pagar à farmácia = PVP produto × (1 - 10% - descForn%)
@@ -2140,7 +2154,8 @@ function addProdEC(pid){
   else {
     const margPct=p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100):0;
     const descConsigEC = p.consig ? 10 : 0; // 10% fixo farmácia
-    c.vendas.push({prodId:pid,nome:p.nome,pvp:p.pvp,pvpBase:p.pvp,custoOriginal:p.custo,custo:p.custo,descConsig:descConsigEC,
+    const custoMedioEC = p.consig ? p.custo : calcCustoMedioProduto(pid);
+    c.vendas.push({prodId:pid,nome:p.nome,pvp:p.pvp,pvpBase:p.pvp,custoOriginal:custoMedioEC,custo:custoMedioEC,descConsig:descConsigEC,
       qty:1,marca:p.marca||'',consig:p.consig||false,margemBase:margPct,descExtra:0,descForn:0,descCliente:0,faturado:false});
     p.stock-=1; // baixar stock ao adicionar
   }
@@ -2203,7 +2218,8 @@ function addVR(pid){
   else {
     const margemPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     const descConsigVR = p.consig ? 10 : 0; // 10% fixo farmácia
-    vrs.push({prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp, custoOriginal:p.custo, custo:p.custo, descConsig:descConsigVR,
+    const custoMedioVR = p.consig ? p.custo : calcCustoMedioProduto(pid);
+    vrs.push({prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp, custoOriginal:custoMedioVR, custo:custoMedioVR, descConsig:descConsigVR,
               qty:1, marca:p.marca||'', consig:p.consig||false, margemBase:margemPct, descExtra:0, descForn:0, descCliente:0});
   }
   document.getElementById('vr-ps-inp').value='';
@@ -2948,9 +2964,10 @@ function addProdEV(cId, pid){
   else {
     const margPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     const descConsig = p.consig ? 10 : 0;
+    const custoMedioEV = p.consig ? p.custo : calcCustoMedioProduto(pid);
     c.vendas.push({
       prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp,
-      custoOriginal:p.custo, custo:p.custo, qty:1,
+      custoOriginal:custoMedioEV, custo:custoMedioEV, qty:1,
       marca:p.marca||'', consig:p.consig||false,
       margemBase:margPct, descExtra:0, descConsig,
       descForn:0, descCliente:0, faturado:c.faturado
@@ -4187,12 +4204,6 @@ function renderEntradas(){
         <div><label>Nº fatura / guia</label><input id="enc-fatura" placeholder="ex: FT 2024/123"/></div>
         <div><label>Portes de envio (€)</label><input id="enc-portes" type="number" placeholder="0.00" step="0.01" min="0" oninput="renderEncLinhas()"/></div>
       </div>
-      <div style="margin-bottom:1rem">
-        <label style="cursor:pointer;display:flex;align-items:center;gap:6px;font-size:13px;background:#fafaf7;border:1px solid #eee;border-radius:8px;padding:8px 12px;width:fit-content">
-          <input type="checkbox" id="enc-fiscal"/>
-          <span>✓ Já submetida no portal das finanças</span>
-        </label>
-      </div>
       <div style="margin-bottom:8px">
         <label>Adicionar produto à encomenda</label>
         <div class="dd-wrap">
@@ -4372,7 +4383,7 @@ function showEncomenda(){
   const f=document.getElementById('enc-form');
   const open=f.style.display==='none';
   f.style.display=open?'block':'none';
-  if(open){ encLinhas=[]; delete f.dataset.editEncId; const fiscalEl=document.getElementById('enc-fiscal'); if(fiscalEl) fiscalEl.checked=false; renderEncLinhas(); }
+  if(open){ encLinhas=[]; delete f.dataset.editEncId; renderEncLinhas(); }
 }
 
 // ─── ENCOMENDA MULTI-PRODUTO ──────────────────────────────────────────────────
@@ -4647,8 +4658,6 @@ function abrirEditEncomenda(encId){
     if(dEl) dEl.value=primeira.data;
     if(fatEl) fatEl.value=primeira.fatura||'';
     if(portEl) portEl.value=linhas.reduce((s,e)=>s+(e.portes||0),0)||'';
-    const fiscalEl=document.getElementById('enc-fiscal');
-    if(fiscalEl) fiscalEl.checked=!!primeira.fiscal;
     if(fornSel){
       const forn=primeira.fornecedor||'';
       const opts=[...fornSel.options].map(o=>o.value);
@@ -4669,9 +4678,15 @@ function guardarEncomenda(){
   const forn   = getFornVal('enc');
   const fatura = document.getElementById('enc-fatura').value.trim();
   const portes = parseFloat(document.getElementById('enc-portes')?.value)||0;
-  const fiscalEnc = document.getElementById('enc-fiscal')?.checked||false;
   const f      = document.getElementById('enc-form');
   const editId = f?.dataset?.editEncId;
+
+  // se edição: preservar o estado fiscal que já existia (a marcação faz-se depois, na listagem)
+  let fiscalEnc = false;
+  if(editId){
+    const antigasFiscal=DB.entradas.filter(e=>e.encomendaId===editId);
+    fiscalEnc = antigasFiscal.length>0 && antigasFiscal.every(e=>e.fiscal);
+  }
 
   // se edição: remover entradas antigas e reverter stock
   if(editId){
@@ -5257,9 +5272,10 @@ function ddProdCed(v){
 
 function addProdCed(pid){
   const p=DB.produtos.find(x=>x.id===pid); if(!p) return;
+  const custoMedioCed = p.consig ? p.custo : calcCustoMedioProduto(pid);
   const ex=cedProds.find(v=>v.prodId===pid);
   if(ex){ ex.qty++; ex.valorRecebido=+(ex.custoUnit*ex.qty).toFixed(2); }
-  else cedProds.push({prodId:pid,nome:p.nome,qty:1,pvp:p.pvp,custoUnit:p.custo,descPct:0,valorRecebido:+p.pvp.toFixed(2)});
+  else cedProds.push({prodId:pid,nome:p.nome,qty:1,pvp:p.pvp,custoUnit:custoMedioCed,descPct:0,valorRecebido:+p.pvp.toFixed(2)});
   renderCedProds();
   const inp=document.getElementById('ced-p');
   const dd=document.getElementById('dd-ced');
@@ -5332,7 +5348,11 @@ function abrirEditCed(ids){
         <div><label style="font-size:10px;color:#888;display:block">Valor recebido (€)</label>
           <input type="number" id="ced-edit-val-${i}" value="${(c.valorRecebido||0).toFixed(2)}" step="0.01" min="0" style="width:90px;font-size:12px"/></div>
         <div><label style="font-size:10px;color:#888;display:block">Custo unit. (€)</label>
-          <input type="number" id="ced-edit-custo-${i}" value="${(c.custoUnit||0).toFixed(2)}" step="0.01" min="0" style="width:90px;font-size:12px"/></div>
+          <div style="display:flex;gap:4px;align-items:center">
+            <input type="number" id="ced-edit-custo-${i}" value="${(c.custoUnit||0).toFixed(2)}" step="0.01" min="0" style="width:90px;font-size:12px"/>
+            <button type="button" class="btn sm" title="Recalcular a partir da média ponderada de todas as entradas deste produto" onclick="recalcularCustoMedioCed(${i},'${c.prodId}')" style="font-size:10px;padding:3px 6px">↻ Média</button>
+          </div>
+        </div>
       </div>
     </div>`).join('');
   document.getElementById('ced-edit-modal').style.display='flex';
@@ -5341,6 +5361,11 @@ function abrirEditCed(ids){
 function fecharEditCed(){
   document.getElementById('ced-edit-modal').style.display='none';
   _editCedIds=[];
+}
+function recalcularCustoMedioCed(i, prodId){
+  const novoCusto = calcCustoMedioProduto(prodId);
+  const inp = document.getElementById('ced-edit-custo-'+i);
+  if(inp) inp.value = novoCusto.toFixed(2);
 }
 
 function gravarEditCed(){
