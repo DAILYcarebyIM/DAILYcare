@@ -821,7 +821,7 @@ document.addEventListener('keydown', e=>{
 });
 
 let cvs = [];
-let fP='', fM='', fF='';
+let fP='', fM='', fF='', fSemStock=false;
 let fVendasTexto='', fVendasData='', fVendasDe='', fVendasAte='', fVendasMarca='';
 let fEntradasTexto='', fEntradasData='';
 let fConsultasTexto='', fConsultasData='';
@@ -3735,6 +3735,10 @@ function renderProdutos(){
           <option value="">Todos os fornecedores</option>
           ${getFornecedores().map(f=>`<option ${fF===f?'selected':''}>${f}</option>`).join('')}
         </select>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
+          <input type="checkbox" id="prod-filtro-semstock" ${fSemStock?'checked':''} onchange="fSemStock=this.checked;renderProdutosTabela()"/>
+          Ocultar sem stock
+        </label>
         <div style="margin-left:auto;display:flex;gap:6px">
           <button class="btn sm" onclick="exportarProdutosCSV()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel (CSV)</button>
           <button class="btn sm" onclick="exportarProdutosPDF()" style="background:#fdeeee;border-color:#e8a0a0;color:#a83232">↓ PDF</button>
@@ -3755,6 +3759,7 @@ function _produtosFiltradosParaExport(){
   if(fP) ps=ps.filter(p=>matchProd(p,fP));
   if(fM) ps=ps.filter(p=>p.marca===fM);
   if(fF) ps=ps.filter(p=>p.fornecedor===fF);
+  if(fSemStock) ps=ps.filter(p=>(p.stock||0)>0);
   return [...ps].sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
 }
 function exportarProdutosCSV(){
@@ -3847,6 +3852,7 @@ function renderProdutosTabela(){
   if(fP) ps=ps.filter(p=>matchProd(p,fP));
   if(fM) ps=ps.filter(p=>p.marca===fM);
   if(fF) ps=ps.filter(p=>p.fornecedor===fF);
+  if(fSemStock) ps=ps.filter(p=>(p.stock||0)>0);
   const {col} = getSort('produtos');
   ps = col ? sortArr(ps,'produtos',defs) : ps;
 
