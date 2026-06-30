@@ -6772,6 +6772,11 @@ function renderRelatorio(){
   const rWorks = relMes ? DB.workshops.filter(w=>w.data?.startsWith(relMes))  : DB.workshops;
   const rFos   = relMes ? (DB.formacoes||[]).filter(f=>f.data?.startsWith(relMes)) : (DB.formacoes||[]);
   const rGastos= relMes ? DB.gastos.filter(g=>g.data?.startsWith(relMes))     : DB.gastos;
+  const rConsumo = relMes ? (DB.consumo||[]).filter(ci=>ci.data?.startsWith(relMes)) : (DB.consumo||[]);
+  const valorConsumoInterno = rConsumo.reduce((s,ci)=>{
+    const custoMedio = calcCustoMedioProduto(ci.prodId);
+    return s+custoMedio*(ci.qty||0);
+  },0);
   const relLabel = relMes ? new Date(relMes+'-01').toLocaleDateString('pt-PT',{month:'long',year:'numeric'}) : '';
 
   const tServ  = rCs.reduce((s,c)=>s+c.valor,0);
@@ -6917,6 +6922,10 @@ function renderRelatorio(){
           <tr><td style="color:#888;font-size:11px">↳ Receita em MBWay/outro</td><td style="text-align:right;font-size:11px">💳 ${fmt(recMBWay)}</td></tr>
           <tr><td style="color:#888;font-size:11px;padding-left:24px">↳ Lucro em MBWay/outro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroMBWay)}</td></tr>
         </table>
+        ${valorConsumoInterno>0?`<div style="margin-top:10px;padding:8px 10px;background:#fffbf5;border-left:3px solid #d4a97a;border-radius:0 6px 6px 0;font-size:11px;color:#7a4f28">
+          💡 Consumo interno este mês: <strong>${fmt(valorConsumoInterno)}</strong> em custo de produtos (${rConsumo.length} registo${rConsumo.length!==1?'s':''}).
+          Este valor <strong>não está descontado</strong> do lucro acima: decide tu se o deves subtrair antes de levantar o lucro para uso pessoal.
+        </div>`:''}
       </div>
       <div class="card">
         <h3>Top clientes por valor</h3>
