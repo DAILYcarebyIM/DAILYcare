@@ -296,9 +296,20 @@ tr:hover td{background:#fafaf7}
         <label style="display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer;border-bottom:1px solid #eee">
           <input type="checkbox" id="orc-consulta" style="flex-shrink:0;width:16px;height:16px"><span>Valor da consulta</span>
         </label>
-        <label style="display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer">
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer;border-bottom:1px solid #eee">
           <input type="checkbox" id="orc-notas" style="flex-shrink:0;width:16px;height:16px"><span>Notas da consulta</span>
         </label>
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 0;cursor:pointer" id="orc-desc-row">
+          <input type="checkbox" id="orc-desc" style="flex-shrink:0;width:16px;height:16px"><span>Mostrar desconto final (€)</span>
+        </label>
+      </div>
+      <div style="margin-bottom:12px">
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Total a apresentar no orçamento (€)</label>
+        <div style="display:flex;align-items:center;gap:8px">
+          <input id="orc-total-custom" type="number" step="0.01" min="0" placeholder="Deixar vazio = calculado automaticamente" style="flex:1;font-size:13px"/>
+          <button class="btn sm" onclick="document.getElementById('orc-total-custom').value=''" style="white-space:nowrap">Auto</button>
+        </div>
+        <div style="font-size:11px;color:#888;margin-top:4px">Podes arredondar o valor final livremente, por exemplo 165€ em vez de 168,15€.</div>
       </div>
       <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Nota de rodapé (opcional)</label>
       <input id="orc-rodape" placeholder="ex: Válido 30 dias. IVA incluído." style="width:100%;font-size:13px;margin-bottom:0"/>
@@ -839,6 +850,14 @@ function toggleSort(tbl, col){
   };
   if(renders[tbl]) renders[tbl]();
 }
+function sortRecente(a,b){
+  // ordenar mais recente primeiro: data desc, hora desc, id numérico desc
+  const dCmp=(b.data||'').localeCompare(a.data||'');
+  if(dCmp!==0) return dCmp;
+  const hCmp=(b.hora||'').localeCompare(a.hora||'');
+  if(hCmp!==0) return hCmp;
+  return parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''));
+}
 function sortArr(arr, tbl, defs){
   const {col, dir} = getSort(tbl);
   if(!col) return arr;
@@ -1075,6 +1094,10 @@ function renderConsultaAtual(){
           </div>
           <div style="margin-left:auto;font-size:13px;font-weight:600;color:#8b6f4e">Total a pagar: <span id="vt-portes">0€</span></div>
         </div>
+        <div id="vt-credito-linha" style="display:none;border-top:1px solid #f0e8d0;padding-top:8px;display:flex;align-items:center;justify-content:flex-end;gap:12px;flex-wrap:wrap">
+          <span style="font-size:12px;color:#155724">Crédito a usar: <span id="vt-credito-val" style="font-weight:600"></span></span>
+          <span style="font-size:15px;font-weight:700;color:#155724">Total final: <span id="vt-total-credito">0€</span></span>
+        </div>
       </div>
     </div>
     <div id="ca-alert" style="display:none"></div>
@@ -1241,7 +1264,7 @@ function _creditoHtml(cId){
         <label style="font-size:12px;color:#555">Valor a usar (€):</label>
         <input id="credito-usar-val" type="number" step="0.01" min="0" max="${cl.credito.toFixed(2)}"
           value="${cl.credito.toFixed(2)}" style="width:90px;font-size:13px"
-          oninput="this.value=Math.min(parseFloat(this.value)||0,${cl.credito.toFixed(2)})"/>
+          oninput="this.value=Math.min(parseFloat(this.value)||0,${cl.credito.toFixed(2)});atualizarTotais()"/>
         <span style="font-size:11px;color:#888">máx. ${fmt(cl.credito)}</span>
         <button class="btn sm" style="background:#f0fff0;border-color:#c3e6cb;color:#155724"
           onclick="document.getElementById('credito-usar-val').value='${cl.credito.toFixed(2)}'">Usar tudo</button>
@@ -1255,6 +1278,7 @@ function toggleUsarCredito(){
   const cb=document.getElementById('usar-credito');
   const bloco=document.getElementById('credito-usar-bloco');
   if(bloco) bloco.style.display=cb?.checked?'block':'none';
+  atualizarTotais();
 }
 // alias para compatibilidade com selCli que chama checkPk
 function checkPk(){ checkPkOuVoucher(); }
@@ -1598,6 +1622,19 @@ function atualizarTotais(){
   if(vtl) vtl.textContent=fmt(tl);
   if(vtt) vtt.textContent=fmt(total);
   if(vtp2) vtp2.textContent=fmt(totalComPortes); // sempre mostra total com portes e desc. final
+  // linha de crédito
+  const usarCreditoCb=document.getElementById('usar-credito');
+  const creditoLinha=document.getElementById('vt-credito-linha');
+  const creditoValEl=document.getElementById('vt-credito-val');
+  const totalCreditoEl=document.getElementById('vt-total-credito');
+  if(usarCreditoCb?.checked){
+    const creditoAUsar=parseFloat(document.getElementById('credito-usar-val')?.value)||0;
+    if(creditoAUsar>0&&creditoLinha&&creditoValEl&&totalCreditoEl){
+      creditoLinha.style.display='flex';
+      creditoValEl.textContent=fmt(creditoAUsar);
+      totalCreditoEl.textContent=fmt(Math.max(0,totalComPortes-creditoAUsar));
+    }
+  } else if(creditoLinha){ creditoLinha.style.display='none'; }
   // reaplicar blur se activo (os textContent repõem mas não afectam o style)
   if(lucroBlur) aplicarBlurLucro();
 }
@@ -1764,6 +1801,11 @@ function gerarRecibo(){
 
 function abrirModalOrcamento(){
   if(!cvs.length){ alert('Adiciona produtos à consulta primeiro.'); return; }
+  const descFinalActivo=parseFloat(document.getElementById('cc-desc-final')?.value)||0;
+  const orcDescRow=document.getElementById('orc-desc-row');
+  if(orcDescRow) orcDescRow.style.display=descFinalActivo>0?'flex':'none';
+  const orcTotalCustom=document.getElementById('orc-total-custom');
+  if(orcTotalCustom) orcTotalCustom.value='';
   document.getElementById('orcamento-modal').style.display='flex';
 }
 
@@ -1773,7 +1815,11 @@ function gerarOrcamento(){
   const inclPortes=document.getElementById('orc-portes').checked;
   const inclConsulta=document.getElementById('orc-consulta').checked;
   const inclNotas=document.getElementById('orc-notas').checked;
+  const inclDesc=document.getElementById('orc-desc')?.checked;
+  const totalCustomStr=document.getElementById('orc-total-custom')?.value;
+  const totalCustom=totalCustomStr?parseFloat(totalCustomStr):null;
   const rodape=document.getElementById('orc-rodape').value;
+  const descFinalVal=parseFloat(document.getElementById('cc-desc-final')?.value)||0;
   const cliNomeVal=document.getElementById('cc-cli').value||'Cliente';
   const dataVal=document.getElementById('cc-data').value;
   const valorCons=parseFloat(document.getElementById('cc-val').value)||0;
@@ -1807,13 +1853,36 @@ function gerarOrcamento(){
     prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(portesVal)+'</td></tr>';}
   if(inclConsulta&&valorCons>0){totalReal+=valorCons;totalPVP+=valorCons;
     prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Consulta</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(valorCons)+'</td></tr>';}
-  const temDescG=totalReal<totalPVP;
-  const totalRow=temDescG
-    ?'<td style="font-size:16px;font-weight:700;color:#7a4f28">Total</td>'
-      +'<td style="text-align:right"><span style="text-decoration:line-through;color:#bbb;font-size:14px">'+f2(totalPVP)+'</span></td>'
-      +'<td style="text-align:right;font-size:16px;font-weight:700;color:#7a4f28">'+f2(totalReal)+'</td>'
-    :'<td style="font-size:16px;font-weight:700;color:#7a4f28">Total</td><td></td>'
-      +'<td style="text-align:right;font-size:16px;font-weight:700;color:#7a4f28">'+f2(totalReal)+'</td>';
+  const subtotalCalculado = totalReal + (inclPortes?portesVal:0) + (inclConsulta?valorCons:0);
+  const totalExibido = totalCustom!=null ? totalCustom : (inclDesc&&descFinalVal>0 ? Math.max(0,subtotalCalculado-descFinalVal) : subtotalCalculado);
+  const temDescG = totalReal<totalPVP || (inclDesc&&descFinalVal>0);
+  let totalRow;
+  if(totalCustom!=null){
+    // total personalizado: mostra subtotal calculado riscado e o total escolhido
+    totalRow='<td style="font-size:16px;font-weight:700;color:#7a4f28">Total</td>'
+      +'<td style="text-align:right"><span style="text-decoration:line-through;color:#bbb;font-size:14px">'+f2(subtotalCalculado)+'</span></td>'
+      +'<td style="text-align:right;font-size:16px;font-weight:700;color:#7a4f28">'+f2(totalExibido)+'</td>';
+  } else if(inclDesc&&descFinalVal>0){
+    // desconto final explícito: subtotal + linha desconto + total
+    totalRow='<td style="font-size:13px;color:#888">Subtotal</td><td></td><td style="text-align:right;font-size:13px;color:#888">'+f2(subtotalCalculado)+'</td>';
+    // adicionar linha de desconto e total depois no tfoot
+    totalRow='SPLIT_SUBTOTAL';
+  } else if(temDescG){
+    totalRow='<td style="font-size:16px;font-weight:700;color:#7a4f28">Total</td>'
+      +'<td style="text-align:right"><span style="text-decoration:line-through;color:#bbb;font-size:14px">'+f2(totalPVP+(inclPortes?portesVal:0)+(inclConsulta?valorCons:0))+'</span></td>'
+      +'<td style="text-align:right;font-size:16px;font-weight:700;color:#7a4f28">'+f2(totalExibido)+'</td>';
+  } else {
+    totalRow='<td style="font-size:16px;font-weight:700;color:#7a4f28">Total</td><td></td>'
+      +'<td style="text-align:right;font-size:16px;font-weight:700;color:#7a4f28">'+f2(totalExibido)+'</td>';
+  }
+  let tfootHtml;
+  if(totalRow==='SPLIT_SUBTOTAL'){
+    tfootHtml='<tr class="tfoot"><td style="font-size:13px;color:#888">Subtotal</td><td></td><td style="text-align:right;padding:20px 0 4px;font-size:13px;color:#888">'+f2(subtotalCalculado)+'</td></tr>'
+      +'<tr><td style="font-size:13px;color:#c05050;font-style:italic">Desconto</td><td></td><td style="text-align:right;font-size:13px;color:#c05050;font-style:italic">- '+f2(descFinalVal)+'</td></tr>'
+      +'<tr><td style="font-size:16px;font-weight:700;color:#7a4f28;padding-top:8px">Total</td><td></td><td style="text-align:right;font-size:16px;font-weight:700;color:#7a4f28;padding-top:8px">'+f2(totalExibido)+'</td></tr>';
+  } else {
+    tfootHtml='<tr class="tfoot">'+totalRow+'</tr>';
+  }
   const LOGO='data:image/png;base64,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';
   const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>Orçamento DAILYcare</title><style>'
     +'*{margin:0;padding:0;box-sizing:border-box}'
@@ -1833,7 +1902,7 @@ function gerarOrcamento(){
     +'</style></head><body>'
     +'<div class="hdr"><img src="'+LOGO+'" alt="DAILYcare"><div class="hdr-right"><h1>Orçamento</h1><div class="data">'+fD(dataVal)+'</div></div></div>'
     +'<div class="cliente">'+cliNomeVal+'</div>'
-    +(prodRows?'<table><thead><tr><th style="text-align:left;width:56%">Descrição</th><th style="width:22%">PVP unit.</th><th style="width:22%">Total</th></tr></thead><tbody>'+prodRows+'</tbody><tfoot><tr class="tfoot">'+totalRow+'</tr></tfoot></table>':'')
+    +(prodRows?'<table><thead><tr><th style="text-align:left;width:56%">Descrição</th><th style="width:22%">PVP unit.</th><th style="width:22%">Total</th></tr></thead><tbody>'+prodRows+'</tbody><tfoot>'+tfootHtml+'</tfoot></table>':'')
     +(inclNotas&&notasVal?'<div class="notas"><strong>Notas:</strong> '+notasVal+'</div>':'')
     +(rodape?'<div class="rodape">'+rodape+'</div>':'')
     +'</body></html>';
@@ -2701,7 +2770,7 @@ function renderVendasPagina(){
     {col:'produtos',fn:c=>c.vendas.length},
   ];
   const {col}=getSort('vendas');
-  const lista=col?sortArr(consultas,'vendas',defs):[...consultas].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+  const lista=col?sortArr(consultas,'vendas',defs):[...consultas].sort((a,b)=>sortRecente(a,b));
   wrap.innerHTML=`<div style="overflow-x:auto"><table>
     <thead><tr>${thSort('vendas','data','Data')}${thSort('vendas','cliente','Cliente')}<th>Tipo</th>${thSort('vendas','produtos','Produtos')}${thSort('vendas','pvp','PVP total')}${thSort('vendas','lucro','Lucro total')}<th>Pagamento</th><th>Faturação</th><th>Pendente</th><th>Estado</th><th></th></tr></thead>
     <tbody>${lista.length?lista.map(c=>{
@@ -2900,7 +2969,7 @@ function exportarListagemVendas(){
         lucro:((v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)-(v.custo||0))*(v.qty||1),
         estado:c.estado||'—'
       }))
-  ).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+  ).sort((a,b)=>sortRecente(a,b));
 
   if(!linhas.length){ alert('Sem resultados para exportar.'); return; }
 
@@ -3113,7 +3182,7 @@ function renderClientes(){
     {col:'ultimaData',fn:cl=>cl._ultimaData||''},
   ];
   let clis = DB.clientes.map(cl=>{
-    const cs   = DB.consultas.filter(c=>c.clienteId===cl.id).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+    const cs   = DB.consultas.filter(c=>c.clienteId===cl.id).sort((a,b)=>sortRecente(a,b));
     const pks  = DB.packs.filter(p=>p.clienteId===cl.id);
     const pkAt = pks.find(p=>p.estado==='Ativo');
     const total= cs.reduce((s,c)=>s+c.valor+c.totalProd,0)+pks.reduce((s,p)=>s+p.valor,0);
@@ -3272,7 +3341,7 @@ function abrirFicha(cliId){
   const cl = DB.clientes.find(x=>x.id===cliId);
   if(!cl) return;
 
-  const consultas = DB.consultas.filter(c=>c.clienteId===cliId).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+  const consultas = DB.consultas.filter(c=>c.clienteId===cliId).sort((a,b)=>sortRecente(a,b));
   const packs = DB.packs.filter(p=>p.clienteId===cliId);
   const vouchers = (DB.vouchers||[]).filter(v=>v.beneficiario===cl.nome||v.usadoPor===cl.nome);
   const todasVendas = consultas.flatMap(c=>c.vendas.map(v=>({...v,data:c.data,consultaId:c.id})));
@@ -3422,9 +3491,9 @@ function abrirHistoricoProd(prodId){
   const p = DB.produtos.find(x=>x.id===prodId);
   if(!p) return;
 
-  const entradas = DB.entradas.filter(e=>e.prodId===prodId).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+  const entradas = DB.entradas.filter(e=>e.prodId===prodId).sort((a,b)=>sortRecente(a,b));
   const vendas   = DB.consultas.flatMap(c=>c.vendas.filter(v=>v.prodId===prodId).map(v=>({...v,data:c.data,cliente:cNome(c.clienteId)})))
-                               .sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+                               .sort((a,b)=>sortRecente(a,b));
 
   const totalComprado = entradas.reduce((s,e)=>s+e.qty+(e.qtyBonus||0),0);
   const totalVendido  = vendas.reduce((s,v)=>s+(v.qty||1),0);
@@ -3547,7 +3616,7 @@ function renderPacks(){
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr><th>Cliente</th><th>Pack</th><th>Sessões</th><th>Progresso</th><th>Valor</th><th>Data</th><th>Faturado</th><th>Pagamento</th><th>Estado</th><th></th></tr></thead>
-        <tbody>${[...DB.packs].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(pk=>{
+        <tbody>${[...DB.packs].sort((a,b)=>sortRecente(a,b)).map(pk=>{
           const pct=Math.round(pk.usadas/pk.incluidas*100);
           return`<tr>
             <td><strong>${cNome(pk.clienteId)}</strong></td>
@@ -5053,8 +5122,8 @@ function renderConsumo(){
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Motivo</th><th>Ações</th></tr></thead>
-        <tbody>${[...DB.consumo].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).length
-          ? [...DB.consumo].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(c=>rowHtml(c)).join('')
+        <tbody>${[...DB.consumo].sort((a,b)=>sortRecente(a,b)).length
+          ? [...DB.consumo].sort((a,b)=>sortRecente(a,b)).map(c=>rowHtml(c)).join('')
           : '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#999">Sem consumo interno registado</td></tr>'}
         </tbody>
       </table>
@@ -5165,7 +5234,7 @@ let editingCedId = null;
 
 function renderCedencias(){
   if(!DB.cedencias) DB.cedencias=[];
-  const lista = [...DB.cedencias].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+  const lista = [...DB.cedencias].sort((a,b)=>sortRecente(a,b));
   // total recebido = valorRecebido já inclui qty (é o total da cedência, não unit.)
   const tRecebido = lista.filter(c=>c.estadoPag==='Pago').reduce((s,c)=>s+(c.valorRecebido||0),0)+lista.filter(c=>c.estadoPag==='Parcial').reduce((s,c)=>s+(c.valorRecebidoPago||0),0);
   const tPendente  = lista.filter(c=>c.estadoPag!=='Pago').reduce((s,c)=>s+Math.max(0,(c.valorRecebido||0)-(c.valorRecebidoPago||0)),0);
@@ -5257,7 +5326,7 @@ function renderCedCards(lista){
     grupos[gid].tReceber+=+(c.valorRecebido||0).toFixed(2);
     grupos[gid].tCusto+=+((c.custoUnit||0)*(c.qty||1)).toFixed(2);
   });
-  wrap.innerHTML=Object.values(grupos).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(g=>{
+  wrap.innerHTML=Object.values(grupos).sort((a,b)=>sortRecente(a,b)).map(g=>{
     const tLucro=+(g.tReceber-g.tCusto).toFixed(2);
     const ids=g.items.map(c=>c.id);
     const prodRows=g.items.map(c=>{
@@ -5593,7 +5662,7 @@ function renderConsign(){
   });
 
   const allItems = [...itemsVenda, ...itemsConsInt]
-    .sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+    .sort((a,b)=>sortRecente(a,b));
 
   const pendentes = allItems.filter(v=>!pagas.has(v.cid));
   const tCusto    = pendentes.reduce((s,v)=>s+calcCustoFarm(v)*(v.qty||1),0);
@@ -5725,7 +5794,7 @@ function exportParaNumbers(){
   // SECÇÃO 1: pagamentos pendentes
   rows.push([`PAGAMENTOS POR LIQUIDAR`]);
   rows.push(['Data','CNP','Produto','Qty','PVP unit.','Desc. forn.','PVP cobrado','A pagar (€)']);
-  pendentes.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).forEach(v=>{
+  pendentes.sort((a,b)=>sortRecente(a,b)).forEach(v=>{
     const pvc = v.pvpCobrado||v.pvp||0;
     const df  = v.descForn||0;
     const dc  = v.descCliente||0;
@@ -5811,7 +5880,7 @@ function _downloadConsignCSV(rows, filename, titulo){
 
 // ─── WORKSHOPS ───────────────────────────────────────────────────────────────
 function renderWorkshops(){
-  const ws = [...DB.workshops.filter(w=>!w.tipo||w.tipo==='Workshop'||w.tipo==='Corporativo')].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+  const ws = [...DB.workshops.filter(w=>!w.tipo||w.tipo==='Workshop'||w.tipo==='Corporativo')].sort((a,b)=>sortRecente(a,b));
   document.getElementById('pg-workshops').innerHTML=`
     <div class="flex-b"><h2 style="margin:0">Workshops</h2><button class="btn" onclick="showAddW()">+ Novo workshop</button></div>
     <div id="add-w-f" style="display:none" class="card">
@@ -6114,7 +6183,7 @@ function renderFormacao(){
     </div>
 
     <div style="display:flex;flex-direction:column;gap:1rem">
-    ${DB.formacoes.length ? [...DB.formacoes].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(f=>{
+    ${DB.formacoes.length ? [...DB.formacoes].sort((a,b)=>sortRecente(a,b)).map(f=>{
       const total=calcFoTotal(f);
       const hs=f.hSinc||0, hc=f.hCont||0, ha=f.hAsinc||0;
       const ts=f.taxaSinc??TAXA_SINC, tc=f.taxaCont??TAXA_CONT, ta=f.taxaAsinc??TAXA_ASINC;
@@ -6407,7 +6476,7 @@ function renderGastos(){
     <div class="card" style="padding:0;overflow:hidden">
       <table>
         <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Fornecedor</th><th>Pagamento</th><th>Ações</th></tr></thead>
-        <tbody>${[...DB.gastos].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(g=>rowHtml(g)).join('')}
+        <tbody>${[...DB.gastos].sort((a,b)=>sortRecente(a,b)).map(g=>rowHtml(g)).join('')}
         </tbody>
       </table>
     </div>`;
@@ -7359,7 +7428,7 @@ function exportarExcel(){
     addSheet('Consultas', [
       ['ID','Cliente','Data','Tipo','Valor Serviço (€)','Total Produtos (€)','Lucro Produtos (€)','Estado','Faturado','Notas'],
       ...DB.consultas.filter(c=>c.tipo!=='Venda direta')
-        .sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')))
+        .sort((a,b)=>sortRecente(a,b))
         .map(c=>[c.id, cNome(c.clienteId), c.data, c.tipo,
           Number(c.valor.toFixed(2)), Number(c.totalProd.toFixed(2)),
           Number(c.lucroProd.toFixed(2)), c.estado, c.faturado?'Sim':'Não', c.notas||''])
@@ -7369,7 +7438,7 @@ function exportarExcel(){
     addSheet('Vendas_Produtos', [
       ['Data','Cliente','Tipo','Produto','Marca','Qty','PVP unit. (€)','PVP total (€)','Custo ef. (€)','Lucro (€)','Desc. forn. %','Consignação'],
       ...DB.consultas
-        .sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')))
+        .sort((a,b)=>sortRecente(a,b))
         .flatMap(c=>c.vendas.map(v=>[
           c.data, cNome(c.clienteId), c.tipo||'Consulta',
           v.nome, v.marca||'', v.qty||1,
@@ -7399,7 +7468,7 @@ function exportarExcel(){
     addSheet('Clientes', [
       ['Nome','Telefone','Email','Notas','Nº Consultas','Última consulta','Valor Total (€)','Crédito disponível (€)'],
       ...DB.clientes.map(cl=>{
-        const cs=DB.consultas.filter(c=>c.clienteId===cl.id).sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+        const cs=DB.consultas.filter(c=>c.clienteId===cl.id).sort((a,b)=>sortRecente(a,b));
         const tot=cs.reduce((s,c)=>s+c.valor+c.totalProd,0)+DB.packs.filter(p=>p.clienteId===cl.id).reduce((s,p)=>s+p.valor,0);
         return[cl.nome, cl.telefone||'', cl.email||'', cl.notas||'',
           cs.length, cs[0]?.data||'', Number(tot.toFixed(2)), Number((cl.credito||0).toFixed(2))];
@@ -7455,14 +7524,14 @@ function exportarExcel(){
     // Gastos
     addSheet('Gastos', [
       ['Data','Descrição','Categoria','Valor (€)','Fornecedor','Nº Fatura'],
-      ...DB.gastos.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')))
+      ...DB.gastos.sort((a,b)=>sortRecente(a,b))
         .map(g=>[g.data, g.desc, g.cat, Number(g.valor.toFixed(2)), g.fornecedor||'', g.fatura||''])
     ]);
 
     // Entradas de Stock
     addSheet('Entradas_Stock', [
       ['Data','Produto','Qty','Qty Bónus','Custo unit. (€)','PVP (€)','Total custo (€)','Fornecedor','Consignação','Bónus','Fatura/Guia'],
-      ...DB.entradas.sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')))
+      ...DB.entradas.sort((a,b)=>sortRecente(a,b))
         .map(e=>[e.data, e.prodNome, e.qty, e.qtyBonus||0,
           Number((e.custo||0).toFixed(2)), Number((e.pvp||0).toFixed(2)),
           Number((e.qty*(e.custo||0)).toFixed(2)),
