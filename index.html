@@ -162,7 +162,8 @@ tr:hover td{background:#fafaf7}
     <button class="nb" onclick="nav('clientes',this)">Clientes</button>
     <button class="nb" onclick="nav('packs',this)">Packs</button>
     <button class="nb" onclick="nav('produtos',this)">Produtos</button>
-    <button class="nb" onclick="nav('entradas',this)">Entrada/Saída stock</button>
+    <button class="nb" onclick="nav('entradas',this)">Entradas stock</button>
+    <button class="nb" onclick="nav('devolucoes',this)">Devoluções</button>
     <button class="nb" onclick="nav('consumo',this)">Consumo interno</button>
     <button class="nb" onclick="nav('cedencias',this)">Cedências</button>
     <button class="nb" onclick="nav('consignacao',this)">Consignação</button>
@@ -461,6 +462,7 @@ tr:hover td{background:#fafaf7}
     </div>
   </div>
   <div id="pg-entradas" class="pg"></div>
+  <div id="pg-devolucoes" class="pg"></div>
   <div id="pg-consumo" class="pg"></div>
   <div id="pg-cedencias" class="pg"></div>
   <div id="pg-consignacao" class="pg"></div>
@@ -901,7 +903,7 @@ function toggleSort(tbl, col){
   sortState[tbl] = { col, dir: s.col===col ? -s.dir : -1 };
   const renders = {
     consultas:renderConsultas, clientes:renderClientes,
-    produtos:renderProdutos, entradas:renderEntradas, vendas:renderVendas
+    produtos:renderProdutos, entradas:renderEntradas, devolucoes:renderDevolucoes, devolucoes:renderDevolucoes, vendas:renderVendas
   };
   if(renders[tbl]) renders[tbl]();
 }
@@ -943,7 +945,7 @@ function nav(page, btn){
     dashboard:renderDash, consulta_atual:renderConsultaAtual,
     consultas:renderConsultas, vendas:renderVendas,
     clientes:renderClientes, packs:renderPacks,
-    produtos:renderProdutos, entradas:renderEntradas,
+    produtos:renderProdutos, entradas:renderEntradas, devolucoes:renderDevolucoes,
     consumo:renderConsumo, cedencias:renderCedencias, consignacao:renderConsign,
     workshops:renderWorkshops, formacao:renderFormacao,
     gastos:renderGastos, encomendas:renderEncomendas,
@@ -1369,7 +1371,7 @@ function addV(pid){
     // margemPct = margem habitual em %
     const margemPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     const descConsigCV = p.consig ? 10 : 0; // 10% = desconto fixo habitual da farmácia
-    const custoMedio = p.consig ? p.custo : calcCustoMedioProduto(pid);
+    const custoMedio = p.consig ? p.custo : calcCustoMedioProduto(pid, 1);
     cvs.push({prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp, custoOriginal:custoMedio, custo:custoMedio, qty:1, marca:p.marca, consig:p.consig||false, margemBase:margemPct, descExtra:0, descConsig:descConsigCV, descForn:0, descCliente:0});
   }
   document.getElementById('ps-inp').value='';
@@ -1416,18 +1418,50 @@ function withScroll(fn){
 // Para consignação: custoFarm = pvpBase × (1 - (descConsig + descForn) / 100)
 // Para não-consig:  custoFarm = custoOriginal × (1 - descForn / 100)
 // pvpCobrado = pvpBase × (1 - descCliente / 100)
-function calcCustoMedioProduto(prodId){
-  // custo médio ponderado a partir de todas as entradas de stock deste produto
-  // reflete bónus a custo zero, descontos diferentes por encomenda, etc.
+function calcCustoMedioProduto(prodId, qty){
+  // FIFO: calcula o custo das próximas `qty` unidades a sair,
+  // baseado nas entradas de stock por ordem cronológica (mais antigas primeiro)
+  // e no stock actualmente em mão.
   if(!prodId) return 0;
-  const entradas = (DB.entradas||[]).filter(e=>e.prodId===prodId && !e.consig);
-  if(!entradas.length){
-    const p = DB.produtos.find(x=>x.id===prodId);
-    return p?.custo||0;
+  const p = DB.produtos.find(x=>x.id===prodId);
+  const entradas = (DB.entradas||[])
+    .filter(e=>e.prodId===prodId && !e.consig)
+    .sort((a,b)=>(a.data||'').localeCompare(b.data||'')||
+      parseInt((a.id||'0').replace(/\D/g,''))-parseInt((b.id||'0').replace(/\D/g,'')));
+  if(!entradas.length) return p?.custo||0;
+
+  // calcular quantas unidades já "saíram" (vendidas + cedidas + consumo)
+  // stock actual = total entrado - total saído
+  const totalEntrado = entradas.reduce((s,e)=>s+(e.qty||0)+(e.qtyBonus||0),0);
+  const stockActual = p ? (p.stock||0) : 0;
+  const totalSaido = Math.max(0, totalEntrado - stockActual);
+
+  // simular FIFO: consumir entradas pela ordem (mais antiga primeiro)
+  // e encontrar o custo das próximas `qty` unidades em stock
+  const qtyNecessaria = qty||1;
+  let restanteSaido = totalSaido;
+  let custTotal = 0, qtyRestante = qtyNecessaria;
+
+  for(const e of entradas){
+    const qtyEntrada = (e.qty||0)+(e.qtyBonus||0);
+    if(restanteSaido >= qtyEntrada){
+      // esta entrada já saiu toda
+      restanteSaido -= qtyEntrada;
+      continue;
+    }
+    // parte desta entrada ainda está em stock
+    const qtyDisponivel = qtyEntrada - restanteSaido;
+    restanteSaido = 0;
+    const qtyUsar = Math.min(qtyDisponivel, qtyRestante);
+    custTotal += (e.custo||0) * qtyUsar;
+    qtyRestante -= qtyUsar;
+    if(qtyRestante <= 0) break;
   }
-  const totalQty = entradas.reduce((s,e)=>s+(e.qty||0),0);
-  const totalCusto = entradas.reduce((s,e)=>s+(e.custo||0)*(e.qty||0),0);
-  return totalQty>0 ? totalCusto/totalQty : 0;
+
+  // se ainda falta (stock insuficiente ou entradas insuficientes), usar custo do produto
+  if(qtyRestante > 0) custTotal += (p?.custo||0) * qtyRestante;
+
+  return qtyNecessaria > 0 ? custTotal/qtyNecessaria : 0;
 }
 function calcCustoFarm(v){
   if(v.consig){
@@ -2301,7 +2335,7 @@ function addProdEC(pid){
   else {
     const margPct=p.pvp>0?Math.round((p.pvp-p.custo)/p.pvp*100):0;
     const descConsigEC = p.consig ? 10 : 0; // 10% fixo farmácia
-    const custoMedioEC = p.consig ? p.custo : calcCustoMedioProduto(pid);
+    const custoMedioEC = p.consig ? p.custo : calcCustoMedioProduto(pid, 1);
     c.vendas.push({prodId:pid,nome:p.nome,pvp:p.pvp,pvpBase:p.pvp,custoOriginal:custoMedioEC,custo:custoMedioEC,descConsig:descConsigEC,
       qty:1,marca:p.marca||'',consig:p.consig||false,margemBase:margPct,descExtra:0,descForn:0,descCliente:0,faturado:false});
     p.stock-=1; // baixar stock ao adicionar
@@ -2365,7 +2399,7 @@ function addVR(pid){
   else {
     const margemPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     const descConsigVR = p.consig ? 10 : 0; // 10% fixo farmácia
-    const custoMedioVR = p.consig ? p.custo : calcCustoMedioProduto(pid);
+    const custoMedioVR = p.consig ? p.custo : calcCustoMedioProduto(pid, 1);
     vrs.push({prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp, custoOriginal:custoMedioVR, custo:custoMedioVR, descConsig:descConsigVR,
               qty:1, marca:p.marca||'', consig:p.consig||false, margemBase:margemPct, descExtra:0, descForn:0, descCliente:0});
   }
@@ -3118,7 +3152,7 @@ function addProdEV(cId, pid){
   else {
     const margPct = p.pvp>0 ? Math.round((p.pvp-p.custo)/p.pvp*100) : 0;
     const descConsig = p.consig ? 10 : 0;
-    const custoMedioEV = p.consig ? p.custo : calcCustoMedioProduto(pid);
+    const custoMedioEV = p.consig ? p.custo : calcCustoMedioProduto(pid, 1);
     c.vendas.push({
       prodId:pid, nome:p.nome, pvp:p.pvp, pvpBase:p.pvp,
       custoOriginal:custoMedioEV, custo:custoMedioEV, qty:1,
@@ -4439,11 +4473,8 @@ function toggleFiscalEnc(encomendaId, checked){
 function renderEntradas(){
   document.getElementById('pg-entradas').innerHTML=`
     <div class="flex-b" style="margin-bottom:1rem">
-      <h2 style="margin:0">Entrada/Saída de Stock</h2>
-      <div style="display:flex;gap:8px">
-        <button class="btn pri" onclick="showEncomenda()">📦 Nova encomenda</button>
-        <button class="btn" onclick="showFormDevolucao()" style="background:#fdecea;border-color:#e8a0a0;color:#a83232">↩ Registar devolução</button>
-      </div>
+      <h2 style="margin:0">Entradas de stock</h2>
+      <button class="btn pri" onclick="showEncomenda()">📦 Nova encomenda</button>
     </div>
 
     <!-- FORMULÁRIO ENCOMENDA COMPLETA -->
@@ -4476,58 +4507,6 @@ function renderEntradas(){
       </div>
     </div>
 
-    <!-- FORMULÁRIO DEVOLUÇÃO -->
-    <div id="dev-form" style="display:none" class="card" style="border-color:#e8a0a0">
-      <h3 style="color:#a83232">↩ Nova devolução ao fornecedor</h3>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:1rem">
-        <div><label>Data</label><input id="dev-data" type="date" value="${today()}"/></div>
-        <div><label>Fornecedor</label>
-          <select id="dev-forn">
-            <option value="">-- selecionar --</option>${fornOptions()}
-          </select>
-        </div>
-        <div><label>Nº nota de crédito / referência</label><input id="dev-ref" placeholder="ex: NC 2024/5"/></div>
-      </div>
-      <div style="margin-bottom:1rem">
-        <label>Produto</label>
-        <div class="dd-wrap">
-          <input id="dev-ps" placeholder="Pesquisar produto..." oninput="ddProdDev(this.value)" autocomplete="off"/>
-          <input type="hidden" id="dev-p-id"/>
-          <div class="dropdown" id="dd-dev-prod" style="display:none"></div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:1rem">
-        <div><label>Quantidade devolvida</label><input id="dev-qty" type="number" min="1" value="1"/></div>
-        <div><label>Custo unitário (€)</label><input id="dev-custo" type="number" step="0.01" min="0" placeholder="0.00"/></div>
-        <div><label>Tipo de devolução</label>
-          <select id="dev-tipo" onchange="toggleDevValor()">
-            <option value="credito">Recebi crédito/reembolso</option>
-            <option value="troca">Troca por outro produto</option>
-            <option value="consig">Consignação (sem valor a receber)</option>
-          </select>
-        </div>
-      </div>
-      <div id="dev-valor-bloco" style="margin-bottom:1rem">
-        <label>Valor recebido (€)</label>
-        <input id="dev-valor" type="number" step="0.01" min="0" placeholder="0.00"/>
-        <div style="font-size:11px;color:#888;margin-top:3px">Deixa a zero se ainda não recebeste.</div>
-      </div>
-      <div style="margin-bottom:1rem">
-        <label>Motivo da devolução</label>
-        <input id="dev-motivo" placeholder="ex: produto com defeito, fora de prazo, encomenda errada..."/>
-      </div>
-      <div style="display:flex;gap:8px">
-        <button class="btn" onclick="guardarDevolucao()" style="background:#fdecea;border-color:#e8a0a0;color:#a83232;font-weight:600">Registar devolução</button>
-        <button class="btn" onclick="showFormDevolucao()">Cancelar</button>
-      </div>
-    </div>
-
-    <!-- BANNER ENTRADAS -->
-    <div style="display:flex;align-items:center;gap:10px;margin:1.2rem 0 0.5rem">
-      <div style="flex:1;height:2px;background:#d4a97a;border-radius:2px"></div>
-      <span style="font-size:12px;font-weight:700;color:#7a4f28;letter-spacing:1px;white-space:nowrap">📦 ENTRADAS DE STOCK</span>
-      <div style="flex:1;height:2px;background:#d4a97a;border-radius:2px"></div>
-    </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap">
         <input id="fe-texto" placeholder="Filtrar por produto, fornecedor ou fatura..." value="${fEntradasTexto}" oninput="fEntradasTexto=this.value;dRenderEntradas()" style="max-width:280px"/>
@@ -4543,18 +4522,66 @@ function renderEntradas(){
         <button class="btn sm" onclick="fEntradasTexto='';fEntradasData='';if(document.getElementById('fe-texto'))document.getElementById('fe-texto').value='';renderEntradasTabela()">× Limpar</button>
       </div>
       <div id="entradas-tabela"></div>
+    </div>`;
+  renderEntradasTabela();
+}
+
+let _devLinhas = []; // [{prodId, prodNome, qty, custo, tipo}]
+
+function renderDevolucoes(){
+  document.getElementById('pg-devolucoes').innerHTML=`
+    <div class="flex-b" style="margin-bottom:1rem">
+      <h2 style="margin:0">Devoluções ao fornecedor</h2>
+      <button class="btn" onclick="showFormDevolucao()" style="background:#fdecea;border-color:#e8a0a0;color:#a83232">↩ Nova devolução</button>
     </div>
 
-    <!-- BANNER DEVOLUÇÕES -->
-    <div style="display:flex;align-items:center;gap:10px;margin:1.5rem 0 0.5rem">
-      <div style="flex:1;height:2px;background:#e8a0a0;border-radius:2px"></div>
-      <span style="font-size:12px;font-weight:700;color:#a83232;letter-spacing:1px;white-space:nowrap">↩ DEVOLUÇÕES AO FORNECEDOR</span>
-      <div style="flex:1;height:2px;background:#e8a0a0;border-radius:2px"></div>
+    <!-- FORMULÁRIO DEVOLUÇÃO -->
+    <div id="dev-form" style="display:none" class="card">
+      <h3 style="color:#a83232;margin-bottom:1rem">↩ Nova devolução ao fornecedor</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:1rem">
+        <div><label>Data</label><input id="dev-data" type="date" value="${today()}"/></div>
+        <div><label>Fornecedor</label>
+          <select id="dev-forn"><option value="">-- selecionar --</option>${fornOptions()}</select>
+        </div>
+        <div><label>Nº nota de crédito / referência</label><input id="dev-ref" placeholder="ex: NC 2024/5"/></div>
+      </div>
+      <div style="margin-bottom:1rem">
+        <label>Tipo de devolução (aplica-se a todos os produtos)</label>
+        <select id="dev-tipo" onchange="toggleDevValor()">
+          <option value="credito">Recebi crédito/reembolso</option>
+          <option value="troca">Troca por outro produto</option>
+          <option value="consig">Consignação (sem valor a receber)</option>
+        </select>
+      </div>
+      <div id="dev-valor-bloco" style="margin-bottom:1rem">
+        <label>Motivo da devolução</label>
+        <input id="dev-motivo" placeholder="ex: produto com defeito, fora de prazo, encomenda errada..."/>
+      </div>
+
+      <!-- linhas de produtos -->
+      <div style="margin-bottom:8px">
+        <label style="font-weight:600;font-size:12px;margin-bottom:4px;display:block">Produtos a devolver</label>
+        <div id="dev-linhas"></div>
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;padding-top:8px;border-top:1px solid #ede8e3">
+          <div style="flex:1" class="dd-wrap">
+            <input id="dev-ps" placeholder="Pesquisar produto..." oninput="ddProdDev(this.value)" autocomplete="off"/>
+            <div class="dropdown" id="dd-dev-prod" style="display:none"></div>
+          </div>
+          <div style="width:80px"><label style="font-size:11px">Qty</label><input id="dev-qty" type="number" min="1" placeholder="1" style="width:100%"/></div>
+          <button class="btn" type="button" onclick="addLinhaDev()" style="white-space:nowrap;align-self:flex-end">+ Adicionar</button>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-top:1rem">
+        <button class="btn" onclick="guardarDevolucao()" style="background:#fdecea;border-color:#e8a0a0;color:#a83232;font-weight:600">Registar devolução</button>
+        <button class="btn" onclick="showFormDevolucao()">Cancelar</button>
+      </div>
     </div>
+
+    <!-- LISTAGEM -->
     <div class="card" style="padding:0;overflow:hidden">
       <div id="devolucoes-tabela"></div>
     </div>`;
-  renderEntradasTabela();
   renderDevolucoesTabela();
 }
 
@@ -4562,65 +4589,87 @@ function showFormDevolucao(){
   const f=document.getElementById('dev-form'); if(!f) return;
   const open=f.style.display==='none'||f.style.display==='';
   f.style.display=open?'block':'none';
-  if(open) setTimeout(()=>document.getElementById('dev-ps')?.focus(),50);
+  if(open){
+    _devLinhas=[];
+    renderLinhasDev();
+    setTimeout(()=>document.getElementById('dev-ps')?.focus(),50);
+  }
 }
 function toggleDevValor(){
-  const tipo=document.getElementById('dev-tipo')?.value;
-  const bloco=document.getElementById('dev-valor-bloco');
-  if(bloco) bloco.style.display=tipo==='consig'?'none':'block';
+  // tipo afecta só a lógica de guardar, não há campo de valor por produto
 }
 function ddProdDev(v){
   const dd=document.getElementById('dd-dev-prod');
-  const m=DB.produtos.filter(p=>matchProd(p,v)&&(p.stock||0)>0);
+  const m=DB.produtos.filter(p=>matchProd(p,v));
   dd.innerHTML=m.map(p=>'<div class="ddi" onclick="selProdDev(\''+p.id+'\',\''+p.nome.replace(/'/g,"\\'")+'\','+p.custo+')">'
     +'<strong>'+p.nome+'</strong><span style="color:#999;font-size:11px"> — stock: '+p.stock+'</span></div>').join('');
   dd.style.display=m.length?'block':'none';
 }
 function selProdDev(id,nome,custo){
   document.getElementById('dev-ps').value=nome;
-  document.getElementById('dev-p-id').value=id;
-  document.getElementById('dev-custo').value=(custo||0).toFixed(2);
+  document.getElementById('dev-ps').dataset.pid=id;
+  document.getElementById('dev-ps').dataset.custo=custo;
   document.getElementById('dd-dev-prod').style.display='none';
   setTimeout(()=>document.getElementById('dev-qty')?.focus(),50);
 }
+function addLinhaDev(){
+  const inp=document.getElementById('dev-ps');
+  const pid=inp?.dataset?.pid;
+  const nome=inp?.value?.trim();
+  const custo=parseFloat(inp?.dataset?.custo)||0;
+  const qty=parseInt(document.getElementById('dev-qty')?.value)||0;
+  if(!pid||!nome||!qty){ alert('Selecciona um produto e indica a quantidade.'); return; }
+  const exist=_devLinhas.find(l=>l.prodId===pid);
+  if(exist){ exist.qty+=qty; } else { _devLinhas.push({prodId:pid, prodNome:nome, qty, custo}); }
+  inp.value=''; delete inp.dataset.pid; delete inp.dataset.custo;
+  document.getElementById('dev-qty').value='';
+  document.getElementById('dd-dev-prod').style.display='none';
+  renderLinhasDev();
+  setTimeout(()=>inp.focus(),50);
+}
+function removeLinhaDev(i){ _devLinhas.splice(i,1); renderLinhasDev(); }
+function renderLinhasDev(){
+  const el=document.getElementById('dev-linhas'); if(!el) return;
+  if(!_devLinhas.length){
+    el.innerHTML='<div style="color:#aaa;font-size:12px;padding:6px 0">Nenhum produto adicionado ainda.</div>';
+    return;
+  }
+  el.innerHTML='<table style="width:100%;font-size:13px;margin-bottom:4px"><thead><tr>'
+    +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:#888">Produto</th>'
+    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:60px">Qty</th>'
+    +'<th style="text-align:right;padding:4px 6px;font-size:11px;color:#888;width:90px">Custo unit.</th>'
+    +'<th style="width:36px"></th></tr></thead><tbody>'
+    +_devLinhas.map((l,i)=>'<tr>'
+      +'<td style="padding:5px 6px"><strong>'+l.prodNome+'</strong></td>'
+      +'<td style="text-align:center;padding:5px 6px">'+l.qty+'</td>'
+      +'<td style="text-align:right;padding:5px 6px;color:#888">'+fmt(l.custo)+'</td>'
+      +'<td style="padding:5px 4px"><button class="btn dan sm" onclick="removeLinhaDev('+i+')" style="padding:2px 7px;font-size:11px">×</button></td>'
+      +'</tr>').join('')
+    +'</tbody></table>';
+}
 function guardarDevolucao(){
-  const pid=document.getElementById('dev-p-id').value;
-  const nome=document.getElementById('dev-ps').value.trim();
-  const qty=parseInt(document.getElementById('dev-qty').value)||0;
-  const custo=parseFloat(document.getElementById('dev-custo').value)||0;
-  const tipo=document.getElementById('dev-tipo').value;
-  const valor=tipo==='consig'?0:(parseFloat(document.getElementById('dev-valor').value)||0);
+  if(!_devLinhas.length){ alert('Adiciona pelo menos um produto.'); return; }
+  const data=document.getElementById('dev-data').value;
   const forn=document.getElementById('dev-forn').value;
   const ref=document.getElementById('dev-ref').value.trim();
-  const motivo=document.getElementById('dev-motivo').value.trim();
-  const data=document.getElementById('dev-data').value;
-  if(!pid||!nome||!qty){ alert('Preenche pelo menos o produto e a quantidade.'); return; }
-  // baixar stock
-  const p=DB.produtos.find(x=>x.id===pid);
-  if(p){
-    if((p.stock||0)<qty && !confirm('O stock actual ('+p.stock+') é inferior à quantidade a devolver ('+qty+'). Continuar mesmo assim?')) return;
-    p.stock=Math.max(0,(p.stock||0)-qty);
-  }
-  // registar devolução
-  DB.devolucoes.push({
-    id:'dev'+DB.ids.dev++, prodId:pid, prodNome:nome, qty, custo, tipo,
-    valor, fornecedor:forn, referencia:ref, motivo, data
+  const tipo=document.getElementById('dev-tipo').value;
+  const motivo=document.getElementById('dev-motivo')?.value?.trim()||'';
+  _devLinhas.forEach(l=>{
+    const p=DB.produtos.find(x=>x.id===l.prodId);
+    if(p){
+      if((p.stock||0)<l.qty && !confirm('O stock de "'+l.prodNome+'" ('+p.stock+') é inferior à quantidade a devolver ('+l.qty+'). Continuar?')) return;
+      p.stock=Math.max(0,(p.stock||0)-l.qty);
+    }
+    DB.devolucoes.push({
+      id:'dev'+DB.ids.dev++, prodId:l.prodId, prodNome:l.prodNome,
+      qty:l.qty, custo:l.custo, tipo, valor:0,
+      fornecedor:forn, referencia:ref, motivo, data
+    });
   });
-  // nota: o valor recebido do fornecedor não entra nos gastos nem no lucro,
-  // porque o custo dos produtos não é deduzido como gasto — está incorporado
-  // no cálculo de lucro por produto (pvpCobrado - custo). A devolução é só
-  // um ajuste de stock e um registo informativo do valor recuperado.
+  _devLinhas=[];
   save();
-  // limpar formulário
-  document.getElementById('dev-ps').value='';
-  document.getElementById('dev-p-id').value='';
-  document.getElementById('dev-qty').value='1';
-  document.getElementById('dev-custo').value='';
-  document.getElementById('dev-valor').value='';
-  document.getElementById('dev-ref').value='';
-  document.getElementById('dev-motivo').value='';
   document.getElementById('dev-form').style.display='none';
-  renderEntradas();
+  renderDevolucoesTabela();
 }
 function renderDevolucoesTabela(){
   const wrap=document.getElementById('devolucoes-tabela'); if(!wrap) return;
@@ -4657,7 +4706,7 @@ function delDevolucao(id){
     const p=DB.produtos.find(x=>x.id===d.prodId);
     if(p) p.stock=(p.stock||0)+d.qty;
     DB.devolucoes=DB.devolucoes.filter(x=>x.id!==id);
-    save(); renderEntradas();
+    save(); renderDevolucoes();
   });
 }
 
@@ -5689,9 +5738,9 @@ function ddProdCed(v){
 
 function addProdCed(pid){
   const p=DB.produtos.find(x=>x.id===pid); if(!p) return;
-  const custoMedioCed = p.consig ? p.custo : calcCustoMedioProduto(pid);
+  const custoMedioCed = p.consig ? p.custo : calcCustoMedioProduto(pid, 1);
   const ex=cedProds.find(v=>v.prodId===pid);
-  if(ex){ ex.qty++; ex.valorRecebido=+(ex.custoUnit*ex.qty).toFixed(2); }
+  if(ex){ ex.qty++; ex.custoUnit=calcCustoMedioProduto(pid, ex.qty); ex.valorRecebido=+(ex.custoUnit*ex.qty).toFixed(2); }
   else cedProds.push({prodId:pid,nome:p.nome,qty:1,pvp:p.pvp,custoUnit:custoMedioCed,descPct:0,valorRecebido:+p.pvp.toFixed(2)});
   renderCedProds();
   const inp=document.getElementById('ced-p');
@@ -5767,7 +5816,6 @@ function abrirEditCed(ids){
         <div><label style="font-size:10px;color:#888;display:block">Custo unit. (€)</label>
           <div style="display:flex;gap:4px;align-items:center">
             <input type="number" id="ced-edit-custo-${i}" value="${(c.custoUnit||0).toFixed(2)}" step="0.01" min="0" style="width:90px;font-size:12px"/>
-            <button type="button" class="btn sm" title="Recalcular a partir da média ponderada de todas as entradas deste produto" onclick="recalcularCustoMedioCed(${i},'${c.prodId}')" style="font-size:10px;padding:3px 6px">↻ Média</button>
           </div>
         </div>
       </div>
@@ -5780,7 +5828,10 @@ function fecharEditCed(){
   _editCedIds=[];
 }
 function recalcularCustoMedioCed(i, prodId){
-  const novoCusto = calcCustoMedioProduto(prodId);
+  // buscar a qty actual desta linha para calcular FIFO correcto
+  const qtyEl = document.getElementById('ced-edit-qty-'+i);
+  const qty = qtyEl ? (parseInt(qtyEl.value)||1) : 1;
+  const novoCusto = calcCustoMedioProduto(prodId, qty);
   const inp = document.getElementById('ced-edit-custo-'+i);
   if(inp) inp.value = novoCusto.toFixed(2);
 }
@@ -7092,7 +7143,7 @@ function renderRelatorio(){
   const rGastos= relMes ? DB.gastos.filter(g=>g.data?.startsWith(relMes))     : DB.gastos;
   const rConsumo = relMes ? (DB.consumo||[]).filter(ci=>ci.data?.startsWith(relMes)) : (DB.consumo||[]);
   const valorConsumoInterno = rConsumo.reduce((s,ci)=>{
-    const custoMedio = calcCustoMedioProduto(ci.prodId);
+    const custoMedio = calcCustoMedioProduto(ci.prodId, ci.qty||1);
     return s+custoMedio*(ci.qty||0);
   },0);
   const relLabel = relMes ? new Date(relMes+'-01').toLocaleDateString('pt-PT',{month:'long',year:'numeric'}) : '';
@@ -7922,6 +7973,7 @@ const ALL_TABS = [
   {id:'packs',label:'Packs'},
   {id:'produtos',label:'Produtos'},
   {id:'entradas',label:'Entradas stock'},
+  {id:'devolucoes',label:'Devoluções'},
   {id:'consumo',label:'Consumo interno'},
   {id:'cedencias',label:'Cedências'},
   {id:'consignacao',label:'Consignação'},
@@ -8059,6 +8111,19 @@ load().then(()=>{
     DB = JSON.parse(JSON.stringify(DEFAULT));
     migrarCampos();
   }
+  // recalcular custoUnit de todas as cedências usando FIFO
+  // (feito aqui porque calcCustoMedioProduto precisa de estar definida)
+  let cedAlteradas = 0;
+  (DB.cedencias||[]).forEach(c=>{
+    if(c.prodId){
+      const novoCusto = calcCustoMedioProduto(c.prodId, c.qty||1);
+      if(Math.abs((c.custoUnit||0) - novoCusto) > 0.005){
+        c.custoUnit = novoCusto;
+        cedAlteradas++;
+      }
+    }
+  });
+  if(cedAlteradas > 0) save();
   renderDash();
 }).catch(e=>{
   console.error('Erro no arranque:', e);
