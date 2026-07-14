@@ -162,7 +162,7 @@ tr:hover td{background:#fafaf7}
     <button class="nb" onclick="nav('clientes',this)">Clientes</button>
     <button class="nb" onclick="nav('packs',this)">Packs</button>
     <button class="nb" onclick="nav('produtos',this)">Produtos</button>
-    <button class="nb" onclick="nav('entradas',this)">Entradas stock</button>
+    <button class="nb" onclick="nav('entradas',this)">Entrada/Saída stock</button>
     <button class="nb" onclick="nav('consumo',this)">Consumo interno</button>
     <button class="nb" onclick="nav('cedencias',this)">Cedências</button>
     <button class="nb" onclick="nav('consignacao',this)">Consignação</button>
@@ -176,7 +176,8 @@ tr:hover td{background:#fafaf7}
     <button class="nb" onclick="exportarExcel()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel</button>
   </nav>
   <button class="menu-btn" onclick="toggleMenuDrawer()" aria-label="Menu">☰</button>
-  <div class="save-indicator" id="save-ind">Guardado</div>
+  <div class="save-indicator" id="save-ind" onclick="abrirDetalhesSync()" style="cursor:pointer" title="Clica para ver detalhes ou forçar sincronização">Guardado</div>
+  <button class="btn" id="btn-sync-force" onclick="forceSyncCloud()" style="display:none;white-space:nowrap;font-size:11px;padding:5px 10px;background:#fdecea;border-color:#e8a0a0;color:#a83232" title="Forçar recarregamento da nuvem">☁ Sync</button>
   <button class="btn" onclick="openHelp()" style="white-space:nowrap;background:#f3e8da;border-color:#d4a97a;color:#7a4f28;font-weight:600;font-size:11px;padding:5px 10px">💬 Pedir ajuda</button>
   <button class="btn" onclick="openSettings()" style="white-space:nowrap;font-size:11px;padding:5px 10px" title="Definições">⚙</button>
 </div>
@@ -517,6 +518,7 @@ const DEFAULT = {
   ],
   entradas:[],
   consumo:[],
+  devolucoes:[],
   workshops:[
     {id:'w1',nome:'Skincare sem Ruído',data:'2025-12-03',tipo:'Workshop',preco:20,faturado:false,participantes:[
       {nome:'Paula Silva',valor:20,estado:'Pago'},{nome:'Carolina',valor:20,estado:'Pago'},{nome:'Adriana Silva',valor:20,estado:'Pago'},{nome:'Daniela Neto',valor:20,estado:'Pago'},{nome:'Paula Neto',valor:20,estado:'Pago'},{nome:'Rita Moreira',valor:20,estado:'Pago'},
@@ -535,7 +537,7 @@ const DEFAULT = {
   ],
   marcas:[],
   tiposConsulta:['Primeira consulta','Acompanhamento','Pack','Voucher','Familiar','Parceria','Clínica do Alto'],
-  ids:{cl:7,c:7,pk:3,w:2,g:3,p:13,e:1,ci:1,f:4,fo:1,v:1},
+  ids:{cl:7,c:7,pk:3,w:2,g:3,p:13,e:1,ci:1,f:4,fo:1,v:1,dev:1},
   vouchers:[],
 };
 
@@ -553,10 +555,61 @@ let saveTimer = null; // debounce para não fazer demasiados pedidos
 
 function showSyncStatus(msg, ok){
   const el = document.getElementById('save-ind');
+  const btnSync = document.getElementById('btn-sync-force');
   if(!el) return;
   el.textContent = msg;
   el.className = 'save-indicator' + (ok ? ' saved' : '');
-  if(ok) setTimeout(()=>{ el.textContent='Guardado ✓'; el.className='save-indicator saved'; }, 1800);
+  // mostrar botão de sync forçado quando há problema de ligação
+  const semNuvem = !ok && (msg.includes('local') || msg.includes('offline') || msg.includes('nuvem'));
+  if(btnSync) btnSync.style.display = semNuvem ? 'block' : 'none';
+  if(ok) setTimeout(()=>{
+    el.textContent = sbOnline ? '☁ Nuvem ✓' : '💾 Local';
+    el.className = 'save-indicator saved';
+    if(btnSync) btnSync.style.display = sbOnline ? 'none' : 'block';
+  }, 2000);
+}
+async function forceSyncCloud(){
+  const btn = document.getElementById('btn-sync-force');
+  if(btn){ btn.textContent='⏳ A sincronizar…'; btn.disabled=true; }
+  showSyncStatus('A ligar à nuvem…', false);
+  try{
+    const cloudData = await loadFromCloud();
+    if(cloudData){
+      const local = localStorage.getItem(KEY);
+      let localDB = null;
+      try{ localDB = JSON.parse(local||'{}'); }catch(e){}
+      const cloudScore = (cloudData.consultas||[]).length + (cloudData.produtos||[]).length;
+      const localScore = (localDB?.consultas||[]).length + (localDB?.produtos||[]).length;
+      if(localDB?.consultas && localScore > cloudScore){
+        if(confirm('Os dados locais parecem mais recentes ('+localScore+' registos locais vs '+cloudScore+' na nuvem).\n\nUsar dados locais e guardar na nuvem?')){
+          DB = localDB; migrarCampos(); await saveToCloud();
+        } else {
+          DB = cloudData; migrarCampos(); await saveToCloud();
+        }
+      } else {
+        DB = cloudData; migrarCampos();
+      }
+      showSyncStatus('Sincronizado ✓', true);
+      renderDash();
+    } else {
+      showSyncStatus('Sem ligação à nuvem', false);
+      alert('Não foi possível ligar ao Supabase. Verifica a ligação à internet e tenta de novo.');
+    }
+  } catch(e){
+    showSyncStatus('Erro: '+e.message, false);
+  } finally {
+    if(btn){ btn.textContent='☁ Sync'; btn.disabled=false; }
+  }
+}
+function abrirDetalhesSync(){
+  const total = (DB.consultas||[]).length + (DB.produtos||[]).length;
+  alert(
+    'Estado da sincronização:\n\n'+
+    '☁ Nuvem: '+(sbOnline?'Ligada ✓':'Sem ligação ✗')+'\n'+
+    '📦 Registos em memória: '+total+'\n'+
+    '🕐 Dispositivo: '+navigator.userAgent.slice(0,60)+'\n\n'+
+    (sbOnline?'Os dados estão a ser guardados na nuvem automaticamente.':'Os dados estão a ser guardados apenas neste dispositivo. Carrega em "☁ Sync" para tentar ligar à nuvem.')
+  );
 }
 
 // guardar local imediatamente + cloud com debounce 1.5s
@@ -672,6 +725,8 @@ function migrarCampos(){
   if(!DB.ids.f) DB.ids.f = 4;
   if(!DB.ids.fo) DB.ids.fo = 1;
   if(!DB.tiposConsulta) DB.tiposConsulta = ['Primeira consulta','Acompanhamento','Pack','Voucher','Familiar','Parceria'];
+  if(!DB.devolucoes) DB.devolucoes = [];
+  if(!DB.ids.dev) DB.ids.dev = 1;
   // recalcular totalProd e lucroProd via função central
   (DB.consultas||[]).forEach(function(c){ recalcTotaisC(c); });
 
@@ -1799,9 +1854,21 @@ function gerarRecibo(){
   setTimeout(()=>w.print(),600);
 }
 
-function abrirModalOrcamento(){
-  if(!cvs.length){ alert('Adiciona produtos à consulta primeiro.'); return; }
-  const descFinalActivo=parseFloat(document.getElementById('cc-desc-final')?.value)||0;
+let _orcContexto = null; // null = consulta actual, 'rapida' = venda rápida, cid = id de consulta gravada
+
+function abrirModalOrcamento(contexto){
+  if(contexto===undefined){
+    // consulta actual
+    if(!cvs.length){ alert('Adiciona produtos à consulta primeiro.'); return; }
+    _orcContexto = null;
+  } else {
+    _orcContexto = contexto; // 'rapida' ou cid string
+  }
+  const descFinalActivo = _orcContexto===null
+    ? (parseFloat(document.getElementById('cc-desc-final')?.value)||0)
+    : _orcContexto==='rapida'
+      ? (parseFloat(document.getElementById('vr-desc-final')?.value)||0)
+      : (DB.consultas.find(x=>x.id===_orcContexto)?.descFinal||0);
   const orcDescRow=document.getElementById('orc-desc-row');
   if(orcDescRow) orcDescRow.style.display=descFinalActivo>0?'flex':'none';
   const orcTotalCustom=document.getElementById('orc-total-custom');
@@ -1811,13 +1878,24 @@ function abrirModalOrcamento(){
 
 function gerarOrcamento(){
   document.getElementById('orcamento-modal').style.display='none';
+  const totalCustomStr=document.getElementById('orc-total-custom')?.value;
+  const totalCustom=totalCustomStr?parseFloat(totalCustomStr):null;
+  const inclDescOrc=document.getElementById('orc-desc')?.checked;
+  // contexto de venda rápida ou consulta gravada: delegar para gerarDocVenda com opções
+  if(_orcContexto==='rapida'){
+    gerarDocVendaRapida('orcamento', {totalCustom, inclDesc:inclDescOrc});
+    return;
+  }
+  if(_orcContexto){
+    gerarDocVenda(_orcContexto, 'orcamento', null, {totalCustom, inclDesc:inclDescOrc});
+    return;
+  }
+  // consulta actual: lógica original
   const inclProdutos=document.getElementById('orc-produtos').checked;
   const inclPortes=document.getElementById('orc-portes').checked;
   const inclConsulta=document.getElementById('orc-consulta').checked;
   const inclNotas=document.getElementById('orc-notas').checked;
-  const inclDesc=document.getElementById('orc-desc')?.checked;
-  const totalCustomStr=document.getElementById('orc-total-custom')?.value;
-  const totalCustom=totalCustomStr?parseFloat(totalCustomStr):null;
+  const inclDesc=inclDescOrc;
   const rodape=document.getElementById('orc-rodape').value;
   const descFinalVal=parseFloat(document.getElementById('cc-desc-final')?.value)||0;
   const cliNomeVal=document.getElementById('cc-cli').value||'Cliente';
@@ -2529,13 +2607,13 @@ function verVenda(cid){
     +(c.notas?'<div style="font-size:12px;color:#666;margin-top:8px;padding:8px 10px;background:#fafaf7;border-left:3px solid #d4a97a;border-radius:0 6px 6px 0">📝 '+c.notas+'</div>':'')
     +'<div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap">'
     +'<button class="btn pri" onclick="document.getElementById(\'venda-ver-modal\').style.display=\'none\';startEditVenda(\''+c.id+'\')">✏ Editar venda</button>'
-    +'<button class="btn" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28" onclick="gerarDocVenda(\''+c.id+'\',\'orcamento\')">📄 Orçamento</button>'
+    +'<button class="btn" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28" onclick="document.getElementById(\'venda-ver-modal\').style.display=\'none\';abrirModalOrcamento(\''+c.id+'\')">📄 Orçamento</button>'
     +'<button class="btn" style="background:#f0fff4;border-color:#c3e6cb;color:#1a6b1a" onclick="gerarDocVenda(\''+c.id+'\',\'recibo\')">🧾 Recibo</button>'
     +'</div>';
   document.getElementById('venda-ver-modal').style.display='flex';
 }
 
-function gerarDocVendaRapida(tipo){
+function gerarDocVendaRapida(tipo, opcoes){
   syncVR();
   if(!vrs.length){ alert('Adiciona pelo menos um produto primeiro.'); return; }
   const cliId = document.getElementById('vr-cli-id').value;
@@ -2565,9 +2643,9 @@ function gerarDocVendaRapida(tipo){
     vendas: vendas
   };
   // reutilizar gerarDocVenda com objecto temporário e nome manual
-  gerarDocVenda(null, tipo, c);
+  gerarDocVenda(null, tipo, c, opcoes);
 }
-function gerarDocVenda(cid, tipo, cOverride){
+function gerarDocVenda(cid, tipo, cOverride, opcoes){
   const c = cOverride || DB.consultas.find(x=>x.id===cid); if(!c||!c.vendas||!c.vendas.length) return;
   const isRecibo=tipo==='recibo';
   const f2=n=>(Math.round((n||0)*100)/100).toFixed(2).replace('.',',')+'€';
@@ -2593,6 +2671,10 @@ function gerarDocVenda(cid, tipo, cOverride){
   });
   const subtotal=totalReal;
   if(descFinalVal>0) totalReal=Math.max(0,totalReal-descFinalVal);
+  // aplicar opções vindas do modal de orçamento, se existirem
+  const totalCustom = (!isRecibo&&opcoes&&opcoes.totalCustom!=null) ? opcoes.totalCustom : null;
+  const inclDesc = (!isRecibo&&opcoes) ? opcoes.inclDesc : true;
+  const totalFinal = totalCustom!=null ? totalCustom : totalReal;
   const tituloDoc=isRecibo?'Recibo':'Orçamento';
   const corDoc=isRecibo?'#1a6b1a':'#7a4f28';
   const LOGO='data:image/png;base64,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';
@@ -2615,12 +2697,15 @@ function gerarDocVenda(cid, tipo, cOverride){
     +'<div class="hdr"><img src="'+LOGO+'" alt="DAILYcare"><div class="hdr-right"><h1>'+tituloDoc+'</h1><div class="data">'+fD(c.data)+(c.hora?' · '+c.hora:'')+'</div></div></div>'
     +'<div class="cliente">'+cliNome+'</div>'
     +'<table><thead><tr><th style="text-align:left;width:56%">Descrição</th><th style="width:22%">PVP unit.</th><th style="width:22%">Total</th></tr></thead><tbody>'+prodRows+'</tbody><tfoot>'
-    +(descFinalVal>0
-      ?'<tr><td style="padding:16px 0 4px;font-size:13px;color:#8b6f4e">Subtotal</td><td></td><td style="text-align:right;padding:16px 0 4px;font-size:13px;color:#8b6f4e">'+f2(subtotal)+'</td></tr>'
-       +'<tr><td style="padding:4px 0;font-size:13px;color:#c0392b;font-style:italic">Desconto</td><td></td><td style="text-align:right;padding:4px 0;font-size:13px;color:#c0392b;font-style:italic">- '+f2(descFinalVal)+'</td></tr>'
-      :'')
-    +'<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">'+(isRecibo?'Total pago':'Total')+'</td><td></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalReal)+'</td></tr>'
-    +'</tfoot></table>'
+    +(totalCustom!=null
+      ? '<tr><td style="padding:16px 0 4px;font-size:13px;color:#8b6f4e">Subtotal</td><td></td><td style="text-align:right;padding:16px 0 4px;font-size:13px;color:#8b6f4e">'+f2(subtotal)+'</td></tr>'
+        +'<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">Total</td><td style="text-align:right"><span style="text-decoration:line-through;color:#bbb;font-size:14px">'+f2(subtotal)+'</span></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalFinal)+'</td></tr>'
+      : (inclDesc&&descFinalVal>0)
+        ? '<tr><td style="padding:16px 0 4px;font-size:13px;color:#8b6f4e">Subtotal</td><td></td><td style="text-align:right;padding:16px 0 4px;font-size:13px;color:#8b6f4e">'+f2(subtotal)+'</td></tr>'
+          +'<tr><td style="padding:4px 0;font-size:13px;color:#c0392b;font-style:italic">Desconto</td><td></td><td style="text-align:right;padding:4px 0;font-size:13px;color:#c0392b;font-style:italic">- '+f2(descFinalVal)+'</td></tr>'
+          +'<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">'+(isRecibo?'Total pago':'Total')+'</td><td></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalFinal)+'</td></tr>'
+        : '<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">'+(isRecibo?'Total pago':'Total')+'</td><td></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalFinal)+'</td></tr>'
+    )+'</tfoot></table>'
     +(isRecibo?'<div class="pag">Forma de pagamento: '+metodoLabel+'</div>':'')
     +'<div class="rodape">Documento não fiscal · DAILYcare by IM</div>'
     +'</body></html>';
@@ -2699,7 +2784,7 @@ function renderVendas(){
       <div id="vr-total-line" style="font-size:13px;font-weight:600;color:#8b6f4e;margin-bottom:10px;padding:8px;background:#f8f8f5;border-radius:6px"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn pri" onclick="guardarVendaRapida()">Guardar venda</button>
-        <button class="btn" onclick="gerarDocVendaRapida('orcamento')" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28">📄 Orçamento</button>
+        <button class="btn" onclick="abrirModalOrcamento('rapida')" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28">📄 Orçamento</button>
         <button class="btn" onclick="gerarDocVendaRapida('recibo')" style="background:#f0fff4;border-color:#c3e6cb;color:#1a6b1a">🧾 Recibo</button>
         <button class="btn" onclick="showVendaRapida()">Cancelar</button>
       </div>
@@ -4353,9 +4438,12 @@ function toggleFiscalEnc(encomendaId, checked){
 
 function renderEntradas(){
   document.getElementById('pg-entradas').innerHTML=`
-    <div class="flex-b">
-      <h2 style="margin:0">Entradas de stock</h2>
-      <button class="btn pri" onclick="showEncomenda()">📦 Nova encomenda</button>
+    <div class="flex-b" style="margin-bottom:1rem">
+      <h2 style="margin:0">Entrada/Saída de Stock</h2>
+      <div style="display:flex;gap:8px">
+        <button class="btn pri" onclick="showEncomenda()">📦 Nova encomenda</button>
+        <button class="btn" onclick="showFormDevolucao()" style="background:#fdecea;border-color:#e8a0a0;color:#a83232">↩ Registar devolução</button>
+      </div>
     </div>
 
     <!-- FORMULÁRIO ENCOMENDA COMPLETA -->
@@ -4380,19 +4468,66 @@ function renderEntradas(){
         </div>
         <div id="enc-criar-prod" style="display:none"></div>
       </div>
-
-      <!-- linhas da encomenda -->
       <div id="enc-linhas" style="margin-bottom:8px"></div>
-
-      <!-- totais -->
       <div id="enc-totais" style="display:none;background:#f8f8f5;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:13px"></div>
-
       <div style="display:flex;gap:8px">
         <button class="btn pri" onclick="guardarEncomenda()">Guardar encomenda e atualizar stock</button>
         <button class="btn" onclick="showEncomenda()">Cancelar</button>
       </div>
     </div>
 
+    <!-- FORMULÁRIO DEVOLUÇÃO -->
+    <div id="dev-form" style="display:none" class="card" style="border-color:#e8a0a0">
+      <h3 style="color:#a83232">↩ Nova devolução ao fornecedor</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:1rem">
+        <div><label>Data</label><input id="dev-data" type="date" value="${today()}"/></div>
+        <div><label>Fornecedor</label>
+          <select id="dev-forn">
+            <option value="">-- selecionar --</option>${fornOptions()}
+          </select>
+        </div>
+        <div><label>Nº nota de crédito / referência</label><input id="dev-ref" placeholder="ex: NC 2024/5"/></div>
+      </div>
+      <div style="margin-bottom:1rem">
+        <label>Produto</label>
+        <div class="dd-wrap">
+          <input id="dev-ps" placeholder="Pesquisar produto..." oninput="ddProdDev(this.value)" autocomplete="off"/>
+          <input type="hidden" id="dev-p-id"/>
+          <div class="dropdown" id="dd-dev-prod" style="display:none"></div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:1rem">
+        <div><label>Quantidade devolvida</label><input id="dev-qty" type="number" min="1" value="1"/></div>
+        <div><label>Custo unitário (€)</label><input id="dev-custo" type="number" step="0.01" min="0" placeholder="0.00"/></div>
+        <div><label>Tipo de devolução</label>
+          <select id="dev-tipo" onchange="toggleDevValor()">
+            <option value="credito">Recebi crédito/reembolso</option>
+            <option value="troca">Troca por outro produto</option>
+            <option value="consig">Consignação (sem valor a receber)</option>
+          </select>
+        </div>
+      </div>
+      <div id="dev-valor-bloco" style="margin-bottom:1rem">
+        <label>Valor recebido (€)</label>
+        <input id="dev-valor" type="number" step="0.01" min="0" placeholder="0.00"/>
+        <div style="font-size:11px;color:#888;margin-top:3px">Deixa a zero se ainda não recebeste.</div>
+      </div>
+      <div style="margin-bottom:1rem">
+        <label>Motivo da devolução</label>
+        <input id="dev-motivo" placeholder="ex: produto com defeito, fora de prazo, encomenda errada..."/>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="guardarDevolucao()" style="background:#fdecea;border-color:#e8a0a0;color:#a83232;font-weight:600">Registar devolução</button>
+        <button class="btn" onclick="showFormDevolucao()">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- BANNER ENTRADAS -->
+    <div style="display:flex;align-items:center;gap:10px;margin:1.2rem 0 0.5rem">
+      <div style="flex:1;height:2px;background:#d4a97a;border-radius:2px"></div>
+      <span style="font-size:12px;font-weight:700;color:#7a4f28;letter-spacing:1px;white-space:nowrap">📦 ENTRADAS DE STOCK</span>
+      <div style="flex:1;height:2px;background:#d4a97a;border-radius:2px"></div>
+    </div>
     <div class="card" style="padding:0;overflow:hidden">
       <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap">
         <input id="fe-texto" placeholder="Filtrar por produto, fornecedor ou fatura..." value="${fEntradasTexto}" oninput="fEntradasTexto=this.value;dRenderEntradas()" style="max-width:280px"/>
@@ -4408,8 +4543,122 @@ function renderEntradas(){
         <button class="btn sm" onclick="fEntradasTexto='';fEntradasData='';if(document.getElementById('fe-texto'))document.getElementById('fe-texto').value='';renderEntradasTabela()">× Limpar</button>
       </div>
       <div id="entradas-tabela"></div>
+    </div>
+
+    <!-- BANNER DEVOLUÇÕES -->
+    <div style="display:flex;align-items:center;gap:10px;margin:1.5rem 0 0.5rem">
+      <div style="flex:1;height:2px;background:#e8a0a0;border-radius:2px"></div>
+      <span style="font-size:12px;font-weight:700;color:#a83232;letter-spacing:1px;white-space:nowrap">↩ DEVOLUÇÕES AO FORNECEDOR</span>
+      <div style="flex:1;height:2px;background:#e8a0a0;border-radius:2px"></div>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <div id="devolucoes-tabela"></div>
     </div>`;
   renderEntradasTabela();
+  renderDevolucoesTabela();
+}
+
+function showFormDevolucao(){
+  const f=document.getElementById('dev-form'); if(!f) return;
+  const open=f.style.display==='none'||f.style.display==='';
+  f.style.display=open?'block':'none';
+  if(open) setTimeout(()=>document.getElementById('dev-ps')?.focus(),50);
+}
+function toggleDevValor(){
+  const tipo=document.getElementById('dev-tipo')?.value;
+  const bloco=document.getElementById('dev-valor-bloco');
+  if(bloco) bloco.style.display=tipo==='consig'?'none':'block';
+}
+function ddProdDev(v){
+  const dd=document.getElementById('dd-dev-prod');
+  const m=DB.produtos.filter(p=>matchProd(p,v)&&(p.stock||0)>0);
+  dd.innerHTML=m.map(p=>'<div class="ddi" onclick="selProdDev(\''+p.id+'\',\''+p.nome.replace(/'/g,"\\'")+'\','+p.custo+')">'
+    +'<strong>'+p.nome+'</strong><span style="color:#999;font-size:11px"> — stock: '+p.stock+'</span></div>').join('');
+  dd.style.display=m.length?'block':'none';
+}
+function selProdDev(id,nome,custo){
+  document.getElementById('dev-ps').value=nome;
+  document.getElementById('dev-p-id').value=id;
+  document.getElementById('dev-custo').value=(custo||0).toFixed(2);
+  document.getElementById('dd-dev-prod').style.display='none';
+  setTimeout(()=>document.getElementById('dev-qty')?.focus(),50);
+}
+function guardarDevolucao(){
+  const pid=document.getElementById('dev-p-id').value;
+  const nome=document.getElementById('dev-ps').value.trim();
+  const qty=parseInt(document.getElementById('dev-qty').value)||0;
+  const custo=parseFloat(document.getElementById('dev-custo').value)||0;
+  const tipo=document.getElementById('dev-tipo').value;
+  const valor=tipo==='consig'?0:(parseFloat(document.getElementById('dev-valor').value)||0);
+  const forn=document.getElementById('dev-forn').value;
+  const ref=document.getElementById('dev-ref').value.trim();
+  const motivo=document.getElementById('dev-motivo').value.trim();
+  const data=document.getElementById('dev-data').value;
+  if(!pid||!nome||!qty){ alert('Preenche pelo menos o produto e a quantidade.'); return; }
+  // baixar stock
+  const p=DB.produtos.find(x=>x.id===pid);
+  if(p){
+    if((p.stock||0)<qty && !confirm('O stock actual ('+p.stock+') é inferior à quantidade a devolver ('+qty+'). Continuar mesmo assim?')) return;
+    p.stock=Math.max(0,(p.stock||0)-qty);
+  }
+  // registar devolução
+  DB.devolucoes.push({
+    id:'dev'+DB.ids.dev++, prodId:pid, prodNome:nome, qty, custo, tipo,
+    valor, fornecedor:forn, referencia:ref, motivo, data
+  });
+  // nota: o valor recebido do fornecedor não entra nos gastos nem no lucro,
+  // porque o custo dos produtos não é deduzido como gasto — está incorporado
+  // no cálculo de lucro por produto (pvpCobrado - custo). A devolução é só
+  // um ajuste de stock e um registo informativo do valor recuperado.
+  save();
+  // limpar formulário
+  document.getElementById('dev-ps').value='';
+  document.getElementById('dev-p-id').value='';
+  document.getElementById('dev-qty').value='1';
+  document.getElementById('dev-custo').value='';
+  document.getElementById('dev-valor').value='';
+  document.getElementById('dev-ref').value='';
+  document.getElementById('dev-motivo').value='';
+  document.getElementById('dev-form').style.display='none';
+  renderEntradas();
+}
+function renderDevolucoesTabela(){
+  const wrap=document.getElementById('devolucoes-tabela'); if(!wrap) return;
+  const lista=[...(DB.devolucoes||[])].sort(sortRecente);
+  if(!lista.length){
+    wrap.innerHTML='<div style="text-align:center;padding:2rem;color:#999">Sem devoluções registadas.</div>';
+    return;
+  }
+  wrap.innerHTML='<div style="overflow-x:auto"><table>'
+    +'<thead><tr style="background:#fdf0f0"><th>Data</th><th>Produto</th><th>Qty</th><th>Fornecedor</th><th>Tipo</th><th>Ref.</th><th>Custo unit.</th><th>Valor recebido</th><th>Motivo</th><th></th></tr></thead><tbody>'
+    +lista.map(d=>{
+      const tipoLabel=d.tipo==='credito'?'<span class="badge bg-g">Crédito/Reembolso</span>'
+        :d.tipo==='troca'?'<span class="badge bg-a">Troca</span>'
+        :'<span class="badge bg-gray">Consignação</span>';
+      return '<tr>'
+        +'<td style="font-size:12px">'+d.data+'</td>'
+        +'<td><strong>'+d.prodNome+'</strong></td>'
+        +'<td style="text-align:center">'+d.qty+'</td>'
+        +'<td style="font-size:12px">'+( d.fornecedor||'—')+'</td>'
+        +'<td>'+tipoLabel+'</td>'
+        +'<td style="font-size:11px;font-family:monospace;color:#888">'+(d.referencia||'—')+'</td>'
+        +'<td>'+fmt(d.custo)+'</td>'
+        +'<td>'+(d.valor>0?'<span class="green">'+fmt(d.valor)+'</span>':'<span style="color:#888">—</span>')+'</td>'
+        +'<td style="font-size:11px;color:#888;max-width:180px">'+( d.motivo||'—')+'</td>'
+        +'<td><button class="btn dan sm" onclick="delDevolucao(\''+d.id+'\')">Apagar</button></td>'
+        +'</tr>';
+    }).join('')
+    +'</tbody></table></div>';
+}
+function delDevolucao(id){
+  const d=DB.devolucoes.find(x=>x.id===id); if(!d) return;
+  confirmDel('Apagar esta devolução? O stock do produto será reposto.', ()=>{
+    // repor stock
+    const p=DB.produtos.find(x=>x.id===d.prodId);
+    if(p) p.stock=(p.stock||0)+d.qty;
+    DB.devolucoes=DB.devolucoes.filter(x=>x.id!==id);
+    save(); renderEntradas();
+  });
 }
 
 function renderEntradasTabela(){
