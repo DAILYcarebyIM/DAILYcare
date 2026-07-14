@@ -3913,21 +3913,33 @@ function renderProdutos(){
       <div style="display:flex;gap:8px;margin-top:8px"><button class="btn pri" onclick="addP()">Guardar</button><button class="btn" onclick="showAddP()">Cancelar</button></div>
     </div>
     <div id="prod-tabela-wrap" class="card" style="padding:0;overflow:hidden">
-      <div style="padding:8px 12px;display:flex;gap:8px;border-bottom:1px solid #eee;background:#fafaf7;flex-wrap:wrap;align-items:center">
-        <input id="prod-filtro" placeholder="Filtrar por nome, marca, cat. ou CNP..." oninput="fP=this.value;dRenderProdutos()" style="max-width:260px" value="${fP}"/>
-        <select id="prod-filtro-marca" onchange="fM=this.value;renderProdutosTabela()" style="max-width:200px">
-          <option value="">Todas as marcas</option>
-          ${getMarcas().map(m=>`<option ${fM===m?'selected':''}>${m}</option>`).join('')}
-        </select>
-        <select id="prod-filtro-forn" onchange="fF=this.value;renderProdutosTabela()" style="max-width:200px">
-          <option value="">Todos os fornecedores</option>
-          ${getFornecedores().map(f=>`<option ${fF===f?'selected':''}>${f}</option>`).join('')}
-        </select>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
-          <input type="checkbox" id="prod-filtro-semstock" ${fSemStock?'checked':''} onchange="fSemStock=this.checked;renderProdutosTabela()"/>
-          Ocultar sem stock
-        </label>
-        <div style="margin-left:auto;display:flex;gap:6px">
+      <div style="padding:8px 12px;border-bottom:1px solid #eee;background:#fafaf7">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+          <input id="prod-filtro" placeholder="Filtrar por nome, marca, cat. ou CNP..." oninput="fP=this.value;dRenderProdutos()" style="flex:1;min-width:180px;max-width:280px" value="${fP}"/>
+          <select id="prod-filtro-marca" onchange="fM=this.value;renderProdutosTabela()" style="flex:1;min-width:140px;max-width:200px">
+            <option value="">Todas as marcas</option>
+            ${getMarcas().map(m=>`<option ${fM===m?'selected':''}>${m}</option>`).join('')}
+          </select>
+          <select id="prod-filtro-forn" onchange="fF=this.value;renderProdutosTabela()" style="flex:1;min-width:140px;max-width:200px">
+            <option value="">Todos os fornecedores</option>
+            ${getFornecedores().map(f=>`<option ${fF===f?'selected':''}>${f}</option>`).join('')}
+          </select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
+            <input type="checkbox" id="prod-filtro-semstock" ${fSemStock?'checked':''} onchange="fSemStock=this.checked;renderProdutosTabela()"/>
+            Ocultar sem stock
+          </label>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <div style="position:relative">
+            <button class="btn sm" onclick="toggleColsDropdown('prod-cols-dd')" style="background:#f3f3f3">⚙ Colunas</button>
+            <div id="prod-cols-dd" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px 14px;min-width:200px;margin-top:4px">
+              <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:6px">Colunas a exportar</div>
+              ${[['colCNP','CNP'],['colMarca','Marca'],['colFornecedor','Fornecedor'],['colCat','Categoria'],['colCusto','Custo'],['colPVP','PVP'],['colMargem','Margem'],['colStock','Stock'],['colStockMin','Stock mín.'],['colValorStock','Valor em stock']].map(([id,lbl])=>
+                `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">
+                  <input type="checkbox" id="${id}" checked onchange=""/> ${lbl}
+                </label>`).join('')}
+            </div>
+          </div>
           <button class="btn sm" onclick="exportarProdutosCSV()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel (CSV)</button>
           <button class="btn sm" onclick="exportarProdutosPDF()" style="background:#fdeeee;border-color:#e8a0a0;color:#a83232">↓ PDF</button>
         </div>
@@ -3950,82 +3962,101 @@ function _produtosFiltradosParaExport(){
   if(fSemStock) ps=ps.filter(p=>(p.stock||0)>0);
   return [...ps].sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
 }
+function toggleColsDropdown(id){
+  const dd=document.getElementById(id); if(!dd) return;
+  const open=dd.style.display==='none'||dd.style.display==='';
+  document.querySelectorAll('[id$="-cols-dd"]').forEach(el=>el.style.display='none');
+  dd.style.display=open?'block':'none';
+  if(open){
+    const close=(e)=>{ if(!dd.contains(e.target)){dd.style.display='none';document.removeEventListener('click',close);} };
+    setTimeout(()=>document.addEventListener('click',close),50);
+  }
+}
+function getColsProd(){
+  const ids=['colCNP','colMarca','colFornecedor','colCat','colCusto','colPVP','colMargem','colStock','colStockMin','colValorStock'];
+  const res={};
+  ids.forEach(id=>{ const el=document.getElementById(id); res[id]=el?el.checked:true; });
+  return res;
+}
 function exportarProdutosCSV(){
-  const ps = _produtosFiltradosParaExport();
+  const ps=_produtosFiltradosParaExport();
   if(!ps.length){ alert('Sem resultados para exportar.'); return; }
+  const cols=getColsProd();
   const partes=[];
   if(fF) partes.push('Fornecedor: '+fF);
   if(fM) partes.push('Marca: '+fM);
   if(fP) partes.push('Filtro: '+fP);
-  const titulo = partes.length ? partes.join(' · ') : 'Todos os produtos';
-  const totalCusto = ps.reduce((s,p)=>s+(p.custo||0)*(p.stock||0),0);
-  const totalPvp = ps.reduce((s,p)=>s+(p.pvp||0)*(p.stock||0),0);
-  const nl='\n';
-  const rows=[
-    ['DAILYcare — Listagem de produtos'],
-    [titulo],
-    ['Exportado em: '+today()],
-    [],
-    ['Nome','CNP','Marca','Fornecedor','Categoria','Custo','PVP','Margem €','Margem %','Stock','Stock mín.','Valor stock (custo)','Valor stock (PVP)'],
+  const titulo=partes.length?partes.join(' · '):'Todos os produtos';
+  const header=['Nome'];
+  if(cols.colCNP) header.push('CNP');
+  if(cols.colMarca) header.push('Marca');
+  if(cols.colFornecedor) header.push('Fornecedor');
+  if(cols.colCat) header.push('Categoria');
+  if(cols.colCusto) header.push('Custo (€)');
+  if(cols.colPVP) header.push('PVP (€)');
+  if(cols.colMargem) header.push('Margem €'); if(cols.colMargem) header.push('Margem %');
+  if(cols.colStock) header.push('Stock');
+  if(cols.colStockMin) header.push('Stock mín.');
+  if(cols.colValorStock) header.push('Valor stock custo (€)'); if(cols.colValorStock) header.push('Valor stock PVP (€)');
+  const rows=[['DAILYcare — Listagem de produtos'],[titulo],['Exportado em: '+today()],[],header,
     ...ps.map(p=>{
-      const custo=p.custo||0, pvp=p.pvp||0, marg=pvp-custo, margPct=pvp>0?Math.round(marg/pvp*100):0;
-      return [p.nome||'',p.cnp||'',p.marca||'',p.fornecedor||'',p.cat||'',custo.toFixed(2),pvp.toFixed(2),marg.toFixed(2),margPct,p.stock??0,p.stockMin??0,((p.custo||0)*(p.stock||0)).toFixed(2),((p.pvp||0)*(p.stock||0)).toFixed(2)];
-    }),
-    [],
-    ['','','','','','','','','','','TOTAL:',totalCusto.toFixed(2),totalPvp.toFixed(2)]
+      const custo=p.custo||0,pvp=p.pvp||0,marg=pvp-custo,margPct=pvp>0?Math.round(marg/pvp*100):0;
+      const row=[p.nome||''];
+      if(cols.colCNP) row.push(p.cnp||'');
+      if(cols.colMarca) row.push(p.marca||'');
+      if(cols.colFornecedor) row.push(p.fornecedor||'');
+      if(cols.colCat) row.push(p.cat||'');
+      if(cols.colCusto) row.push(custo.toFixed(2));
+      if(cols.colPVP) row.push(pvp.toFixed(2));
+      if(cols.colMargem){row.push(marg.toFixed(2));row.push(margPct);}
+      if(cols.colStock) row.push(p.stock??0);
+      if(cols.colStockMin) row.push(p.stockMin??0);
+      if(cols.colValorStock){row.push(((p.custo||0)*(p.stock||0)).toFixed(2));row.push(((p.pvp||0)*(p.stock||0)).toFixed(2));}
+      return row;
+    })
   ];
-  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join(nl);
+  const csv=rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
   a.download='produtos_'+(fF||fM||'todos').replace(/\s/g,'_')+'_'+today()+'.csv';
-  a.click();
-  URL.revokeObjectURL(a.href);
+  a.click(); URL.revokeObjectURL(a.href);
 }
 function exportarProdutosPDF(){
-  const ps = _produtosFiltradosParaExport();
+  const ps=_produtosFiltradosParaExport();
   if(!ps.length){ alert('Sem resultados para exportar.'); return; }
+  const cols=getColsProd();
   const partes=[];
   if(fF) partes.push('Fornecedor: '+fF);
   if(fM) partes.push('Marca: '+fM);
   if(fP) partes.push('Filtro: '+fP);
-  const titulo = partes.length ? partes.join(' · ') : 'Todos os produtos';
-  const totalCusto = ps.reduce((s,p)=>s+(p.custo||0)*(p.stock||0),0);
-  const totalPvp = ps.reduce((s,p)=>s+(p.pvp||0)*(p.stock||0),0);
-  const rows = ps.map(p=>{
-    const custo=p.custo||0, pvp=p.pvp||0, marg=pvp-custo, margPct=pvp>0?Math.round(marg/pvp*100):0;
-    return '<tr>'
-      +'<td style="padding:6px 8px"><strong>'+(p.nome||'')+'</strong></td>'
-      +'<td style="font-family:monospace;font-size:10px;color:#8b6f4e">'+(p.cnp||'—')+'</td>'
-      +'<td>'+(p.marca||'—')+'</td>'
-      +'<td>'+(p.fornecedor||'—')+'</td>'
-      +'<td style="text-align:right">'+fmt(custo)+'</td>'
-      +'<td style="text-align:right">'+fmt(pvp)+'</td>'
-      +'<td style="text-align:right">'+fmt(marg)+' ('+margPct+'%)</td>'
-      +'<td style="text-align:center">'+(p.stock??0)+'</td>'
-      +'</tr>';
+  const titulo=partes.length?partes.join(' · '):'Todos os produtos';
+  const thCols=[];
+  if(cols.colCNP) thCols.push('<th>CNP</th>');
+  if(cols.colMarca) thCols.push('<th>Marca</th>');
+  if(cols.colFornecedor) thCols.push('<th>Fornecedor</th>');
+  if(cols.colCusto) thCols.push('<th style="text-align:right">Custo</th>');
+  if(cols.colPVP) thCols.push('<th style="text-align:right">PVP</th>');
+  if(cols.colMargem) thCols.push('<th style="text-align:right">Margem</th>');
+  if(cols.colStock) thCols.push('<th style="text-align:center">Stock</th>');
+  const rows=ps.map(p=>{
+    const custo=p.custo||0,pvp=p.pvp||0,marg=pvp-custo,margPct=pvp>0?Math.round(marg/pvp*100):0;
+    let tds='<td style="padding:6px 8px"><strong>'+(p.nome||'')+'</strong></td>';
+    if(cols.colCNP) tds+='<td style="font-family:monospace;font-size:10px;color:#8b6f4e">'+(p.cnp||'—')+'</td>';
+    if(cols.colMarca) tds+='<td>'+(p.marca||'—')+'</td>';
+    if(cols.colFornecedor) tds+='<td>'+(p.fornecedor||'—')+'</td>';
+    if(cols.colCusto) tds+='<td style="text-align:right">'+fmt(custo)+'</td>';
+    if(cols.colPVP) tds+='<td style="text-align:right">'+fmt(pvp)+'</td>';
+    if(cols.colMargem) tds+='<td style="text-align:right">'+fmt(marg)+' ('+margPct+'%)</td>';
+    if(cols.colStock) tds+='<td style="text-align:center">'+(p.stock??0)+'</td>';
+    return '<tr>'+tds+'</tr>';
   }).join('');
-  const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>Produtos DAILYcare</title><style>'
-    +'*{margin:0;padding:0;box-sizing:border-box}'
-    +'body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:32px}'
-    +'@media print{body{padding:16px}@page{margin:1.2cm}}'
-    +'h1{font-size:20px;font-weight:600;margin-bottom:4px}'
-    +'.sub{font-size:12px;color:#888;margin-bottom:20px}'
-    +'table{width:100%;border-collapse:collapse;font-size:12px}'
-    +'thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;padding:6px 8px;border-bottom:2px solid #d4a97a}'
-    +'tbody tr:nth-child(even){background:#fafaf7}'
-    +'tfoot td{padding:10px 8px;font-weight:700;border-top:2px solid #333}'
-    +'</style></head><body>'
+  const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>Produtos DAILYcare</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:32px}@media print{body{padding:16px}@page{margin:1.2cm}}h1{font-size:20px;font-weight:600;margin-bottom:4px}.sub{font-size:12px;color:#888;margin-bottom:20px}table{width:100%;border-collapse:collapse;font-size:12px}thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;padding:6px 8px;border-bottom:2px solid #d4a97a;font-weight:500}tbody tr:nth-child(even){background:#fafaf7}</style></head><body>'
     +'<h1>Listagem de produtos — DAILYcare</h1>'
-    +'<div class="sub">'+titulo+' · Exportado em '+today().split('-').reverse().join('/')+' · '+ps.length+' produto'+(ps.length!==1?'s':'')+'</div>'
-    +'<table><thead><tr><th>Nome</th><th>CNP</th><th>Marca</th><th>Fornecedor</th><th style="text-align:right">Custo</th><th style="text-align:right">PVP</th><th style="text-align:right">Margem</th><th style="text-align:center">Stock</th></tr></thead>'
-    +'<tbody>'+rows+'</tbody>'
-    +'<tfoot><tr><td colspan="4">Total ('+ps.reduce((s,p)=>s+(p.stock||0),0)+' unidades em stock)</td><td style="text-align:right">'+fmt(totalCusto)+'</td><td style="text-align:right">'+fmt(totalPvp)+'</td><td colspan="2"></td></tr></tfoot>'
-    +'</table></body></html>';
-  const w=window.open('','_blank');
-  w.document.write(html);
-  w.document.close();
-  setTimeout(()=>{w.print();},500);
+    +'<div class="sub">'+titulo+' · '+today().split('-').reverse().join('/')+' · '+ps.length+' produto'+(ps.length!==1?'s':'')+'</div>'
+    +'<table><thead><tr><th>Nome</th>'+thCols.join('')+'</tr></thead><tbody>'+rows+'</tbody></table></body></html>';
+  const w=window.open('','_blank'); w.document.write(html); w.document.close();
+  setTimeout(()=>w.print(),500);
 }
 function renderProdutosTabela(){
   const wrap = document.getElementById('prod-tbody-wrap'); if(!wrap) return;
@@ -5996,7 +6027,16 @@ function renderConsign(){
       <button class="btn" onclick="exportConsignCompleto()" style="background:#f0f0ec">
         ↓ Exportar histórico completo
       </button>
-
+      <div style="position:relative">
+        <button class="btn sm" onclick="toggleColsDropdown('consig-cols-dd')" style="background:#f3f3f3">⚙ Colunas</button>
+        <div id="consig-cols-dd" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px 14px;min-width:200px;margin-top:4px">
+          <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:6px">Colunas a incluir</div>
+          ${[['cColData','Data'],['cColCNP','CNP'],['cColCliente','Cliente / Motivo'],['cColQty','Quantidade'],['cColPVP','PVP unitário'],['cColPVPCob','PVP cobrado'],['cColDescForn','Desc. fornecedor'],['cColCusto','A pagar farmácia'],['cColLucro','Lucro DAILYcare'],['cColEstado','Estado']].map(([id,lbl])=>
+            `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">
+              <input type="checkbox" id="${id}" checked/> ${lbl}
+            </label>`).join('')}
+        </div>
+      </div>
     </div>
 
     <div class="card" style="padding:0;overflow:hidden">
@@ -6150,17 +6190,43 @@ function exportConsignCompleto(){
   _downloadConsignCSV(rows, `consignacao_completo_${today()}.csv`, 'Histórico completo — DAILYcare');
 }
 function _downloadConsignCSV(rows, filename, titulo){
-  const header = ['Data','CNP','Produto','Cliente','Quantidade','PVP unitário','PVP cobrado','PVP total','Custo base','Desc. forn. (meu)','Desc. cliente','A pagar farmácia','Lucro DAILYcare','Estado'];
+  const c={
+    data: document.getElementById('cColData')?.checked!==false,
+    cnp:  document.getElementById('cColCNP')?.checked!==false,
+    cli:  document.getElementById('cColCliente')?.checked!==false,
+    qty:  document.getElementById('cColQty')?.checked!==false,
+    pvp:  document.getElementById('cColPVP')?.checked!==false,
+    pvpCob: document.getElementById('cColPVPCob')?.checked!==false,
+    descForn: document.getElementById('cColDescForn')?.checked!==false,
+    custo: document.getElementById('cColCusto')?.checked!==false,
+    lucro: document.getElementById('cColLucro')?.checked!==false,
+    estado: document.getElementById('cColEstado')?.checked!==false,
+  };
+  const header=['Produto'];
+  if(c.data) header.push('Data');
+  if(c.cnp) header.push('CNP');
+  if(c.cli) header.push('Cliente / Motivo');
+  if(c.qty) header.push('Quantidade');
+  if(c.pvp) header.push('PVP unitário');
+  if(c.pvpCob) header.push('PVP cobrado');
+  if(c.descForn) header.push('Desc. forn.');
+  if(c.custo) header.push('A pagar farmácia');
+  if(c.lucro) header.push('Lucro DAILYcare');
+  if(c.estado) header.push('Estado');
   const data = rows.map(v=>{
-    const custoBase=v.custoOriginal||v.custo, descPct=v.descExtra||0, custoEf=v.custo, qty=v.qty||1;
-    const pvpCob=(v.pvpCobrado||v.pvp);
-    return [v.data, v.cnp||'', v.nome, v.cliente, qty,
-      v.pvp.toFixed(2), (pvpCob*qty).toFixed(2), (v.pvp*qty).toFixed(2),
-      (custoBase*qty).toFixed(2),
-      v.descForn>0?`+${v.descForn}%`:'0%',
-      v.descCliente>0?`-${v.descCliente}%`:'0%',
-      (custoEf*qty).toFixed(2), ((pvpCob-custoEf)*qty).toFixed(2),
-      v.pago?'Pago':'Por pagar'];
+    const custoEf=v.custo, pvpCob=(v.pvpCobrado||v.pvp), qty=v.qty||1;
+    const row=[v.nome];
+    if(c.data) row.push(v.data);
+    if(c.cnp) row.push(v.cnp||'');
+    if(c.cli) row.push(v.cliente);
+    if(c.qty) row.push(qty);
+    if(c.pvp) row.push(v.pvp.toFixed(2));
+    if(c.pvpCob) row.push((pvpCob*qty).toFixed(2));
+    if(c.descForn) row.push(v.descForn>0?'+'+v.descForn+'%':'0%');
+    if(c.custo) row.push((custoEf*qty).toFixed(2));
+    if(c.lucro) row.push(((pvpCob-custoEf)*qty).toFixed(2));
+    if(c.estado) row.push(v.pago?'Pago':'Por pagar');
+    return row;
   });
   const total = rows.filter(v=>!v.pago).reduce((s,v)=>s+v.custo*(v.qty||1),0);
   const csv = [
