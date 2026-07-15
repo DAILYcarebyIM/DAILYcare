@@ -3426,6 +3426,16 @@ function renderClientes(){
   if(_si) _si.value=cliSearch;
 }
 
+function removerLinhaCredito(cliId, idx){
+  const cl = DB.clientes.find(x=>x.id===cliId); if(!cl) return;
+  const linha = (cl.creditoHistorico||[])[idx]; if(!linha) return;
+  confirmDel('Remover esta linha de crédito ('+(linha.val>=0?'+':'')+fmt(linha.val)+' — '+linha.desc+')?', ()=>{
+    cl.credito = Math.max(0, (cl.credito||0) - linha.val);
+    cl.creditoHistorico.splice(idx, 1);
+    save();
+    abrirFicha(cliId);
+  });
+}
 function adicionarCredito(cliId){
   document.getElementById('credito-cli-id').value=cliId;
   document.getElementById('credito-val').value='';
@@ -3571,11 +3581,12 @@ function abrirFicha(cliId){
         <div style="font-size:18px;font-weight:700;color:#155724">${fmt(cl.credito||0)} disponível</div>
       </div>
       ${(cl.creditoHistorico||[]).length ? `<table>
-        <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th></tr></thead>
-        <tbody>${(cl.creditoHistorico||[]).map(h=>`<tr>
+        <thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th></th></tr></thead>
+        <tbody>${(cl.creditoHistorico||[]).map((h,i)=>`<tr>
           <td style="font-size:11px">${h.data}</td>
           <td>${h.desc}</td>
-          <td class="green"><strong>${fmt(h.val)}</strong></td>
+          <td class="${h.val>=0?'green':'red'}"><strong>${fmt(h.val)}</strong></td>
+          <td><button class="btn dan sm" style="padding:2px 7px;font-size:11px" onclick="removerLinhaCredito('${cl.id}',${i})">×</button></td>
         </tr>`).join('')}</tbody>
       </table>` : ''}
     </div>` : ''}
