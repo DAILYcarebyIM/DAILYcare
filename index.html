@@ -744,6 +744,8 @@ function migrarCampos(){
   if(!DB.tiposConsulta) DB.tiposConsulta = ['Primeira consulta','Acompanhamento','Pack','Voucher','Familiar','Parceria'];
   if(!DB.devolucoes) DB.devolucoes = [];
   if(!DB.ids.dev) DB.ids.dev = 1;
+  // limpar valorPendente em consultas/vendas com estado Pago
+  (DB.consultas||[]).forEach(c=>{ if(c.estado==='Pago') c.valorPendente=0; });
   // recalcular totalProd e lucroProd via função central
   (DB.consultas||[]).forEach(function(c){ recalcTotaisC(c); });
 
@@ -2381,7 +2383,7 @@ function saveEditCons(id){
   c.fatProd =ecFatVal==='ambos'||ecFatVal==='produtos';
   c.notas=document.getElementById('ec-notas').value;
   c.descFinal=parseFloat(document.getElementById('ec-desc-final')?.value)||0;
-  c.valorPendente=parseFloat(document.getElementById('ec-pendente')?.value)||0;
+  c.valorPendente=c.estado==='Pago'?0:(parseFloat(document.getElementById('ec-pendente')?.value)||0);
 
   recalcTotaisC(c);
   editingConsId=null; save(); withScroll(renderConsultas);
@@ -2911,7 +2913,7 @@ function renderVendasPagina(){
       const tp=c.totalProd;
       const tl=c.lucroProd;
       const nomes=c.vendas.map(v=>`${v.nome}${v.qty>1?' ×'+v.qty:''}`).join(', ');
-      const pendente=c.valorPendente||0;
+      const pendente=(c.estado==='Pago')?0:(c.valorPendente||0);
       const isEditingV = editingVendaId===c.id;
       if(isEditingV) return `<tr style="background:#fffbf5">
         <td colspan="9" style="padding:12px">
@@ -3225,7 +3227,7 @@ function saveEditVenda(id){
   c.metodoPagamento = pagInfoEv.metodoPagamento;
   c.pagamentos = pagInfoEv.pagamentos;
   c.faturado= document.getElementById('ev-fat')?.value==='true';
-  c.valorPendente = parseFloat(document.getElementById('ev-pendente')?.value)||0;
+  c.valorPendente = c.estado==='Pago' ? 0 : (parseFloat(document.getElementById('ev-pendente')?.value)||0);
   // actualizar cada produto
   c.vendas.forEach((v,vi)=>{
     const qty   = parseInt(document.getElementById(`ev-qty-${id}-${vi}`)?.value)||v.qty;
@@ -3286,6 +3288,9 @@ function confirmarVendaPag(){
   c.estado=divida<=0.01?'Pago':'Pendente';
   fecharVendaPagModal();
   save(); renderVendasPagina();
+  // actualizar consultas se estiver visível
+  const pgCons=document.getElementById('pg-consultas');
+  if(pgCons&&pgCons.style.display!=='none') renderConsultas();
 }
 
 function toggleVendaProds(cId, btn){
