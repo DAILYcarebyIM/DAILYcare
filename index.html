@@ -28,6 +28,7 @@ h2{font-size:15px;font-weight:600;margin-bottom:12px;letter-spacing:-0.2px}
 h3{font-size:13px;font-weight:600;margin-bottom:8px}
 label{font-size:11px;color:#777;display:block;margin-bottom:3px;font-weight:500}
 input,select,textarea{width:100%;padding:7px 10px;border:1px solid #ddd;border-radius:7px;background:#fff;color:#1a1a1a;font-size:12px;font-family:inherit;transition:border-color 0.15s;outline:none}
+input[type=checkbox],input[type=radio]{width:auto;padding:0;border:none;border-radius:0;background:none;transition:none}
 input:focus,select:focus{border-color:#8b6f4e;box-shadow:0 0 0 3px rgba(139,111,78,0.08)}
 .row{display:grid;gap:8px;margin-bottom:8px}
 .c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:1fr 1fr 1fr}.c4{grid-template-columns:1fr 1fr 1fr 1fr}
@@ -459,6 +460,20 @@ tr:hover td{background:#fafaf7}
         <button onclick="document.getElementById('venda-ver-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888">×</button>
       </div>
       <div id="venda-ver-body" style="padding:20px"></div>
+    </div>
+  </div>
+  <!-- MODAL SELECTOR DE COLUNAS PARA EXPORTAÇÃO -->
+  <div id="export-cols-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:12px;width:100%;max-width:380px;padding:0;box-shadow:0 8px 40px rgba(0,0,0,.2);margin:1rem">
+      <div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0;font-size:15px" id="export-cols-titulo">Escolher colunas</h3>
+        <button onclick="document.getElementById('export-cols-modal').style.display='none'" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1">×</button>
+      </div>
+      <div id="export-cols-body" style="padding:16px 20px;max-height:60vh;overflow-y:auto"></div>
+      <div style="padding:12px 20px;border-top:1px solid #eee;display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn" onclick="document.getElementById('export-cols-modal').style.display='none'">Cancelar</button>
+        <button class="btn pri" id="export-cols-confirmar">Exportar</button>
+      </div>
     </div>
   </div>
   <div id="pg-entradas" class="pg"></div>
@@ -3914,35 +3929,26 @@ function renderProdutos(){
     </div>
     <div id="prod-tabela-wrap" class="card" style="padding:0;overflow:hidden">
       <div style="padding:8px 12px;border-bottom:1px solid #eee;background:#fafaf7">
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
-          <input id="prod-filtro" placeholder="Filtrar por nome, marca, cat. ou CNP..." oninput="fP=this.value;dRenderProdutos()" style="flex:1;min-width:180px;max-width:280px" value="${fP}"/>
-          <select id="prod-filtro-marca" onchange="fM=this.value;renderProdutosTabela()" style="flex:1;min-width:140px;max-width:200px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+          <input id="prod-filtro" placeholder="Filtrar por nome, marca, cat. ou CNP..." oninput="fP=this.value;dRenderProdutos()" style="flex:2;min-width:0" value="${fP}"/>
+          <select id="prod-filtro-marca" onchange="fM=this.value;renderProdutosTabela()" style="flex:1;min-width:0">
             <option value="">Todas as marcas</option>
             ${getMarcas().map(m=>`<option ${fM===m?'selected':''}>${m}</option>`).join('')}
           </select>
-          <select id="prod-filtro-forn" onchange="fF=this.value;renderProdutosTabela()" style="flex:1;min-width:140px;max-width:200px">
+          <select id="prod-filtro-forn" onchange="fF=this.value;renderProdutosTabela()" style="flex:1;min-width:0">
             <option value="">Todos os fornecedores</option>
             ${getFornecedores().map(f=>`<option ${fF===f?'selected':''}>${f}</option>`).join('')}
           </select>
         </div>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap;padding:4px 0">
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;white-space:nowrap">
             <input type="checkbox" id="prod-filtro-semstock" ${fSemStock?'checked':''} onchange="fSemStock=this.checked;renderProdutosTabela()"/>
             Ocultar sem stock
           </label>
-          <div style="width:1px;height:18px;background:#ddd;flex-shrink:0"></div>
-          <div style="position:relative">
-            <button class="btn sm" onclick="toggleColsDropdown('prod-cols-dd')" style="background:#f3f3f3">⚙ Colunas a exportar</button>
-            <div id="prod-cols-dd" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px 14px;min-width:200px;margin-top:4px">
-              <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:6px">Escolhe as colunas a incluir na exportação</div>
-              ${[['colCNP','CNP'],['colMarca','Marca'],['colFornecedor','Fornecedor'],['colCat','Categoria'],['colCusto','Custo'],['colPVP','PVP'],['colMargem','Margem'],['colStock','Stock'],['colStockMin','Stock mín.'],['colValorStock','Valor em stock']].map(([id,lbl])=>
-                `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">
-                  <input type="checkbox" id="${id}" checked/> ${lbl}
-                </label>`).join('')}
-            </div>
+          <div style="margin-left:auto;display:flex;gap:6px">
+            <button class="btn sm" onclick="abrirModalExportCols('produtos','csv')" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel (CSV)</button>
+            <button class="btn sm" onclick="abrirModalExportCols('produtos','pdf')" style="background:#fdeeee;border-color:#e8a0a0;color:#a83232">↓ PDF</button>
           </div>
-          <button class="btn sm" onclick="exportarProdutosCSV()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel (CSV)</button>
-          <button class="btn sm" onclick="exportarProdutosPDF()" style="background:#fdeeee;border-color:#e8a0a0;color:#a83232">↓ PDF</button>
         </div>
       </div>
       <div id="prod-tbody-wrap"></div>
@@ -3963,16 +3969,39 @@ function _produtosFiltradosParaExport(){
   if(fSemStock) ps=ps.filter(p=>(p.stock||0)>0);
   return [...ps].sort((a,b)=>(a.nome||'').localeCompare(b.nome||''));
 }
-function toggleColsDropdown(id){
-  const dd=document.getElementById(id); if(!dd) return;
-  const open=dd.style.display==='none'||dd.style.display==='';
-  document.querySelectorAll('[id$="-cols-dd"]').forEach(el=>el.style.display='none');
-  dd.style.display=open?'block':'none';
-  if(open){
-    const close=(e)=>{ if(!dd.contains(e.target)){dd.style.display='none';document.removeEventListener('click',close);} };
-    setTimeout(()=>document.addEventListener('click',close),50);
+let _exportColsCallback = null;
+function abrirModalExportCols(contexto, formato){
+  const modal = document.getElementById('export-cols-modal');
+  const body = document.getElementById('export-cols-body');
+  const titulo = document.getElementById('export-cols-titulo');
+  const btn = document.getElementById('export-cols-confirmar');
+  titulo.textContent = (formato==='csv'?'↓ Excel (CSV)':'↓ PDF') + ' — escolher colunas';
+  let cols, cb;
+  if(contexto==='produtos'){
+    cols=[['colCNP','CNP'],['colMarca','Marca'],['colFornecedor','Fornecedor'],['colCat','Categoria'],['colCusto','Custo'],['colPVP','PVP'],['colMargem','Margem'],['colStock','Stock'],['colStockMin','Stock mín.'],['colValorStock','Valor em stock']];
+    cb = formato==='csv' ? exportarProdutosCSV : exportarProdutosPDF;
+  } else if(contexto==='consig'){
+    cols=[['cColData','Data'],['cColCNP','CNP'],['cColCliente','Cliente / Motivo'],['cColQty','Quantidade'],['cColPVP','PVP unitário'],['cColPVPCob','PVP cobrado'],['cColDescForn','Desc. fornecedor'],['cColCusto','A pagar farmácia'],['cColLucro','Lucro DAILYcare'],['cColEstado','Estado']];
+    cb = null; // determinado pelo botão original
   }
+  body.innerHTML = cols.map(([id,lbl])=>
+    `<label style="display:flex;align-items:center;gap:10px;font-size:13px;padding:6px 0;cursor:pointer;border-bottom:1px solid #f5f5f5">
+      <input type="checkbox" id="${id}" checked style="width:16px;height:16px;flex-shrink:0;cursor:pointer"/>
+      <span>${lbl}</span>
+    </label>`
+  ).join('');
+  _exportColsCallback = cb ? ()=>{ modal.style.display='none'; cb(); } : null;
+  btn.onclick = _exportColsCallback || (()=>modal.style.display='none');
+  modal.style.display='flex';
 }
+function abrirModalExportColsConsig(fn){
+  abrirModalExportCols('consig','csv');
+  document.getElementById('export-cols-confirmar').onclick=()=>{
+    document.getElementById('export-cols-modal').style.display='none';
+    fn();
+  };
+}
+function toggleColsDropdown(id){ /* mantido por compatibilidade, já não usado */ }
 function getColsProd(){
   const ids=['colCNP','colMarca','colFornecedor','colCat','colCusto','colPVP','colMargem','colStock','colStockMin','colValorStock'];
   const res={};
@@ -6022,22 +6051,12 @@ function renderConsign(){
       <button class="btn" onclick="exportParaNumbers()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32;font-weight:600">
         ↓ Exportar para Numbers
       </button>
-      <button class="btn" onclick="exportConsignPendente()" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600">
+      <button class="btn" onclick="abrirModalExportColsConsig(exportConsignPendente)" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600">
         ↓ Exportar lista pendente
       </button>
-      <button class="btn" onclick="exportConsignCompleto()" style="background:#f0f0ec">
+      <button class="btn" onclick="abrirModalExportColsConsig(exportConsignCompleto)" style="background:#f0f0ec">
         ↓ Exportar histórico completo
       </button>
-      <div style="position:relative">
-        <button class="btn sm" onclick="toggleColsDropdown('consig-cols-dd')" style="background:#f3f3f3">⚙ Colunas</button>
-        <div id="consig-cols-dd" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px 14px;min-width:200px;margin-top:4px">
-          <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:6px">Colunas a incluir</div>
-          ${[['cColData','Data'],['cColCNP','CNP'],['cColCliente','Cliente / Motivo'],['cColQty','Quantidade'],['cColPVP','PVP unitário'],['cColPVPCob','PVP cobrado'],['cColDescForn','Desc. fornecedor'],['cColCusto','A pagar farmácia'],['cColLucro','Lucro DAILYcare'],['cColEstado','Estado']].map(([id,lbl])=>
-            `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">
-              <input type="checkbox" id="${id}" checked/> ${lbl}
-            </label>`).join('')}
-        </div>
-      </div>
     </div>
 
     <div class="card" style="padding:0;overflow:hidden">
