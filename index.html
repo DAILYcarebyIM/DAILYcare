@@ -3914,7 +3914,7 @@ function renderProdutos(){
     </div>
     <div id="prod-tabela-wrap" class="card" style="padding:0;overflow:hidden">
       <div style="padding:8px 12px;border-bottom:1px solid #eee;background:#fafaf7">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap">
           <input id="prod-filtro" placeholder="Filtrar por nome, marca, cat. ou CNP..." oninput="fP=this.value;dRenderProdutos()" style="flex:1;min-width:180px;max-width:280px" value="${fP}"/>
           <select id="prod-filtro-marca" onchange="fM=this.value;renderProdutosTabela()" style="flex:1;min-width:140px;max-width:200px">
             <option value="">Todas as marcas</option>
@@ -3924,19 +3924,20 @@ function renderProdutos(){
             <option value="">Todos os fornecedores</option>
             ${getFornecedores().map(f=>`<option ${fF===f?'selected':''}>${f}</option>`).join('')}
           </select>
-          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap">
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;white-space:nowrap;padding:4px 0">
             <input type="checkbox" id="prod-filtro-semstock" ${fSemStock?'checked':''} onchange="fSemStock=this.checked;renderProdutosTabela()"/>
             Ocultar sem stock
           </label>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <div style="width:1px;height:18px;background:#ddd;flex-shrink:0"></div>
           <div style="position:relative">
-            <button class="btn sm" onclick="toggleColsDropdown('prod-cols-dd')" style="background:#f3f3f3">⚙ Colunas</button>
+            <button class="btn sm" onclick="toggleColsDropdown('prod-cols-dd')" style="background:#f3f3f3">⚙ Colunas a exportar</button>
             <div id="prod-cols-dd" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#fff;border:1px solid #ddd;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);padding:10px 14px;min-width:200px;margin-top:4px">
-              <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:6px">Colunas a exportar</div>
+              <div style="font-size:11px;font-weight:600;color:#888;margin-bottom:6px">Escolhe as colunas a incluir na exportação</div>
               ${[['colCNP','CNP'],['colMarca','Marca'],['colFornecedor','Fornecedor'],['colCat','Categoria'],['colCusto','Custo'],['colPVP','PVP'],['colMargem','Margem'],['colStock','Stock'],['colStockMin','Stock mín.'],['colValorStock','Valor em stock']].map(([id,lbl])=>
                 `<label style="display:flex;align-items:center;gap:6px;font-size:12px;padding:3px 0;cursor:pointer">
-                  <input type="checkbox" id="${id}" checked onchange=""/> ${lbl}
+                  <input type="checkbox" id="${id}" checked/> ${lbl}
                 </label>`).join('')}
             </div>
           </div>
