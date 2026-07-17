@@ -993,7 +993,7 @@ function renderDash(){
 
   // ── alertas stock ─────────────────────────────────────────────────────────
   const ativos  = DB.produtos.filter(p=>p.ativo!==false);
-  const stockBaixo = ativos.filter(p=>parseInt(p.stockMin||0)>0 && p.stock<=parseInt(p.stockMin||0));
+  const stockBaixo = ativos.filter(p=>parseInt(p.stockMin||0)>0 && p.stock<parseInt(p.stockMin||0));
 
   // ── cedências por pagar ───────────────────────────────────────────────────
   const cedPendentes = (DB.cedencias||[]).filter(c=>c.estadoPag!=='Pago');
@@ -3680,7 +3680,7 @@ function abrirHistoricoProd(prodId){
       </div>
       <div class="met ${Math.abs(stockDif)>0?'':''}">
         <div class="lb">Stock calculado</div>
-        <div class="vl ${stockCalculado<=0?'red':stockCalculado<=(p.stockMin??0)?'amber':'green'}">${stockCalculado}</div>
+        <div class="vl ${stockCalculado<=0?'red':stockCalculado<(p.stockMin??0)?'amber':'green'}">${stockCalculado}</div>
         <div style="font-size:9px;color:#888">${totalComprado} comprado − ${totalVendido} vendido − ${consumoInterno} consumo</div>
       </div>
       ${Math.abs(stockDif)>0?`<div class="met" style="border:1px solid #f5c6cb;background:#fff5f5">
@@ -7013,7 +7013,7 @@ let encFiltroMarca='', encFiltroForn='', encOrdem='nome', encGraficoId=null;
 function renderEncomendas(){
   if(!DB.encomendados) DB.encomendados=[];
   const ativos = DB.produtos.filter(p=>p.ativo!==false);
-  const baixo  = ativos.filter(p=>parseInt(p.stockMin||0)>0 && p.stock<=parseInt(p.stockMin||0));
+  const baixo  = ativos.filter(p=>parseInt(p.stockMin||0)>0 && p.stock<parseInt(p.stockMin||0));
   DB.encomendados = DB.encomendados.filter(id=>baixo.find(p=>p.id===id));
 
   // média mensal desde que o produto entrou em stock (primeira entrada)
