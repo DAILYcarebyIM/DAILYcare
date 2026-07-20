@@ -7382,13 +7382,23 @@ function renderRelatorio(){
     </div>
     <div class="row c2">
       <div class="card">
-        <h3>Custos e lucro real (total)</h3>
+        <h3>Lucros e resultado</h3>
         <table>
-          <tr><td>Receita total</td><td style="text-align:right">${fmt(receitaTotal)}</td></tr>
-          <tr><td>Lucro produtos vendidos</td><td style="text-align:right" class="green">+ ${fmt(lucProdRel)}</td></tr>
-          <tr><td>Outros gastos</td><td style="text-align:right" class="red">− ${fmt(tGasto)}</td></tr>
-          <tr style="border-top:1px solid #eee"><td><strong>Lucro real estimado</strong></td><td style="text-align:right;font-weight:700;font-size:15px" class="green">${fmt(lucroReal)}</td></tr>
-          <tr><td style="color:#888;font-size:11px">↳ Receita em dinheiro</td><td style="text-align:right;font-size:11px">💵 ${fmt(recDinheiro)}</td></tr>
+          <tr><td style="color:#888;font-size:12px">Lucro serviços</td><td style="text-align:right">+ ${fmt(tServ)}</td></tr>
+          <tr><td style="color:#888;font-size:12px">Lucro produtos vendidos</td><td style="text-align:right">+ ${fmt(lucProdRel)}</td></tr>
+          ${tPacks>0?`<tr><td style="color:#888;font-size:12px">Packs</td><td style="text-align:right">+ ${fmt(tPacks)}</td></tr>`:''}
+          ${tWork>0?`<tr><td style="color:#888;font-size:12px">Workshops</td><td style="text-align:right">+ ${fmt(tWork)}</td></tr>`:''}
+          ${tFo>0?`<tr><td style="color:#888;font-size:12px">Formação</td><td style="text-align:right">+ ${fmt(tFo)}</td></tr>`:''}
+          <tr style="border-top:2px solid #d4a97a">
+            <td><strong>Total lucros (antes de gastos)</strong></td>
+            <td style="text-align:right;font-weight:700;font-size:15px" class="green"><strong>${fmt(tServ+lucProdRel+tPacks+tWork+tFo)}</strong></td>
+          </tr>
+          <tr><td style="color:#c0392b;font-size:12px;padding-top:8px">Gastos do negócio</td><td style="text-align:right;padding-top:8px" class="red">− ${fmt(tGasto)}</td></tr>
+          <tr style="border-top:1px solid #eee">
+            <td><strong>Lucro real estimado</strong></td>
+            <td style="text-align:right;font-weight:700;font-size:15px" class="${lucroReal>=0?'green':'red'}"><strong>${fmt(lucroReal)}</strong></td>
+          </tr>
+          <tr><td style="color:#888;font-size:11px;padding-top:8px">↳ Receita em dinheiro</td><td style="text-align:right;font-size:11px;padding-top:8px">💵 ${fmt(recDinheiro)}</td></tr>
           <tr><td style="color:#888;font-size:11px;padding-left:24px">↳ Lucro em dinheiro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroDinheiro)}</td></tr>
           <tr><td style="color:#888;font-size:11px">↳ Receita em MBWay/outro</td><td style="text-align:right;font-size:11px">💳 ${fmt(recMBWay)}</td></tr>
           <tr><td style="color:#888;font-size:11px;padding-left:24px">↳ Lucro em MBWay/outro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroMBWay)}</td></tr>
