@@ -1461,6 +1461,8 @@ function calcCustoMedioProduto(prodId, qty){
 
   for(const e of entradas){
     const qtyEntrada = (e.qty||0)+(e.qtyBonus||0);
+    // custo médio desta entrada: bónus custam 0€, só as unidades normais têm custo
+    const custoMedioEntrada = qtyEntrada > 0 ? ((e.custo||0)*(e.qty||0)) / qtyEntrada : 0;
     if(restanteSaido >= qtyEntrada){
       // esta entrada já saiu toda
       restanteSaido -= qtyEntrada;
@@ -1470,7 +1472,7 @@ function calcCustoMedioProduto(prodId, qty){
     const qtyDisponivel = qtyEntrada - restanteSaido;
     restanteSaido = 0;
     const qtyUsar = Math.min(qtyDisponivel, qtyRestante);
-    custTotal += (e.custo||0) * qtyUsar;
+    custTotal += custoMedioEntrada * qtyUsar;
     qtyRestante -= qtyUsar;
     if(qtyRestante <= 0) break;
   }
@@ -8242,19 +8244,6 @@ load().then(()=>{
     DB = JSON.parse(JSON.stringify(DEFAULT));
     migrarCampos();
   }
-  // recalcular custoUnit de todas as cedências usando FIFO
-  // (feito aqui porque calcCustoMedioProduto precisa de estar definida)
-  let cedAlteradas = 0;
-  (DB.cedencias||[]).forEach(c=>{
-    if(c.prodId){
-      const novoCusto = calcCustoMedioProduto(c.prodId, c.qty||1);
-      if(Math.abs((c.custoUnit||0) - novoCusto) > 0.005){
-        c.custoUnit = novoCusto;
-        cedAlteradas++;
-      }
-    }
-  });
-  if(cedAlteradas > 0) save();
   renderDash();
 }).catch(e=>{
   console.error('Erro no arranque:', e);
