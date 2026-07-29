@@ -7414,7 +7414,7 @@ function renderRelatorio(){
           ${lucCedRel!==0?`<tr><td style="color:#888;font-size:12px">Cedências a colegas</td><td style="text-align:right">${lucCedRel>=0?'+ ':''} ${fmt(lucCedRel)}</td></tr>`:''}
           <tr style="border-top:2px solid #d4a97a">
             <td><strong>Total lucros (antes de gastos)</strong></td>
-            <td style="text-align:right;font-weight:700;font-size:15px" class="green"><strong>${fmt(tServ+lucProdRel+tPacks+tWork+tFo)}</strong></td>
+            <td style="text-align:right;font-weight:700;font-size:15px" class="green"><strong>${fmt(tServ+lucProdRel+tPacks+tWork+tFo+lucCedRel)}</strong></td>
           </tr>
           <tr><td style="color:#c0392b;font-size:12px;padding-top:8px">Gastos do negócio</td><td style="text-align:right;padding-top:8px" class="red">− ${fmt(tGasto)}</td></tr>
           <tr style="border-top:1px solid #eee">
