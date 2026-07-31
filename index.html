@@ -156,7 +156,7 @@ tr:hover td{background:#fafaf7}
 <div class="header">
   <div class="logo">DAILY<span>care</span></div>
   <nav class="nav" id="nav">
-    <button class="nb active" onclick="nav('dashboard',this)">Dashboard</button>
+    <button class="nb" onclick="nav('dashboard',this)">Dashboard</button>
     <button class="nb" onclick="nav('consulta_atual',this)">Consulta atual</button>
     <button class="nb" onclick="nav('consultas',this)">Consultas</button>
     <button class="nb" onclick="nav('vendas',this)">Vendas produtos</button>
@@ -7446,7 +7446,7 @@ function renderRelatorio(){
       <table>
         <thead>
           <tr>
-            <th>Mês</th><th>Consultas</th><th>Vendas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th class="green">Lucro bruto</th><th style="background:#f0fff4;color:#155724">💶 Líquido</th><th>SS est.</th>
+            <th>Mês</th><th>Consultas</th><th>Vendas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th class="green">Lucro bruto</th><th style="background:#f0fff4;color:#155724">💶 Líquido</th><th>% Lucro</th><th>SS est.</th>
           </tr>
         </thead>
         <tbody>
@@ -7465,6 +7465,7 @@ function renderRelatorio(){
             <td class="green">${fmt(r.lucP)}</td>
             <td style="font-weight:700;color:#1a6b1a"><strong>${fmt(r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed)}</strong></td>
             <td style="font-weight:700;color:${(r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed-r.gasto)>=0?'#155724':'#721c24'};background:${(r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed-r.gasto)>=0?'#f0fff4':'#fff5f5'}">${fmt(r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed-r.gasto)}</td>
+            <td style="text-align:center;font-size:12px;color:#555">${r.total>0?Math.round((r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed-r.gasto)/r.total*100)+'%':'—'}</td>
             <td class="amber" style="font-size:11px">${fmt(r.ssM)}</td>
           </tr>`).join('')}
           <tr style="border-top:2px solid #eee;font-weight:600;background:#fafaf7">
@@ -7475,6 +7476,7 @@ function renderRelatorio(){
             <td class="red">${fmt(tGasto)}</td><td class="green">${fmt(tLucro)}</td>
             <td style="font-weight:700;color:#1a6b1a"><strong>${fmt(tServ+tLucro+tPacks+tWork+tFo+lucCedRel)}</strong></td>
             <td style="font-weight:700;color:${(tServ+tLucro+tPacks+tWork+tFo+lucCedRel-tGasto)>=0?'#155724':'#721c24'}">${fmt(tServ+tLucro+tPacks+tWork+tFo+lucCedRel-tGasto)}</td>
+            <td style="text-align:center;font-size:12px;font-weight:700">${receitaTotal>0?Math.round((tServ+tLucro+tPacks+tWork+tFo+lucCedRel-tGasto)/receitaTotal*100)+'%':'—'}</td>
             <td class="amber">${fmt(ss)}</td>
           </tr>
         </tbody>
@@ -8248,7 +8250,9 @@ load().then(()=>{
     DB = JSON.parse(JSON.stringify(DEFAULT));
     migrarCampos();
   }
-  renderDash();
+  // abrir relatório como página inicial
+  const btnRel = document.querySelector('.nb[onclick*="relatorio"]');
+  if(btnRel) btnRel.click(); else renderRelatorio();
 }).catch(e=>{
   console.error('Erro no arranque:', e);
   mostrarErro(String(e) + '\n\nStack: ' + (e.stack||'n/a'));
