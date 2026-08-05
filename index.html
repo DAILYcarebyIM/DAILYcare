@@ -4445,20 +4445,18 @@ function trocarPalavraPasseApp(){
   const msg   = document.getElementById('def-pass-msg');
   const mostrar = (txt, ok) => { if(msg){ msg.textContent=txt; msg.style.color=ok?'#1a6b1a':'#c0392b'; } };
   if(!atual||!nova||!conf){ mostrar('Preenche todos os campos.', false); return; }
-  const passAtualEfetiva = window._PASS_REAL_RUNTIME || _PASS_REAL;
-  if(_hashStr(atual)!==passAtualEfetiva){ mostrar('Palavra-passe actual incorrecta.', false); return; }
+  const hashGuardado = localStorage.getItem(_PASS_KEY);
+  if(_hashStr(atual)!==hashGuardado){ mostrar('Palavra-passe actual incorrecta.', false); return; }
   if(nova.length<6){ mostrar('A nova palavra-passe deve ter pelo menos 6 caracteres.', false); return; }
   if(nova!==conf){ mostrar('As palavras-passe não coincidem.', false); return; }
-  const novoHash = _hashStr(nova);
-  localStorage.setItem(_PASS_KEY, novoHash);
-  window._PASS_REAL_RUNTIME = novoHash;
+  localStorage.setItem(_PASS_KEY, _hashStr(nova));
   mostrar('Palavra-passe alterada com sucesso.', true);
   document.getElementById('def-pass-atual').value='';
   document.getElementById('def-pass-nova').value='';
   document.getElementById('def-pass-conf').value='';
 }
 function terminarSessaoApp(){
-  localStorage.removeItem(_PASS_KEY);
+  sessionStorage.removeItem(_PASS_KEY+'_ok');
   location.reload();
 }
 function renderFiscal(){
@@ -8259,19 +8257,17 @@ document.getElementById('pg-dashboard').innerHTML = `
 
 // ─── PROTECÇÃO POR PALAVRA-PASSE ─────────────────────────────────────────────
 const _PASS_KEY = 'dc_auth';
-const _PASS_HASH = '8e9a4f2b1c3d5e6f'; // substituído pelo hash real abaixo
 function _hashStr(s){
   let h=0;
   for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;}
   return Math.abs(h).toString(16).padStart(16,'0');
 }
-// palavra-passe: dailycare2026 (muda aqui e na linha _PASS_HASH)
-const _PASS_REAL = _hashStr('dailycare2026');
-
+// inicializar com a pass padrão se ainda não houver nada guardado
+if(!localStorage.getItem(_PASS_KEY)){
+  localStorage.setItem(_PASS_KEY, _hashStr('dailycare2026'));
+}
 function _verificarPass(){
-  const stored = localStorage.getItem(_PASS_KEY);
-  const passEfetiva = window._PASS_REAL_RUNTIME || _PASS_REAL;
-  return stored === passEfetiva;
+  return sessionStorage.getItem(_PASS_KEY+'_ok')==='1';
 }
 function _mostrarLoginPass(){
   document.body.style.overflow='hidden';
@@ -8293,8 +8289,10 @@ function _mostrarLoginPass(){
 }
 function _confirmarPass(){
   const val=document.getElementById('pass-input')?.value||'';
-  if(_hashStr(val)===(window._PASS_REAL_RUNTIME||_PASS_REAL)){
-    localStorage.setItem(_PASS_KEY, _PASS_REAL);
+  const hashGuardado = localStorage.getItem(_PASS_KEY);
+  if(_hashStr(val)===hashGuardado){
+    // marcar sessão como verificada (separado do hash da pass)
+    sessionStorage.setItem(_PASS_KEY+'_ok','1');
     document.body.style.overflow='';
     document.getElementById('pass-overlay')?.remove();
     _arrancarApp();
