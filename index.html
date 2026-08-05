@@ -174,6 +174,7 @@ tr:hover td{background:#fafaf7}
     <button class="nb" onclick="nav('encomendas',this)">Lista encomendas</button>
     <button class="nb" onclick="nav('relatorio',this)">Relatório</button>
     <button class="nb" onclick="nav('fornecedores',this)">Fornecedores, Marcas e Tipos</button>
+    <button class="nb" onclick="nav('definicoes',this)">⚙ Definições</button>
     <button class="nb" onclick="nav('vouchers',this)">Vouchers</button>
     <button class="nb" onclick="exportarExcel()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel</button>
   </nav>
@@ -487,6 +488,7 @@ tr:hover td{background:#fafaf7}
   <div id="pg-encomendas" class="pg"></div>
   <div id="pg-relatorio" class="pg"></div>
   <div id="pg-fornecedores" class="pg"></div>
+  <div id="pg-definicoes" class="pg"></div>
   <div id="pg-fiscal" class="pg"></div>
   <div id="pg-vouchers" class="pg"></div>
 </div>
@@ -967,7 +969,7 @@ function nav(page, btn){
     workshops:renderWorkshops, formacao:renderFormacao,
     gastos:renderGastos, encomendas:renderEncomendas,
     relatorio:renderRelatorio, fornecedores:renderFornecedores,
-    vouchers:renderVouchers, fiscal:renderFiscal
+    vouchers:renderVouchers, fiscal:renderFiscal, definicoes:renderDefinicoes
   };
   renders[page]?.();
 }
@@ -1880,7 +1882,7 @@ function gerarRecibo(){
   const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>Recibo DAILYcare</title><style>'
     +'*{margin:0;padding:0;box-sizing:border-box}'
     +'body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:48px;max-width:680px;margin:0 auto}'
-    +'@media print{body{padding:24px}@page{margin:1.5cm}}'
+    +'@media print{body{padding:24px}@page{margin:1.5cm;size:A4}@page{-webkit-margin-before:0;-webkit-margin-after:0}}'
     +'.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:28px;margin-bottom:36px;border-bottom:1.5px solid #ded8d0}'
     +'.hdr img{height:90px;max-width:220px;object-fit:contain}'
     +'.hdr-right{text-align:right}.hdr-right h1{font-size:26px;font-weight:300;letter-spacing:4px;text-transform:uppercase;color:#1a6b1a;margin-bottom:6px}'
@@ -2018,7 +2020,7 @@ function gerarOrcamento(){
   const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>Orçamento DAILYcare</title><style>'
     +'*{margin:0;padding:0;box-sizing:border-box}'
     +'body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:48px;max-width:680px;margin:0 auto}'
-    +'@media print{body{padding:24px}@page{margin:1.5cm}}'
+    +'@media print{body{padding:24px}@page{margin:1.5cm;size:A4}@page{-webkit-margin-before:0;-webkit-margin-after:0}}'
     +'.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:28px;margin-bottom:36px;border-bottom:1.5px solid #ded8d0}'
     +'.hdr img{height:90px;max-width:220px;object-fit:contain}'
     +'.hdr-right{text-align:right}.hdr-right h1{font-size:26px;font-weight:300;letter-spacing:4px;text-transform:uppercase;color:#3a2010;margin-bottom:6px}'
@@ -2734,7 +2736,7 @@ function gerarDocVenda(cid, tipo, cOverride, opcoes){
   const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>'+tituloDoc+' DAILYcare</title><style>'
     +'*{margin:0;padding:0;box-sizing:border-box}'
     +'body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:48px;max-width:680px;margin:0 auto}'
-    +'@media print{body{padding:24px}@page{margin:1.5cm}}'
+    +'@media print{body{padding:24px}@page{margin:1.5cm;size:A4}@page{-webkit-margin-before:0;-webkit-margin-after:0}}'
     +'.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:28px;margin-bottom:36px;border-bottom:1.5px solid #ded8d0}'
     +'.hdr img{height:90px;max-width:220px;object-fit:contain}'
     +'.hdr-right{text-align:right}.hdr-right h1{font-size:26px;font-weight:300;letter-spacing:4px;text-transform:uppercase;color:'+corDoc+';margin-bottom:6px}'
@@ -4098,7 +4100,7 @@ function exportarProdutosPDF(){
     if(cols.colStock) tds+='<td style="text-align:center">'+(p.stock??0)+'</td>';
     return '<tr>'+tds+'</tr>';
   }).join('');
-  const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>Produtos DAILYcare</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:32px}@media print{body{padding:16px}@page{margin:1.2cm}}h1{font-size:20px;font-weight:600;margin-bottom:4px}.sub{font-size:12px;color:#888;margin-bottom:20px}table{width:100%;border-collapse:collapse;font-size:12px}thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;padding:6px 8px;border-bottom:2px solid #d4a97a;font-weight:500}tbody tr:nth-child(even){background:#fafaf7}</style></head><body>'
+  const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>Produtos DAILYcare</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:32px}@media print{body{padding:16px}@page{margin:1.2cm;size:A4}}h1{font-size:20px;font-weight:600;margin-bottom:4px}.sub{font-size:12px;color:#888;margin-bottom:20px}table{width:100%;border-collapse:collapse;font-size:12px}thead th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#888;padding:6px 8px;border-bottom:2px solid #d4a97a;font-weight:500}tbody tr:nth-child(even){background:#fafaf7}</style></head><body>'
     +'<h1>Listagem de produtos — DAILYcare</h1>'
     +'<div class="sub">'+titulo+' · '+today().split('-').reverse().join('/')+' · '+ps.length+' produto'+(ps.length!==1?'s':'')+'</div>'
     +'<table><thead><tr><th>Nome</th>'+thCols.join('')+'</tr></thead><tbody>'+rows+'</tbody></table></body></html>';
@@ -4415,6 +4417,50 @@ function pesquisarProdEncomendas(texto){
 // ─── CONTROLO FISCAL ────────────────────────────────────────────────────────
 let fiscalAno = new Date().getFullYear().toString();
 
+function renderDefinicoes(){
+  document.getElementById('pg-definicoes').innerHTML=`
+    <h2 style="margin-bottom:1.5rem">⚙ Definições</h2>
+    <div class="card" style="max-width:480px">
+      <h3 style="margin-bottom:1rem">Segurança</h3>
+      <div style="margin-bottom:1.2rem">
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Palavra-passe actual</label>
+        <input type="password" id="def-pass-atual" placeholder="Palavra-passe actual" style="margin-bottom:8px"/>
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Nova palavra-passe</label>
+        <input type="password" id="def-pass-nova" placeholder="Nova palavra-passe (mín. 6 caracteres)" style="margin-bottom:8px"/>
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px">Confirmar nova palavra-passe</label>
+        <input type="password" id="def-pass-conf" placeholder="Repetir nova palavra-passe"/>
+        <div id="def-pass-msg" style="font-size:12px;min-height:18px;margin-top:8px"></div>
+        <button class="btn pri" onclick="trocarPalavraPasseApp()" style="margin-top:12px">Guardar nova palavra-passe</button>
+      </div>
+      <div style="border-top:1px solid #eee;padding-top:1rem">
+        <div style="font-size:12px;color:#888;margin-bottom:10px">Terminar sessão neste dispositivo — a próxima abertura vai pedir a palavra-passe.</div>
+        <button class="btn" onclick="terminarSessaoApp()" style="background:#fdecea;border-color:#e8a0a0;color:#a83232">Terminar sessão</button>
+      </div>
+    </div>`;
+}
+function trocarPalavraPasseApp(){
+  const atual = document.getElementById('def-pass-atual')?.value||'';
+  const nova  = document.getElementById('def-pass-nova')?.value||'';
+  const conf  = document.getElementById('def-pass-conf')?.value||'';
+  const msg   = document.getElementById('def-pass-msg');
+  const mostrar = (txt, ok) => { if(msg){ msg.textContent=txt; msg.style.color=ok?'#1a6b1a':'#c0392b'; } };
+  if(!atual||!nova||!conf){ mostrar('Preenche todos os campos.', false); return; }
+  const passAtualEfetiva = window._PASS_REAL_RUNTIME || _PASS_REAL;
+  if(_hashStr(atual)!==passAtualEfetiva){ mostrar('Palavra-passe actual incorrecta.', false); return; }
+  if(nova.length<6){ mostrar('A nova palavra-passe deve ter pelo menos 6 caracteres.', false); return; }
+  if(nova!==conf){ mostrar('As palavras-passe não coincidem.', false); return; }
+  const novoHash = _hashStr(nova);
+  localStorage.setItem(_PASS_KEY, novoHash);
+  window._PASS_REAL_RUNTIME = novoHash;
+  mostrar('Palavra-passe alterada com sucesso.', true);
+  document.getElementById('def-pass-atual').value='';
+  document.getElementById('def-pass-nova').value='';
+  document.getElementById('def-pass-conf').value='';
+}
+function terminarSessaoApp(){
+  localStorage.removeItem(_PASS_KEY);
+  location.reload();
+}
 function renderFiscal(){
   const anos=[...new Set(DB.entradas.map(e=>e.data?.substring(0,4)).filter(Boolean))].sort().reverse();
   if(anos.length && !anos.includes(fiscalAno)) fiscalAno=anos[0];
@@ -7421,10 +7467,11 @@ function renderRelatorio(){
             <td><strong>Lucro real estimado</strong></td>
             <td style="text-align:right;font-weight:700;font-size:15px" class="${lucroReal>=0?'green':'red'}"><strong>${fmt(lucroReal)}</strong></td>
           </tr>
-          <tr><td style="color:#888;font-size:11px;padding-top:8px">↳ Receita em dinheiro</td><td style="text-align:right;font-size:11px;padding-top:8px">💵 ${fmt(recDinheiro)}</td></tr>
-          <tr><td style="color:#888;font-size:11px;padding-left:24px">↳ Lucro em dinheiro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroDinheiro)}</td></tr>
-          <tr><td style="color:#888;font-size:11px">↳ Receita em MBWay/outro</td><td style="text-align:right;font-size:11px">💳 ${fmt(recMBWay)}</td></tr>
-          <tr><td style="color:#888;font-size:11px;padding-left:24px">↳ Lucro em MBWay/outro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroMBWay)}</td></tr>
+          <tr><td style="color:#888;font-size:11px;padding-top:8px" colspan="2">↳ Breakdown por método de pagamento (antes de gastos)</td></tr>
+          <tr><td style="color:#888;font-size:11px;padding-left:12px">💵 Receita em dinheiro</td><td style="text-align:right;font-size:11px">${fmt(recDinheiro)}</td></tr>
+          <tr><td style="color:#888;font-size:11px;padding-left:24px">Lucro bruto em dinheiro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroDinheiro)}</td></tr>
+          <tr><td style="color:#888;font-size:11px;padding-left:12px">💳 Receita em MBWay/outro</td><td style="text-align:right;font-size:11px">${fmt(recMBWay)}</td></tr>
+          <tr><td style="color:#888;font-size:11px;padding-left:24px">Lucro bruto em MBWay/outro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroMBWay)}</td></tr>
         </table>
         ${valorConsumoInterno>0?`<div style="margin-top:10px;padding:8px 10px;background:#fffbf5;border-left:3px solid #d4a97a;border-radius:0 6px 6px 0;font-size:11px;color:#7a4f28">
           💡 Consumo interno este mês: <strong>${fmt(valorConsumoInterno)}</strong> em custo de produtos (${rConsumo.length} registo${rConsumo.length!==1?'s':''}).
@@ -8123,6 +8170,7 @@ const ALL_TABS = [
   {id:'relatorio',label:'Relatório'},
   {id:'fornecedores',label:'Fornecedores'},
   {id:'fiscal',label:'Controlo fiscal'},
+  {id:'definicoes',label:'Definições'},
   {id:'vouchers',label:'Vouchers'},
 ];
 
@@ -8209,12 +8257,79 @@ document.getElementById('pg-dashboard').innerHTML = `
   </div>
   <style>@keyframes prog{from{transform:translateX(-20%)}to{transform:translateX(120%)}}</style>`;
 
-function setLoadMsg(m){ const el=document.getElementById('loading-msg'); if(el) el.textContent=m; }
+// ─── PROTECÇÃO POR PALAVRA-PASSE ─────────────────────────────────────────────
+const _PASS_KEY = 'dc_auth';
+const _PASS_HASH = '8e9a4f2b1c3d5e6f'; // substituído pelo hash real abaixo
+function _hashStr(s){
+  let h=0;
+  for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;}
+  return Math.abs(h).toString(16).padStart(16,'0');
+}
+// palavra-passe: dailycare2026 (muda aqui e na linha _PASS_HASH)
+const _PASS_REAL = _hashStr('dailycare2026');
+
+function _verificarPass(){
+  const stored = localStorage.getItem(_PASS_KEY);
+  const passEfetiva = window._PASS_REAL_RUNTIME || _PASS_REAL;
+  return stored === passEfetiva;
+}
+function _mostrarLoginPass(){
+  document.body.style.overflow='hidden';
+  const overlay=document.createElement('div');
+  overlay.id='pass-overlay';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(245,240,235,.97);z-index:99999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML=`
+    <div style="background:#fff;border-radius:16px;padding:40px;max-width:340px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,.15);text-align:center">
+      <div style="font-size:28px;font-weight:700;color:#8b6f4e;margin-bottom:4px">DAILY<span style="color:#1a1a1a">care</span></div>
+      <div style="font-size:13px;color:#888;margin-bottom:28px">Sistema de gestão</div>
+      <input type="password" id="pass-input" placeholder="Palavra-passe" autofocus
+        style="width:100%;padding:12px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:15px;text-align:center;letter-spacing:2px;outline:none"
+        onkeydown="if(event.key==='Enter')_confirmarPass()"/>
+      <div id="pass-erro" style="color:#c0392b;font-size:12px;margin-top:8px;min-height:16px"></div>
+      <button onclick="_confirmarPass()" style="margin-top:12px;width:100%;padding:12px;background:#8b6f4e;color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">Entrar</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  setTimeout(()=>document.getElementById('pass-input')?.focus(),100);
+}
+function _confirmarPass(){
+  const val=document.getElementById('pass-input')?.value||'';
+  if(_hashStr(val)===(window._PASS_REAL_RUNTIME||_PASS_REAL)){
+    localStorage.setItem(_PASS_KEY, _PASS_REAL);
+    document.body.style.overflow='';
+    document.getElementById('pass-overlay')?.remove();
+    _arrancarApp();
+  } else {
+    const err=document.getElementById('pass-erro');
+    if(err) err.textContent='Palavra-passe incorrecta.';
+    const inp=document.getElementById('pass-input');
+    if(inp){inp.value='';inp.focus();}
+  }
+}
+function _arrancarApp(){
+  loadTabSettings();
+  load().then(()=>{
+    setLoadMsg('A renderizar…');
+    if(!DB || !DB.clientes){
+      DB = JSON.parse(JSON.stringify(DEFAULT));
+      migrarCampos();
+    }
+    const btnRel = document.querySelector('.nb[onclick*="relatorio"]');
+    if(btnRel) btnRel.click(); else renderRelatorio();
+  }).catch(e=>{
+    console.error('Erro no arranque:', e);
+    mostrarErro(String(e) + '\n\nStack: ' + (e.stack||'n/a'));
+    try{
+      if(!DB || !DB.clientes){ DB = JSON.parse(JSON.stringify(DEFAULT)); migrarCampos(); }
+      renderRelatorio();
+    }catch(e2){ mostrarErro('Erro fatal: '+e2); }
+  });
+}
+// iniciar: verificar palavra-passe
+if(_verificarPass()){ _arrancarApp(); } else { _mostrarLoginPass(); }
 
 function buildMenuDrawer(){
   const drawerNav = document.getElementById('menu-drawer-nav');
   if(!drawerNav) return;
-  // copiar botões do nav principal para o drawer
   const navBtns = document.querySelectorAll('.nav .nb');
   drawerNav.innerHTML = '';
   navBtns.forEach(btn=>{
@@ -8240,28 +8355,6 @@ function closeMenuDrawer(){
   const ov = document.getElementById('menu-overlay');
   if(ov) ov.style.display='none';
 }
-
-loadTabSettings();
-
-load().then(()=>{
-  setLoadMsg('A renderizar…');
-  // garantir que DB tem estrutura mínima
-  if(!DB || !DB.clientes){
-    DB = JSON.parse(JSON.stringify(DEFAULT));
-    migrarCampos();
-  }
-  // abrir relatório como página inicial
-  const btnRel = document.querySelector('.nb[onclick*="relatorio"]');
-  if(btnRel) btnRel.click(); else renderRelatorio();
-}).catch(e=>{
-  console.error('Erro no arranque:', e);
-  mostrarErro(String(e) + '\n\nStack: ' + (e.stack||'n/a'));
-  // tentar mesmo assim
-  try{
-    if(!DB || !DB.clientes){ DB = JSON.parse(JSON.stringify(DEFAULT)); migrarCampos(); }
-    renderDash();
-  }catch(e2){ mostrarErro('Erro fatal: '+e2); }
-});
 </script>
 </body>
 </html>
