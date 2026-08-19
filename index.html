@@ -4454,13 +4454,15 @@ function trocarPalavraPasseApp(){
   if(nova.length<6){ mostrar('A nova palavra-passe deve ter pelo menos 6 caracteres.', false); return; }
   if(nova!==conf){ mostrar('As palavras-passe não coincidem.', false); return; }
   localStorage.setItem(_PASS_KEY, _hashStr(nova));
+  DB.passHash = _hashStr(nova);
+  save();
   mostrar('Palavra-passe alterada com sucesso.', true);
   document.getElementById('def-pass-atual').value='';
   document.getElementById('def-pass-nova').value='';
   document.getElementById('def-pass-conf').value='';
 }
 function terminarSessaoApp(){
-  sessionStorage.removeItem(_PASS_KEY+'_ok');
+  localStorage.removeItem(_PASS_KEY+'_ok');
   location.reload();
 }
 function renderFiscal(){
@@ -8266,12 +8268,23 @@ function _hashStr(s){
   for(let i=0;i<s.length;i++){h=((h<<5)-h)+s.charCodeAt(i);h|=0;}
   return Math.abs(h).toString(16).padStart(16,'0');
 }
-// inicializar com a pass padrão se ainda não houver nada guardado
+// hash da palavra-passe: guardado em localStorage E sincronizado com Supabase via DB.passHash
+// inicializar com a pass padrão se ainda não houver nada guardado localmente
 if(!localStorage.getItem(_PASS_KEY)){
   localStorage.setItem(_PASS_KEY, _hashStr('dailycare2026'));
 }
 function _verificarPass(){
-  return sessionStorage.getItem(_PASS_KEY+'_ok')==='1';
+  return localStorage.getItem(_PASS_KEY+'_ok')==='1';
+}
+function _sincronizarPassHash(){
+  // após carregar DB, sincronizar o hash entre Supabase e localStorage
+  if(DB.passHash){
+    // Supabase tem um hash guardado — usar esse (é a fonte de verdade)
+    localStorage.setItem(_PASS_KEY, DB.passHash);
+  } else {
+    // guardar o hash local no Supabase para que outros dispositivos o usem
+    DB.passHash = localStorage.getItem(_PASS_KEY);
+  }
 }
 function _mostrarLoginPass(){
   document.body.style.overflow='hidden';
@@ -8296,7 +8309,7 @@ function _confirmarPass(){
   const hashGuardado = localStorage.getItem(_PASS_KEY);
   if(_hashStr(val)===hashGuardado){
     // marcar sessão como verificada (separado do hash da pass)
-    sessionStorage.setItem(_PASS_KEY+'_ok','1');
+    localStorage.setItem(_PASS_KEY+'_ok','1');
     document.body.style.overflow='';
     document.getElementById('pass-overlay')?.remove();
     _arrancarApp();
@@ -8317,6 +8330,7 @@ function _arrancarApp(){
       DB = JSON.parse(JSON.stringify(DEFAULT));
       migrarCampos();
     }
+    _sincronizarPassHash();
     const btnRel = document.querySelector('.nb[onclick*="relatorio"]');
     if(btnRel) btnRel.click(); else renderRelatorio();
   }).catch(e=>{
