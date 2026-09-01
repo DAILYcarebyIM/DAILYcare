@@ -3793,6 +3793,7 @@ function renderPacks(){
     </div>`;
 }
 function showAddPk(){const f=document.getElementById('add-pk-f');f.style.display=f.style.display==='none'?'block':'none';}
+function ddCliPk(v){ ddCliGenerico(v,'dd-pk','pk-cli','pk-cli-id',''); }
 function addPk(){
   const cId=document.getElementById('pk-cli-id').value; if(!cId){alert('Seleciona um cliente.');return;}
   const tipo=document.getElementById('pk-tipo').value;
