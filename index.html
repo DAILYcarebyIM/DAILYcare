@@ -5674,38 +5674,14 @@ function guardarCI(){
   _ciLinhas.forEach(function(l){
     const p=DB.produtos.find(function(x){return x.id===l.prodId;});
     if(p) p.stock-=l.qty;
-    DB.consumo.push({id:'ci'+DB.ids.ci++,prodId:l.prodId,prodNome:l.prodNome,qty:l.qty,data:data,motivo:motivo,consig:l.consig});
-    // se for produto de consignação, criar entrada na listagem de consignação
-    if(l.consig){
-      const descTotal=10+(l.descForn||0);
-      const pvpBase=l.pvp||p?.pvp||0;
-      const custoUnit=+(pvpBase*(1-descTotal/100)).toFixed(2);
-      const pvpCobrado=pvpBase; // não há desconto ao cliente — é consumo interno
-      if(!DB.ids.ci_consig) DB.ids.ci_consig=1;
-      DB.consignacao=DB.consignacao||[];
-      for(let u=0;u<l.qty;u++){
-        DB.consignacao.push({
-          id:'csg'+(DB.ids.ci_consig++),
-          prodId:l.prodId,
-          nome:l.prodNome,
-          cnp:p?.cnp||'',
-          pvp:pvpBase,
-          pvpBase:pvpBase,
-          pvpCobrado:pvpCobrado,
-          custo:custoUnit,
-          custoOriginal:custoUnit,
-          descForn:l.descForn||0,
-          descCliente:0,
-          qty:1,
-          data:data,
-          clienteId:'',
-          cliente:'Consumo interno',
-          motivo:motivo,
-          pago:false,
-          tipo:'consig_ci' // marcador para identificar origem
-        });
-      }
-    }
+    DB.consumo.push({
+      id:'ci'+DB.ids.ci++,
+      prodId:l.prodId, prodNome:l.prodNome,
+      qty:l.qty, data:data, motivo:motivo,
+      consig:l.consig,
+      pvp:l.pvp||0,
+      descForn:l.descForn||0
+    });
   });
   _ciLinhas=[];
   save();
@@ -6254,10 +6230,16 @@ function _consignRows(apenasItens){
   }).map(ci=>{
     const p=DB.produtos.find(x=>x.id===ci.prodId);
     const cid=`ci-${ci.id}`;
+    const pvp=ci.pvp||p?.pvp||0;
+    const descForn=ci.descForn||0;
+    const descTotal=10+descForn;
+    const custo=+(pvp*(1-descTotal/100)).toFixed(2);
     return {cid, tipo:'Consumo interno', prodId:ci.prodId, nome:ci.prodNome,
-      qty:ci.qty, data:ci.data, cliente:'— (uso interno)', cnp:p?.cnp||'',
-      pvp:0, custoOriginal:p?.custo||0, custo:p?.custo||0, descExtra:0,
-      pago:pagas.has(cid)};
+      qty:ci.qty, data:ci.data, cliente:'— (uso pessoal)', cnp:p?.cnp||'',
+      pvp:pvp, pvpCobrado:pvp, custoOriginal:custo, custo:custo,
+      descForn:descForn, descExtra:descForn, descCliente:0,
+      pago:pagas.has(cid),
+      _pessoal:true}; // marcador: pagamento pessoal, não afecta empresa
   });
   const all=[...itemsVenda,...itemsCI];
   return apenasItens ? all.filter(v=>!v.pago) : all;
