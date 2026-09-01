@@ -1793,7 +1793,13 @@ function gravarConsulta(){
   cvs.forEach(v=>{const p=DB.produtos.find(x=>x.id===v.prodId);if(p)p.stock-=v.qty;});
   if(tipo==='Pack'){
     const pk = DB.packs.find(p=>p.clienteId===cId&&p.estado==='Ativo');
-    if(pk){pk.usadas++;if(pk.usadas>=pk.incluidas)pk.estado='Concluído';}
+    if(pk){
+      pk.usadas++;
+      if(pk.usadas>=pk.incluidas) pk.estado='Concluído';
+      // guardar packId na consulta para poder repor ao apagar
+      const c=DB.consultas.find(x=>x.id===id);
+      if(c) c.packId=pk.id;
+    }
   }
   if(tipo==='Voucher'){
     const vEl = document.getElementById('voucher-selecionado');
@@ -2407,6 +2413,16 @@ function delConsulta(id){
       const p=DB.produtos.find(x=>x.id===v.prodId);
       if(p) p.stock+=v.qty;
     });
+    // repor sessão do pack se aplicável
+    if(c.tipo==='Pack'){
+      const pk = c.packId
+        ? DB.packs.find(x=>x.id===c.packId)
+        : DB.packs.find(x=>x.clienteId===c.clienteId&&(x.estado==='Ativo'||x.estado==='Concluído'));
+      if(pk&&pk.usadas>0){
+        pk.usadas--;
+        if(pk.estado==='Concluído'&&pk.usadas<pk.incluidas) pk.estado='Ativo';
+      }
+    }
     DB.consultas=DB.consultas.filter(x=>x.id!==id);
     save(); renderConsultas();
   });
