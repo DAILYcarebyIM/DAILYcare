@@ -5610,8 +5610,17 @@ function addLinhaCI(){
   const nome=document.getElementById('ci-p').value.trim();
   const qty=parseInt(document.getElementById('ci-q').value)||0;
   if(!pid||!nome||!qty)return;
+  const p=DB.produtos.find(x=>x.id===pid);
   const exist=_ciLinhas.find(l=>l.prodId===pid);
-  if(exist){ exist.qty+=qty; } else { _ciLinhas.push({prodId:pid,prodNome:nome,qty}); }
+  if(exist){ exist.qty+=qty; }
+  else {
+    _ciLinhas.push({
+      prodId:pid, prodNome:nome, qty,
+      consig:!!(p?.consig),
+      pvp:p?.pvp||0,
+      descForn:0 // desconto adicional do fornecedor (além dos 10% base)
+    });
+  }
   document.getElementById('ci-p').value='';
   document.getElementById('ci-p-id').value='';
   document.getElementById('ci-q').value='';
@@ -5633,12 +5642,26 @@ function renderLinhasCI(){
   el.innerHTML='<table style="width:100%;font-size:13px;margin-bottom:4px"><thead><tr>'
     +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:#888">Produto</th>'
     +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:60px">Qty</th>'
+    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:120px">A pagar farmácia</th>'
+    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:110px">Desc. forn. (%)</th>'
     +'<th style="width:36px"></th></tr></thead><tbody>'
     +_ciLinhas.map(function(l,i){
       const p=DB.produtos.find(function(x){return x.id===l.prodId;});
+      const descTotal=10+(l.descForn||0);
+      const valorUnit=l.consig?+(l.pvp*(1-descTotal/100)).toFixed(2):0;
+      const valorTotal=+(valorUnit*l.qty).toFixed(2);
       return '<tr>'
-        +'<td style="padding:5px 6px"><strong>'+l.prodNome+'</strong>'+(p&&p.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':'')+'</td>'
+        +'<td style="padding:5px 6px"><strong>'+l.prodNome+'</strong>'+(l.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':'')+'</td>'
         +'<td style="text-align:center;padding:5px 6px">'+l.qty+'</td>'
+        +(l.consig
+          ?'<td style="text-align:center;padding:5px 6px;color:#8b6f4e;font-weight:600">'+fmt(valorTotal)+'<div style="font-size:10px;color:#aaa">'+fmt(valorUnit)+'/un.</div></td>'
+            +'<td style="text-align:center;padding:5px 6px"><div style="display:flex;align-items:center;gap:4px;justify-content:center">'
+            +'<span style="font-size:11px;color:#888">10%</span>'
+            +'<span style="font-size:11px;color:#888">+</span>'
+            +'<input type="number" min="0" max="90" step="1" value="'+(l.descForn||0)+'" style="width:52px;font-size:12px;text-align:center" oninput="_ciLinhas['+i+'].descForn=parseFloat(this.value)||0;renderLinhasCI()"/>'
+            +'<span style="font-size:11px;color:#888">%</span>'
+            +'</div></td>'
+          :'<td style="text-align:center;color:#bbb;font-size:11px">—</td><td style="text-align:center;color:#bbb;font-size:11px">—</td>')
         +'<td style="padding:5px 4px"><button class="btn dan sm" onclick="removeLinhaCI('+i+')" style="padding:2px 7px;font-size:11px">×</button></td>'
         +'</tr>';
     }).join('')
@@ -5651,7 +5674,38 @@ function guardarCI(){
   _ciLinhas.forEach(function(l){
     const p=DB.produtos.find(function(x){return x.id===l.prodId;});
     if(p) p.stock-=l.qty;
-    DB.consumo.push({id:'ci'+DB.ids.ci++,prodId:l.prodId,prodNome:l.prodNome,qty:l.qty,data:data,motivo:motivo});
+    DB.consumo.push({id:'ci'+DB.ids.ci++,prodId:l.prodId,prodNome:l.prodNome,qty:l.qty,data:data,motivo:motivo,consig:l.consig});
+    // se for produto de consignação, criar entrada na listagem de consignação
+    if(l.consig){
+      const descTotal=10+(l.descForn||0);
+      const pvpBase=l.pvp||p?.pvp||0;
+      const custoUnit=+(pvpBase*(1-descTotal/100)).toFixed(2);
+      const pvpCobrado=pvpBase; // não há desconto ao cliente — é consumo interno
+      if(!DB.ids.ci_consig) DB.ids.ci_consig=1;
+      DB.consignacao=DB.consignacao||[];
+      for(let u=0;u<l.qty;u++){
+        DB.consignacao.push({
+          id:'csg'+(DB.ids.ci_consig++),
+          prodId:l.prodId,
+          nome:l.prodNome,
+          cnp:p?.cnp||'',
+          pvp:pvpBase,
+          pvpBase:pvpBase,
+          pvpCobrado:pvpCobrado,
+          custo:custoUnit,
+          custoOriginal:custoUnit,
+          descForn:l.descForn||0,
+          descCliente:0,
+          qty:1,
+          data:data,
+          clienteId:'',
+          cliente:'Consumo interno',
+          motivo:motivo,
+          pago:false,
+          tipo:'consig_ci' // marcador para identificar origem
+        });
+      }
+    }
   });
   _ciLinhas=[];
   save();
