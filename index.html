@@ -1165,7 +1165,12 @@ function renderConsultaAtual(){
           <div style="display:flex;align-items:center;gap:6px">
             <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
             <input id="cc-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-              oninput="atualizarTotais()" style="width:80px;font-size:13px"/>
+              oninput="atualizarTotais();document.getElementById('cc-portes-custo').value=this.value;document.getElementById('cc-portes-gratis').checked=false" style="width:80px;font-size:13px"/>
+            <input type="hidden" id="cc-portes-custo" value="0"/>
+            <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:#1a6b1a">
+              <input type="checkbox" id="cc-portes-gratis" onchange="portesGratisCC(this.checked)"/>
+              Grátis
+            </label>
           </div>
           <div style="display:flex;align-items:center;gap:6px">
             <label style="font-size:12px;color:#c05050;white-space:nowrap">Desc. final (€):</label>
@@ -1710,6 +1715,32 @@ function renderVendasTabela(){
 }
 
 // actualiza só os totais sem re-renderizar os inputs (evita perder foco)
+function portesGratisCC(gratis){
+  const portesEl=document.getElementById('cc-portes');
+  const custoEl=document.getElementById('cc-portes-custo');
+  if(gratis){
+    // guardar o custo real e cobrar zero ao cliente
+    if(custoEl&&portesEl) custoEl.value=portesEl.value;
+    if(portesEl) portesEl.value='0';
+  } else {
+    // repor o valor original no campo cobrado
+    if(custoEl&&portesEl) portesEl.value=custoEl.value;
+    if(custoEl) custoEl.value='0';
+  }
+  atualizarTotais();
+}
+function portesGratisVR(gratis){
+  const portesEl=document.getElementById('vr-portes');
+  const custoEl=document.getElementById('vr-portes-custo');
+  if(gratis){
+    if(custoEl&&portesEl) custoEl.value=portesEl.value;
+    if(portesEl) portesEl.value='0';
+  } else {
+    if(custoEl&&portesEl) portesEl.value=custoEl.value;
+    if(custoEl) custoEl.value='0';
+  }
+  atualizarTotaisVR();
+}
 function atualizarTotais(){
   syncInputs();
   // actualizar custo/lucro por linha sem reescrever o input
@@ -1782,6 +1813,7 @@ function gravarConsulta(){
   const fatProd  = fatVal==='ambos'||fatVal==='produtos';  // produtos faturados
   const notas = document.getElementById('cc-notas').value;
   const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
+  const portesCusto = parseFloat(document.getElementById('cc-portes-custo')?.value)||0;
   const descFinal = parseFloat(document.getElementById('cc-desc-final')?.value)||0;
   // garantir que descCliente e pvpCobrado estão actualizados antes de gravar
   syncInputs();
@@ -1789,7 +1821,7 @@ function gravarConsulta(){
   const tp = Math.max(0, cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (descFinal||0));
   const tl = cvs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0) - (descFinal||0);
   const id = 'c'+DB.ids.c++;
-  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,fatProd,estado,metodoPagamento,pagamentos:pagInfo.pagamentos,notas,portes,descFinal,vendas:vendasComFat,totalProd:tp,lucroProd:tl});
+  DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,fatProd,estado,metodoPagamento,pagamentos:pagInfo.pagamentos,notas,portes,portesCusto,descFinal,vendas:vendasComFat,totalProd:tp,lucroProd:tl-portesCusto});
   cvs.forEach(v=>{const p=DB.produtos.find(x=>x.id===v.prodId);if(p)p.stock-=v.qty;});
   if(tipo==='Pack'){
     const pk = DB.packs.find(p=>p.clienteId===cId&&p.estado==='Ativo');
@@ -1833,6 +1865,8 @@ function gravarConsulta(){
   document.getElementById('cc-cli').value='';document.getElementById('cc-cli-id').value='';
   document.getElementById('cc-val').value='';document.getElementById('cc-notas').value='';
   const portesEl=document.getElementById('cc-portes'); if(portesEl) portesEl.value='0';
+  const portesCustoEl=document.getElementById('cc-portes-custo'); if(portesCustoEl) portesCustoEl.value='0';
+  const portesGratisEl=document.getElementById('cc-portes-gratis'); if(portesGratisEl) portesGratisEl.checked=false;
   const dfEl=document.getElementById('cc-desc-final'); if(dfEl) dfEl.value='0';
   const ncEl=document.getElementById('cc-notas-cli'); if(ncEl) ncEl.value='';
   cvs=[];renderVendasTabela();
@@ -2602,6 +2636,7 @@ function guardarVendaRapida(){
   const estado   = document.getElementById('vr-estado').value;
   const portesVR = parseFloat(document.getElementById('vr-portes')?.value)||0;
   const vrDescFinalVal = parseFloat(document.getElementById('vr-desc-final')?.value)||0;
+  const portesVRCusto = parseFloat(document.getElementById('vr-portes-custo')?.value)||0;
   const tp = Math.max(0, vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (vrDescFinalVal||0));
   const pagInfoVR = getPagamentosParaGravar('vr', tp+portesVR);
   const metodoPagamento = pagInfoVR.metodoPagamento;
@@ -2628,10 +2663,11 @@ function guardarVendaRapida(){
     pagamentos:pagInfoVR.pagamentos,
     notas:'',
     portes:portesVR,
+    portesCusto:portesVRCusto,
     descFinal:vrDescFinalVal,
     vendas,
     totalProd:tp,
-    lucroProd:tl
+    lucroProd:tl-portesVRCusto
   });
   // baixar stock
   vrs.forEach(v=>{ const p=DB.produtos.find(x=>x.id===v.prodId); if(p) p.stock-=v.qty; });
@@ -2848,7 +2884,12 @@ function renderVendas(){
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
           <input id="vr-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-            oninput="atualizarTotaisVR()" style="width:80px;font-size:13px"/>
+            oninput="atualizarTotaisVR();document.getElementById('vr-portes-custo').value=this.value;document.getElementById('vr-portes-gratis').checked=false" style="width:80px;font-size:13px"/>
+          <input type="hidden" id="vr-portes-custo" value="0"/>
+          <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:#1a6b1a">
+            <input type="checkbox" id="vr-portes-gratis" onchange="portesGratisVR(this.checked)"/>
+            Grátis
+          </label>
         </div>
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:12px;color:#c05050;white-space:nowrap">Desc. final (€):</label>
