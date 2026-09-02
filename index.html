@@ -2270,12 +2270,17 @@ function renderConsultasLista(){
               : `<strong>${fmt(c.valor)}</strong>`}
           </div>
           <div>
-            <div class="lb">Produtos${c.descFinal>0?` <span style="font-size:9px;color:#c05050;font-weight:400">(-${fmt(c.descFinal)} desc.)</span>`:''}</div>
+            <div class="lb">Produtos${c.descFinal>0?` <span style="font-size:9px;color:#c05050;font-weight:400">(-${fmt(c.descFinal)} desc.)</span>`:''}${c.portesCusto>0?` <span style="font-size:9px;color:#856404;font-weight:400">(-${fmt(c.portesCusto)} portes)</span>`:''}</div>
             <strong>${fmt(c.totalProd)}</strong>
           </div>
           <div>
             <div class="lb">Pagamento</div>
             <strong style="font-size:12px">${metodoPagamentoDisplay(c)}</strong>
+          </div>
+          <div style="background:#f0fff4;border-radius:6px;padding:6px 10px">
+            <div class="lb" style="color:#1a6b1a">Lucro total</div>
+            <strong style="color:#1a6b1a">${fmt(c.valor+c.lucroProd)}</strong>
+            ${c.portesCusto>0?`<div style="font-size:10px;color:#856404;margin-top:1px">Incl. -${fmt(c.portesCusto)} portes ofert.</div>`:''}
           </div>
         </div>
         ${c.vendas.length?`
@@ -2711,6 +2716,7 @@ function verVenda(cid){
     +'</tbody></table>'
     +'<div style="border-top:2px solid #eee;padding:12px 8px;display:flex;gap:20px;flex-wrap:wrap;margin-top:4px">'
     +(c.descFinal>0?'<div><div style="font-size:10px;color:#888">Subtotal</div><div style="font-weight:600">'+fmt(bruto)+'</div></div><div><div style="font-size:10px;color:#c05050">Desconto</div><div style="font-weight:600;color:#c05050">- '+fmt(c.descFinal)+'</div></div>':'')
+    +(c.portesCusto>0?'<div><div style="font-size:10px;color:#856404">Portes oferecidos</div><div style="font-weight:600;color:#856404">- '+fmt(c.portesCusto)+'</div></div>':'')
     +'<div><div style="font-size:10px;color:#888">Total pago</div><div style="font-size:18px;font-weight:700">'+fmt(c.totalProd)+'</div></div>'
     +'<div><div style="font-size:10px;color:#888">Lucro total</div><div style="font-size:18px;font-weight:700" class="green">'+fmt(c.lucroProd)+'</div></div>'
     +(c.portes>0?'<div><div style="font-size:10px;color:#888">Portes</div><div style="font-weight:600">'+fmt(c.portes)+'</div></div>':'')
@@ -3021,7 +3027,7 @@ function renderVendasPagina(){
         <td style="white-space:nowrap">${c.data}</td>
         <td>${cNome(c.clienteId)}</td>
         <td style="font-size:11px;color:#888;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${nomes}">${nomes}</td>
-        <td style="white-space:nowrap">${c.descFinal>0?`<div><strong>${fmt(tp)}</strong></div><div style="font-size:10px;color:#c05050">-${fmt(c.descFinal)}</div>`:`<strong>${fmt(tp)}</strong>`}</td>
+        <td style="white-space:nowrap">${c.descFinal>0||c.portesCusto>0?`<div><strong>${fmt(tp)}</strong></div>${c.descFinal>0?`<div style="font-size:10px;color:#c05050">-${fmt(c.descFinal)} desc.</div>`:''} ${c.portesCusto>0?`<div style="font-size:10px;color:#856404">-${fmt(c.portesCusto)} portes</div>`:''}`:`<strong>${fmt(tp)}</strong>`}</td>
         <td class="green" style="white-space:nowrap"><strong>${fmt(tl)}</strong></td>
         <td style="font-size:11px;white-space:nowrap">${metodoPagamentoDisplay(c)}</td>
         <td>${pendente>0?`<span class="badge bg-a" style="white-space:nowrap">${fmt(pendente)}</span>`:'<span style="color:#bbb;font-size:11px">—</span>'}</td>
@@ -7415,7 +7421,7 @@ function renderRelatorio(){
 
   const tServ  = rCs.reduce((s,c)=>s+c.valor,0);
   const tProd  = rCs.reduce((s,c)=>s+c.totalProd,0);
-  const calcLucroCRel=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0);
+  const calcLucroCRel=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0)-(c.portesCusto||0);
   const tLucro = rCs.reduce((s,c)=>s+calcLucroCRel(c),0);
   // receitas e lucro por método de pagamento — considera divisão por c.pagamentos quando existir
   let recDinheiro=0, recMBWay=0, recOutro=0, lucroDinheiro=0, lucroMBWay=0, lucroOutro=0;
@@ -7439,19 +7445,35 @@ function renderRelatorio(){
       else { recOutro+=totalC; lucroOutro+=lucroC; }
     }
   });
-  recMBWay += recOutro; lucroMBWay += lucroOutro; // "Outro" agrupado com MBWay para manter os dois totais existentes
+  recMBWay += recOutro; lucroMBWay += lucroOutro; // "Outro" agrupado com MBWay
   const tPacks = rPacks.reduce((s,p)=>s+p.valor,0);
   const tWork  = rWorks.reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
   const tFo    = rFos.reduce((s,f)=>s+calcFoTotal(f),0);
   const tGasto = rGastos.reduce((s,g)=>s+g.valor,0);
   const rCeds  = relMes ? (DB.cedencias||[]).filter(c=>c.data?.startsWith(relMes)) : (DB.cedencias||[]);
   const tCedencias = rCeds.reduce((s,c)=>s+(c.valorRecebido||0),0);
+  // adicionar packs ao breakdown por método de pagamento
+  rPacks.forEach(pk=>{
+    const metodo = pk.metodoPagamento||'MBWay';
+    const val = pk.valor||0;
+    if(metodo==='Dinheiro'){ recDinheiro+=val; lucroDinheiro+=val; }
+    else { recMBWay+=val; lucroMBWay+=val; }
+  });
+  // adicionar cedências ao breakdown por método de pagamento
+  rCeds.forEach(c=>{
+    const metodo = c.metodoPagamento||'MBWay';
+    const rec = c.valorRecebido||0;
+    const luc = rec - (c.custoUnit||0)*(c.qty||1);
+    if(metodo==='Dinheiro'){ recDinheiro+=rec; lucroDinheiro+=luc; }
+    else { recMBWay+=rec; lucroMBWay+=luc; }
+  });
   const tFat   = rCs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)
                + rPacks.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0)
                + rWorks.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0)
                + rFos.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
   const tNFat  = (tServ+tPacks+tWork+tFo)-tFat;
   const lucProdRel = rCs.reduce((s,c)=>s+calcLucroCRel(c),0);
+  const tPortesGratis = rCs.reduce((s,c)=>s+(c.portesCusto||0),0);
   const receitaTotal = tServ+tProd+tPacks+tWork+tFo;
   const tCedRel = (DB.cedencias||[]).filter(c=>!relMes||c.data?.startsWith(relMes)).reduce((s,c)=>s+(c.valorRecebido||0),0);
   const lucCedRel = (DB.cedencias||[]).filter(c=>!relMes||c.data?.startsWith(relMes)).reduce((s,c)=>s+(c.valorRecebido||0)-(c.custoUnit||0)*(c.qty||1),0);
@@ -7490,7 +7512,7 @@ function renderRelatorio(){
     const gs   = DB.gastos.filter(g=>g.data?.startsWith(m));
     const serv = cs.reduce((s,c)=>s+c.valor,0);
     const prod = cs.reduce((s,c)=>s+c.totalProd,0);
-    const calcLucroM=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0);
+    const calcLucroM=c=>(c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:(v.pvp||0))*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0)-(c.portesCusto||0);
     const lucP = cs.reduce((s,c)=>s+calcLucroM(c),0);
     const pk   = pks.reduce((s,p)=>s+p.valor,0);
     const wk   = ws.reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0);
@@ -7552,6 +7574,7 @@ function renderRelatorio(){
         <table>
           <tr><td style="color:#888;font-size:12px">Lucro serviços</td><td style="text-align:right">+ ${fmt(tServ)}</td></tr>
           <tr><td style="color:#888;font-size:12px">Lucro produtos vendidos</td><td style="text-align:right">+ ${fmt(lucProdRel)}</td></tr>
+          ${tPortesGratis>0?`<tr><td style="color:#c05050;font-size:12px">Portes oferecidos</td><td style="text-align:right;color:#c05050">− ${fmt(tPortesGratis)}</td></tr>`:''}
           ${tPacks>0?`<tr><td style="color:#888;font-size:12px">Packs</td><td style="text-align:right">+ ${fmt(tPacks)}</td></tr>`:''}
           ${tWork>0?`<tr><td style="color:#888;font-size:12px">Workshops</td><td style="text-align:right">+ ${fmt(tWork)}</td></tr>`:''}
           ${tFo>0?`<tr><td style="color:#888;font-size:12px">Formação</td><td style="text-align:right">+ ${fmt(tFo)}</td></tr>`:''}
