@@ -5705,8 +5705,7 @@ function renderLinhasCI(){
   el.innerHTML='<table style="width:100%;font-size:13px;margin-bottom:4px"><thead><tr>'
     +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:#888">Produto</th>'
     +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:60px">Qty</th>'
-    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:120px">A pagar farmácia</th>'
-    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:110px">Desc. forn. (%)</th>'
+    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:200px">Nota</th>'
     +'<th style="width:36px"></th></tr></thead><tbody>'
     +_ciLinhas.map(function(l,i){
       const p=DB.produtos.find(function(x){return x.id===l.prodId;});
@@ -5717,13 +5716,7 @@ function renderLinhasCI(){
         +'<td style="padding:5px 6px"><strong>'+l.prodNome+'</strong>'+(l.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':'')+'</td>'
         +'<td style="text-align:center;padding:5px 6px">'+l.qty+'</td>'
         +(l.consig
-          ?'<td style="text-align:center;padding:5px 6px;color:#8b6f4e;font-weight:600">'+fmt(valorTotal)+'<div style="font-size:10px;color:#aaa">'+fmt(valorUnit)+'/un.</div></td>'
-            +'<td style="text-align:center;padding:5px 6px"><div style="display:flex;align-items:center;gap:4px;justify-content:center">'
-            +'<span style="font-size:11px;color:#888">10%</span>'
-            +'<span style="font-size:11px;color:#888">+</span>'
-            +'<input type="number" min="0" max="90" step="1" value="'+(l.descForn||0)+'" style="width:52px;font-size:12px;text-align:center" oninput="_ciLinhas['+i+'].descForn=parseFloat(this.value)||0;renderLinhasCI()"/>'
-            +'<span style="font-size:11px;color:#888">%</span>'
-            +'</div></td>'
+          ?'<td colspan="2" style="text-align:center;padding:5px 6px;font-size:11px;color:#856404">Consignação — pago pessoalmente à farmácia</td>'
           :'<td style="text-align:center;color:#bbb;font-size:11px">—</td><td style="text-align:center;color:#bbb;font-size:11px">—</td>')
         +'<td style="padding:5px 4px"><button class="btn dan sm" onclick="removeLinhaCI('+i+')" style="padding:2px 7px;font-size:11px">×</button></td>'
         +'</tr>';
@@ -6205,7 +6198,9 @@ function renderConsign(){
     .sort((a,b)=>sortRecente(a,b));
 
   const pendentes = allItems.filter(v=>!pagas.has(v.cid));
-  const tCusto    = pendentes.reduce((s,v)=>s+calcCustoFarm(v)*(v.qty||1),0);
+  const pendentesEmpresa = pendentes.filter(v=>!v._pessoal);
+  const tCusto    = pendentesEmpresa.reduce((s,v)=>s+calcCustoFarm(v)*(v.qty||1),0);
+  const tCustoPessoal = pendentes.filter(v=>v._pessoal).reduce((s,v)=>s+v.custo*(v.qty||1),0);
   const tLucro    = allItems.filter(v=>!pagas.has(v.cid)&&v.tipo==='Venda')
                     .reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*(v.qty||1),0);
 
@@ -6213,11 +6208,18 @@ function renderConsign(){
     <h2>Consignação — Farmácia Fonte da Moura</h2>
     <div class="cbanner">
       <div>
-        <div style="font-weight:600;color:#856404">Total a pagar à farmácia (por liquidar)</div>
-        <div style="font-size:11px;color:#999">Inclui vendas e consumo interno de produtos em consignação.</div>
+        <div style="font-weight:600;color:#856404">Total a pagar à farmácia (empresa, por liquidar)</div>
+        <div style="font-size:11px;color:#999">Apenas vendas a clientes. Consumo pessoal excluído.</div>
       </div>
       <div style="font-size:24px;font-weight:700;color:#856404">${fmt(tCusto)}</div>
     </div>
+    ${tCustoPessoal>0?`<div class="cbanner" style="background:#fffbf5;border-color:#d4a97a">
+      <div>
+        <div style="font-weight:600;color:#7a4f28">A pagar pessoalmente (por liquidar)</div>
+        <div style="font-size:11px;color:#999">Consumo interno — pagamento da tua conta pessoal.</div>
+      </div>
+      <div style="font-size:24px;font-weight:700;color:#7a4f28">${fmt(tCustoPessoal)}</div>
+    </div>`:''}
     <div class="metrics">
       <div class="met"><div class="lb">Total vendido (PVP)</div><div class="vl">${fmt(allItems.filter(v=>v.tipo==='Venda').reduce((s,v)=>s+v.pvpTotal,0))}</div></div>
       <div class="met"><div class="lb">A pagar (pendente)</div><div class="vl amber">${fmt(tCusto)}</div></div>
@@ -6245,23 +6247,28 @@ function renderConsign(){
           ${allItems.length ? allItems.map(v=>{
             const qty=v.qty||1;
             const pago=pagas.has(v.cid);
-            const isCI=v.tipo==='Consumo interno';
-            // calcular com funções correctas — pvpCobrado e custo podem estar desactualizados
-            const pvc  = isCI ? 0 : calcPvpCobrado(v);   // pvp cobrado ao cliente
-            const cEf  = calcCustoFarm(v);                 // o que pago à farmácia
+            const isCI=v._pessoal===true;
+            const pvc  = isCI ? 0 : calcPvpCobrado(v);
+            const cEf  = isCI ? v.custo : calcCustoFarm(v);
             const lucro = (pvc - cEf) * qty;
-            return `<tr style="${pago?'opacity:0.4;text-decoration:line-through':''}${isCI?';background:#fafaf7':''}">
+            return `<tr style="${pago?'opacity:0.4;text-decoration:line-through':''}${isCI?';background:#fffbf5;border-left:3px solid #d4a97a':''}">
               <td style="white-space:nowrap">${v.data}</td>
-              <td><span class="badge ${isCI?'bg-gray':'bg-b'}" style="font-size:9px">${v.tipo}</span></td>
+              <td><span class="badge ${isCI?'bg-a':'bg-b'}" style="font-size:9px">${isCI?'Consumo pessoal':v.tipo}</span></td>
               <td style="font-family:monospace;font-size:11px;color:#8b6f4e">${v.cnp||'—'}</td>
               <td>${v.nome}${v.motivo?`<div style="font-size:10px;color:#999">${v.motivo}</div>`:''}</td>
               <td style="font-size:11px;color:#888">${v.cliente}</td>
               <td>${qty}</td>
-              <td>${isCI?'<span style="color:#bbb">—</span>':fmt(v.pvp)}</td>
+              <td>${isCI?fmt(v.pvp):fmt(v.pvp)}</td>
               <td style="white-space:nowrap">${isCI?'<span style="color:#bbb">—</span>':(v.descCliente>0?`<span style="color:#c05050;font-weight:600">${fmt(pvc)}</span><div style="font-size:10px;color:#c05050">(-${v.descCliente}%)</div>`:fmt(pvc))}</td>
-              <td>${v.descForn>0?`<span class="badge bg-g" title="10% habitual + ${v.descForn}% extra = ${10+(v.descForn||0)}% total">+${v.descForn}%</span>`:'—'}</td>
-              <td class="amber"><strong>${fmt(cEf*qty)}</strong></td>
-              <td class="${isCI?'':'green'}">${isCI?'<span style="color:#bbb">0,00€</span>':fmt(lucro)}</td>
+              <td>${isCI
+                ?`<div style="display:flex;align-items:center;gap:3px">
+                    <span style="font-size:10px;color:#888">20%+</span>
+                    <input type="number" min="0" max="80" step="1" value="${v.descForn||0}" style="width:44px;font-size:11px;text-align:center" title="Desconto adicional (%)" onchange="editarDescCi('${v.cid}',parseFloat(this.value)||0)"/>
+                    <span style="font-size:10px;color:#888">%</span>
+                  </div>`
+                :(v.descForn>0?`<span class="badge bg-g" title="10% habitual + ${v.descForn}% extra = ${10+(v.descForn||0)}% total">+${v.descForn}%</span>`:'—')}</td>
+              <td class="${isCI?'amber':'amber'}"><strong>${fmt(cEf*qty)}</strong>${isCI?'<div style="font-size:9px;color:#888">pessoal</div>':''}</td>
+              <td class="${isCI?'':'green'}">${isCI?'<span style="color:#bbb">—</span>':fmt(lucro)}</td>
               <td>${pago?'<span class="badge bg-g">Pago</span>':`<button class="btn suc sm" onclick="pagarC('${v.cid}')">Marcar pago</button>`}</td>
             </tr>`;
           }).join('') : '<tr><td colspan="12" style="text-align:center;padding:2rem;color:#999">Sem itens de consignação</td></tr>'}
@@ -6276,6 +6283,16 @@ function pagarC(cid){
   if(!DB.consignacoesPagas.includes(cid)) DB.consignacoesPagas.push(cid);
   save(); renderConsign();
 }
+function editarDescCi(cid, novoDescForn){
+  // cid tem formato 'ci-ciXXX' — extrair o id do registo de consumo
+  const ciId = cid.replace('ci-','');
+  const ci = (DB.consumo||[]).find(x=>x.id===ciId);
+  if(ci){
+    ci.descForn = novoDescForn;
+    save();
+    renderConsign();
+  }
+}
 
 function _consignRows(apenasItens){
   const pagas = new Set(DB.consignacoesPagas||[]);
@@ -6287,6 +6304,8 @@ function _consignRows(apenasItens){
         cnp:prod?.cnp||'', cid, tipo:'Venda', pago:pagas.has(cid)};
     })
   );
+  // consumo interno de consignação: aparece na listagem para controlo pessoal
+  // NÃO entra no lucro nem gastos da empresa — pagamento é pessoal
   const itemsCI = DB.consumo.filter(ci=>{
     const p=DB.produtos.find(x=>x.id===ci.prodId);
     return p&&p.consig;
@@ -6294,15 +6313,15 @@ function _consignRows(apenasItens){
     const p=DB.produtos.find(x=>x.id===ci.prodId);
     const cid=`ci-${ci.id}`;
     const pvp=ci.pvp||p?.pvp||0;
-    const descForn=ci.descForn||0;
-    const descTotal=10+descForn;
+    const descForn=ci.descForn!=null?ci.descForn:10; // desconto adicional editável
+    const descTotal=20+descForn; // base 20% para consumo pessoal
     const custo=+(pvp*(1-descTotal/100)).toFixed(2);
-    return {cid, tipo:'Consumo interno', prodId:ci.prodId, nome:ci.prodNome,
+    return {cid, tipo:'Consumo pessoal', prodId:ci.prodId, nome:ci.prodNome,
       qty:ci.qty, data:ci.data, cliente:'— (uso pessoal)', cnp:p?.cnp||'',
       pvp:pvp, pvpCobrado:pvp, custoOriginal:custo, custo:custo,
       descForn:descForn, descExtra:descForn, descCliente:0,
       pago:pagas.has(cid),
-      _pessoal:true}; // marcador: pagamento pessoal, não afecta empresa
+      _pessoal:true};
   });
   const all=[...itemsVenda,...itemsCI];
   return apenasItens ? all.filter(v=>!v.pago) : all;
