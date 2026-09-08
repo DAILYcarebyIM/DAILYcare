@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260806161353 -->
+  <!-- v20260908110650 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -5629,7 +5629,7 @@ function renderConsumo(){
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Motivo</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Motivo</th><th></th></tr></thead>
         <tbody>${[...DB.consumo].sort((a,b)=>sortRecente(a,b)).length
           ? [...DB.consumo].sort((a,b)=>sortRecente(a,b)).map(c=>rowHtml(c)).join('')
           : '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#999">Sem consumo interno registado</td></tr>'}
