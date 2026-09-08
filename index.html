@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260908111151 -->
+  <!-- v20260908113812 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -6258,8 +6258,10 @@ function renderConsign(){
               <td>${v.nome}${v.motivo?`<div style="font-size:10px;color:#999">${v.motivo}</div>`:''}</td>
               <td style="font-size:11px;color:#888">${v.cliente}</td>
               <td>${qty}</td>
-              <td>${isCI?fmt(v.pvp):fmt(v.pvp)}</td>
-              <td style="white-space:nowrap">${isCI?'<span style="color:#bbb">—</span>':(v.descCliente>0?`<span style="color:#c05050;font-weight:600">${fmt(pvc)}</span><div style="font-size:10px;color:#c05050">(-${v.descCliente}%)</div>`:fmt(pvc))}</td>
+              <td><strong>${fmt(v.pvp)}</strong></td>
+              <td style="white-space:nowrap">${isCI
+                ?`<span style="font-size:11px;color:#8b6f4e">${fmt(cEf)}<div style="font-size:9px;color:#aaa">20%${v.descForn>0?'+'+v.descForn+'%':''} desc.</div></span>`
+                :(v.descCliente>0?`<span style="color:#c05050;font-weight:600">${fmt(pvc)}</span><div style="font-size:10px;color:#c05050">(-${v.descCliente}%)</div>`:fmt(pvc))}</td>
               <td>${isCI
                 ?`<div style="display:flex;align-items:center;gap:3px">
                     <span style="font-size:10px;color:#888">20%+</span>
@@ -6267,7 +6269,7 @@ function renderConsign(){
                     <span style="font-size:10px;color:#888">%</span>
                   </div>`
                 :(v.descForn>0?`<span class="badge bg-g" title="10% habitual + ${v.descForn}% extra = ${10+(v.descForn||0)}% total">+${v.descForn}%</span>`:'—')}</td>
-              <td class="${isCI?'amber':'amber'}"><strong>${fmt(cEf*qty)}</strong>${isCI?'<div style="font-size:9px;color:#888">pessoal</div>':''}</td>
+              <td class="amber"><strong>${fmt(cEf*qty)}</strong>${isCI?'<div style="font-size:9px;color:#888">pessoal</div>':''}</td>
               <td class="${isCI?'':'green'}">${isCI?'<span style="color:#bbb">—</span>':fmt(lucro)}</td>
               <td>${pago?'<span class="badge bg-g">Pago</span>':`<button class="btn suc sm" onclick="pagarC('${v.cid}')">Marcar pago</button>`}</td>
             </tr>`;
