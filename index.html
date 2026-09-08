@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260908110650 -->
+  <!-- v20260908111151 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -6198,10 +6198,10 @@ function renderConsign(){
     .sort((a,b)=>sortRecente(a,b));
 
   const pendentes = allItems.filter(v=>!pagas.has(v.cid));
-  const pendentesEmpresa = pendentes.filter(v=>!v._pessoal);
+  const pendentesEmpresa = pendentes.filter(v=>!v._pessoal&&!v.cid?.startsWith('ci-'));
   const tCusto    = pendentesEmpresa.reduce((s,v)=>s+calcCustoFarm(v)*(v.qty||1),0);
-  const tCustoPessoal = pendentes.filter(v=>v._pessoal).reduce((s,v)=>s+v.custo*(v.qty||1),0);
-  const tLucro    = allItems.filter(v=>!pagas.has(v.cid)&&v.tipo==='Venda')
+  const tCustoPessoal = pendentes.filter(v=>v._pessoal||v.cid?.startsWith('ci-')).reduce((s,v)=>s+v.custo*(v.qty||1),0);
+  const tLucro    = allItems.filter(v=>!pagas.has(v.cid)&&v.tipo==='Venda'&&!v._pessoal&&!v.cid?.startsWith('ci-'))
                     .reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*(v.qty||1),0);
 
   document.getElementById('pg-consignacao').innerHTML=`
@@ -6247,7 +6247,7 @@ function renderConsign(){
           ${allItems.length ? allItems.map(v=>{
             const qty=v.qty||1;
             const pago=pagas.has(v.cid);
-            const isCI=v._pessoal===true;
+            const isCI=v._pessoal===true || v.cid?.startsWith('ci-');
             const pvc  = isCI ? 0 : calcPvpCobrado(v);
             const cEf  = isCI ? v.custo : calcCustoFarm(v);
             const lucro = (pvc - cEf) * qty;
