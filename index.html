@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260915105243 -->
+  <!-- v20260915165844 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -5424,8 +5424,9 @@ function guardarEncomenda(){
 
   encLinhas.forEach((l,idx)=>{
     const p=DB.produtos.find(x=>x.id===l.prodId);
+    const stockAntes = p ? p.stock : 0;
     if(p){
-      p.stock += l.qty + (l.qtyBonus||0); // bónus entram no stock também
+      p.stock += l.qty + (l.qtyBonus||0);
       if(l.custo>0) p.custo=l.custo;
       if(l.pvp>0)   p.pvp=Math.max(p.pvp||0,l.pvp);
     }
@@ -5436,6 +5437,47 @@ function guardarEncomenda(){
       fatura, portes:idx===0?portes:0, fiscal:fiscalEnc,
       encomendaId:nEnc
     });
+    // correcção automática: se o stock estava negativo, significa que há vendas/cedências
+    // que foram registadas antes desta encomenda entrar — corrigir o custo real
+    if(stockAntes < 0 && l.custo > 0){
+      const unidadesAfectar = Math.abs(stockAntes); // quantas saíram "em avanço"
+      const custoReal = l.custo; // custo real desta encomenda
+      // custo médio da entrada (considerando bónus a custo zero)
+      const qtyTotal = l.qty + (l.qtyBonus||0);
+      const custoMedioEntrada = qtyTotal > 0 ? (custoReal * l.qty) / qtyTotal : custoReal;
+      // recolher vendas e cedências deste produto, ordenadas da mais recente para a mais antiga
+      const transacoes = [
+        ...(DB.consultas||[]).filter(c=>(c.vendas||[]).some(v=>v.prodId===l.prodId))
+          .map(c=>({tipo:'venda', obj:c, data:c.data, id:c.id})),
+        ...(DB.cedencias||[]).filter(c=>c.prodId===l.prodId)
+          .map(c=>({tipo:'cedencia', obj:c, data:c.data, id:c.id}))
+      ].sort((a,b)=>b.data.localeCompare(a.data)||b.id.localeCompare(a.id));
+      let aCorrigir = unidadesAfectar;
+      for(const t of transacoes){
+        if(aCorrigir <= 0) break;
+        if(t.tipo==='venda'){
+          const c = t.obj;
+          const linhasProd = (c.vendas||[]).filter(v=>v.prodId===l.prodId);
+          for(const v of linhasProd){
+            if(aCorrigir <= 0) break;
+            const qtyCorrigir = Math.min(v.qty||1, aCorrigir);
+            const custAntigo = v.custo||0;
+            v.custo = custoMedioEntrada;
+            v.pvpCobrado = calcPvpCobrado(v);
+            aCorrigir -= qtyCorrigir;
+          }
+          // recalcular totais da consulta
+          const tl = (c.vendas||[]).reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1)-(v.custo||0)*(v.qty||1),0)-(c.descFinal||0)-(c.portesCusto||0);
+          c.lucroProd = tl;
+        } else if(t.tipo==='cedencia'){
+          const ced = t.obj;
+          if(aCorrigir <= 0) break;
+          const qtyCorrigir = Math.min(ced.qty||1, aCorrigir);
+          ced.custoUnit = custoMedioEntrada;
+          aCorrigir -= qtyCorrigir;
+        }
+      }
+    }
   });
 
   save();
