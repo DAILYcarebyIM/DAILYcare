@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260915104445 -->
+  <!-- v20260915105243 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -1729,6 +1729,17 @@ function portesGratisCC(gratis){
   }
   atualizarTotais();
 }
+function portesGratisEV(gratis){
+  const portesEl=document.getElementById('ev-portes');
+  const custoEl=document.getElementById('ev-portes-custo');
+  if(gratis){
+    if(custoEl&&portesEl&&(parseFloat(custoEl.value)||0)===0) custoEl.value=portesEl.value;
+    if(portesEl) portesEl.value='0';
+  } else {
+    if(custoEl&&portesEl) portesEl.value=custoEl.value;
+    if(custoEl) custoEl.value='0';
+  }
+}
 function portesGratisVR(gratis){
   const portesEl=document.getElementById('vr-portes');
   const custoEl=document.getElementById('vr-portes-custo');
@@ -3002,6 +3013,22 @@ function renderVendasPagina(){
             <div><label>Valor pendente (€)</label><input id="ev-pendente" type="number" step="0.01" min="0" value="${pendente.toFixed(2)}" placeholder="0.00"/></div>
             <div><label>Faturado?</label><select id="ev-fat"><option value="false" ${!c.faturado?'selected':''}>Não</option><option value="true" ${c.faturado?'selected':''}>Sim</option></select></div>
           </div>
+          <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px;flex-wrap:wrap;padding:8px 10px;background:#fafaf7;border-radius:8px;border:1px solid #eee">
+            <div style="display:flex;align-items:center;gap:6px">
+              <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
+              <input id="ev-portes" type="number" step="0.01" min="0" value="${(c.portes||0).toFixed(2)}" style="width:80px;font-size:13px"
+                oninput="document.getElementById('ev-portes-custo').value=this.value;document.getElementById('ev-portes-gratis').checked=false"/>
+              <input type="hidden" id="ev-portes-custo" value="${(c.portesCusto||0).toFixed(2)}"/>
+              <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:#1a6b1a">
+                <input type="checkbox" id="ev-portes-gratis" ${(c.portesCusto||0)>0&&(c.portes||0)===0?'checked':''} onchange="portesGratisEV(this.checked)"/>
+                Grátis
+              </label>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <label style="font-size:12px;color:#888;white-space:nowrap">Desconto final (€):</label>
+              <input id="ev-desc-final" type="number" step="0.01" min="0" value="${(c.descFinal||0).toFixed(2)}" style="width:80px;font-size:13px"/>
+            </div>
+          </div>
           <div style="margin-bottom:8px;font-size:12px;font-weight:600;color:#555">Produtos</div>
           <div style="overflow-x:auto"><table style="margin-bottom:8px">
             <thead><tr style="background:#f0f0ec"><th>Produto</th><th style="width:65px">Qty</th><th style="width:85px">PVP (€)</th><th style="width:85px">Custo (€)</th><th style="width:75px">Desc. forn %</th><th style="width:75px">Desc. cli %</th><th>Lucro</th><th style="width:30px"></th></tr></thead>
@@ -3299,6 +3326,13 @@ function saveEditVenda(id){
   const c=DB.consultas.find(x=>x.id===id); if(!c) return;
   c.data    = document.getElementById('ev-data')?.value||c.data;
   c.estado  = document.getElementById('ev-estado')?.value||c.estado;
+  // portes e desconto final
+  const evPortes = parseFloat(document.getElementById('ev-portes')?.value)||0;
+  const evPortesCusto = parseFloat(document.getElementById('ev-portes-custo')?.value)||0;
+  const evDescFinal = parseFloat(document.getElementById('ev-desc-final')?.value)||0;
+  c.portes = evPortes;
+  c.portesCusto = evPortesCusto;
+  c.descFinal = evDescFinal;
   const pagInfoEv = getPagamentosParaGravar('ev', (c.totalProd||0));
   c.metodoPagamento = pagInfoEv.metodoPagamento;
   c.pagamentos = pagInfoEv.pagamentos;
@@ -3324,6 +3358,11 @@ function saveEditVenda(id){
     if(p && v.qty!==oldQty) p.stock+=oldQty-v.qty;
   });
   recalcTotaisC(c);
+  // recalcular totalProd com portes e desconto
+  const tpProd = Math.max(0, c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1),0) - evDescFinal) + evPortes;
+  const tlProd = c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1)-(v.custo||0)*(v.qty||1),0) - evDescFinal - evPortesCusto;
+  c.totalProd = tpProd;
+  c.lucroProd = tlProd;
   editingVendaId=null; save(); renderVendasPagina();
 }
 let _vendaPagId=null;
