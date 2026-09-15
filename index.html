@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260908113812 -->
+  <!-- v20260915104445 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -1818,7 +1818,7 @@ function gravarConsulta(){
   // garantir que descCliente e pvpCobrado estão actualizados antes de gravar
   syncInputs();
   const vendasComFat = cvs.map(v=>({...v, faturado, descForn:v.descForn||0, descCliente:v.descCliente||0, pvpCobrado:calcPvpCobrado(v)}));
-  const tp = Math.max(0, cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (descFinal||0));
+  const tp = Math.max(0, cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (descFinal||0)) + portes;
   const tl = cvs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0) - (descFinal||0);
   const id = 'c'+DB.ids.c++;
   DB.consultas.push({id,clienteId:cId,data,tipo,valor,faturado,fatProd,estado,metodoPagamento,pagamentos:pagInfo.pagamentos,notas,portes,portesCusto,descFinal,vendas:vendasComFat,totalProd:tp,lucroProd:tl-portesCusto});
@@ -2643,7 +2643,8 @@ function guardarVendaRapida(){
   const vrDescFinalVal = parseFloat(document.getElementById('vr-desc-final')?.value)||0;
   const portesVRCusto = parseFloat(document.getElementById('vr-portes-custo')?.value)||0;
   const tp = Math.max(0, vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (vrDescFinalVal||0));
-  const pagInfoVR = getPagamentosParaGravar('vr', tp+portesVR);
+  const tpComPortes = tp + portesVR;
+  const pagInfoVR = getPagamentosParaGravar('vr', tpComPortes);
   const metodoPagamento = pagInfoVR.metodoPagamento;
   const tl = vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0)-(vrDescFinalVal||0);
   const vendas = vrs.map(v=>({
@@ -2671,7 +2672,7 @@ function guardarVendaRapida(){
     portesCusto:portesVRCusto,
     descFinal:vrDescFinalVal,
     vendas,
-    totalProd:tp,
+    totalProd:tpComPortes,
     lucroProd:tl-portesVRCusto
   });
   // baixar stock
@@ -2787,6 +2788,11 @@ function gerarDocVenda(cid, tipo, cOverride, opcoes){
       +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px;font-weight:600">'+f2(total)+'</td></tr>';
   });
   const subtotal=totalReal;
+  const portesDocVal = c.portes||0;
+  if(portesDocVal>0){
+    totalReal+=portesDocVal;
+    prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(portesDocVal)+'</td></tr>';
+  }
   if(descFinalVal>0) totalReal=Math.max(0,totalReal-descFinalVal);
   // aplicar opções vindas do modal de orçamento, se existirem
   const totalCustom = (!isRecibo&&opcoes&&opcoes.totalCustom!=null) ? opcoes.totalCustom : null;
