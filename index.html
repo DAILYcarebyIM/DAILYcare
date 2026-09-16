@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260916105444 -->
+  <!-- v20260916105744 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -1514,8 +1514,8 @@ function calcPvpCobrado(v){
 
 function recalcTotaisC(c){
   // fonte única de verdade para totalProd e lucroProd
-  // totalProd = soma dos pvpCobrado×qty (já com descCliente por produto)
-  // lucroProd = soma de (pvpCobrado-custo)×qty menos descFinal
+  // totalProd = soma dos pvpCobrado×qty - descFinal + portes cobrados ao cliente
+  // lucroProd = soma de (pvpCobrado-custo)×qty - descFinal - portesCusto (se grátis)
   const somaVendas = (c.vendas||[]).reduce(function(s,v){
     var pvc = v.pvpCobrado!=null ? v.pvpCobrado : (v.pvp||0);
     return s + pvc*(v.qty||1);
@@ -1524,8 +1524,8 @@ function recalcTotaisC(c){
     var pvc = v.pvpCobrado!=null ? v.pvpCobrado : (v.pvp||0);
     return s + (pvc - (v.custo||0))*(v.qty||1);
   }, 0);
-  c.totalProd = Math.max(0, somaVendas - (c.descFinal||0));
-  c.lucroProd = somaLucro - (c.descFinal||0);
+  c.totalProd = Math.max(0, somaVendas - (c.descFinal||0)) + (c.portes||0);
+  c.lucroProd = somaLucro - (c.descFinal||0) - (c.portesCusto||0);
 }
 // ===== SISTEMA DE PAGAMENTOS MÚLTIPLOS =====
 // Cada contexto (cc=consulta nova, ec=edição consulta, vr=venda rápida, ev=edição venda) tem o seu próprio array em memória
@@ -3358,11 +3358,6 @@ function saveEditVenda(id){
     if(p && v.qty!==oldQty) p.stock+=oldQty-v.qty;
   });
   recalcTotaisC(c);
-  // recalcular totalProd com portes e desconto
-  const tpProd = Math.max(0, c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1),0) - evDescFinal) + evPortes;
-  const tlProd = c.vendas.reduce((s,v)=>s+(v.pvpCobrado!=null?v.pvpCobrado:v.pvp||0)*(v.qty||1)-(v.custo||0)*(v.qty||1),0) - evDescFinal - evPortesCusto;
-  c.totalProd = tpProd;
-  c.lucroProd = tlProd;
   editingVendaId=null; save(); renderVendasPagina();
 }
 let _vendaPagId=null;
