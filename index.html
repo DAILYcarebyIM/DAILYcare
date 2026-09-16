@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260915165844 -->
+  <!-- v20260916105444 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -1165,7 +1165,7 @@ function renderConsultaAtual(){
           <div style="display:flex;align-items:center;gap:6px">
             <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
             <input id="cc-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-              oninput="atualizarTotais();document.getElementById('cc-portes-custo').value=this.value;document.getElementById('cc-portes-gratis').checked=false" style="width:80px;font-size:13px"/>
+              oninput="atualizarTotais();document.getElementById('cc-portes-gratis').checked=false;if(!document.getElementById('cc-portes-gratis').checked)document.getElementById('cc-portes-custo').value='0'" style="width:80px;font-size:13px"/>
             <input type="hidden" id="cc-portes-custo" value="0"/>
             <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:#1a6b1a">
               <input type="checkbox" id="cc-portes-gratis" onchange="portesGratisCC(this.checked)"/>
@@ -2907,7 +2907,7 @@ function renderVendas(){
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
           <input id="vr-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-            oninput="atualizarTotaisVR();document.getElementById('vr-portes-custo').value=this.value;document.getElementById('vr-portes-gratis').checked=false" style="width:80px;font-size:13px"/>
+            oninput="atualizarTotaisVR();document.getElementById('vr-portes-gratis').checked=false;if(!document.getElementById('vr-portes-gratis').checked)document.getElementById('vr-portes-custo').value='0'" style="width:80px;font-size:13px"/>
           <input type="hidden" id="vr-portes-custo" value="0"/>
           <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:#1a6b1a">
             <input type="checkbox" id="vr-portes-gratis" onchange="portesGratisVR(this.checked)"/>
@@ -3017,7 +3017,7 @@ function renderVendasPagina(){
             <div style="display:flex;align-items:center;gap:6px">
               <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
               <input id="ev-portes" type="number" step="0.01" min="0" value="${(c.portes||0).toFixed(2)}" style="width:80px;font-size:13px"
-                oninput="document.getElementById('ev-portes-custo').value=this.value;document.getElementById('ev-portes-gratis').checked=false"/>
+                oninput="document.getElementById('ev-portes-gratis').checked=false;document.getElementById('ev-portes-custo').value='0'"/>
               <input type="hidden" id="ev-portes-custo" value="${(c.portesCusto||0).toFixed(2)}"/>
               <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:#1a6b1a">
                 <input type="checkbox" id="ev-portes-gratis" ${(c.portesCusto||0)>0&&(c.portes||0)===0?'checked':''} onchange="portesGratisEV(this.checked)"/>
