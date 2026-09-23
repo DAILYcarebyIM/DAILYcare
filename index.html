@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260916105744 -->
+  <!-- v20260923160219 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -1175,7 +1175,10 @@ function renderConsultaAtual(){
           <div style="display:flex;align-items:center;gap:6px">
             <label style="font-size:12px;color:#c05050;white-space:nowrap">Desc. final (€):</label>
             <input id="cc-desc-final" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-              oninput="atualizarTotais()" style="width:80px;font-size:13px;border-color:#d4a0a0;background:#fff8f8"/>
+              oninput="atualizarTotais()" style="width:75px;font-size:13px;border-color:#d4a0a0;background:#fff8f8"/>
+            <label style="font-size:12px;color:#c05050;white-space:nowrap">ou (%):</label>
+            <input id="cc-desc-pct" type="number" placeholder="0" step="1" min="0" max="100" value=""
+              oninput="aplicarDescPctCC(this.value)" style="width:55px;font-size:13px;border-color:#d4a0a0;background:#fff8f8"/>
           </div>
           <div style="margin-left:auto;font-size:13px;font-weight:600;color:#8b6f4e">Total a pagar: <span id="vt-portes">0€</span></div>
         </div>
@@ -1715,6 +1718,26 @@ function renderVendasTabela(){
 }
 
 // actualiza só os totais sem re-renderizar os inputs (evita perder foco)
+function aplicarDescPctCC(pct){
+  const p = parseFloat(pct)||0;
+  const totalProd = cvs.reduce((s,v)=>s+calcPvpCobrado(v)*(v.qty||1),0);
+  const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
+  const base = totalProd + portes;
+  const descEuros = p>0 ? +(base*p/100).toFixed(2) : 0;
+  const el = document.getElementById('cc-desc-final');
+  if(el){ el.value = descEuros > 0 ? descEuros.toFixed(2) : '0'; }
+  atualizarTotais();
+}
+function aplicarDescPctVR(pct){
+  const p = parseFloat(pct)||0;
+  const totalProd = vrs.reduce((s,v)=>s+calcPvpCobrado(v)*(v.qty||1),0);
+  const portes = parseFloat(document.getElementById('vr-portes')?.value)||0;
+  const base = totalProd + portes;
+  const descEuros = p>0 ? +(base*p/100).toFixed(2) : 0;
+  const el = document.getElementById('vr-desc-final');
+  if(el){ el.value = descEuros > 0 ? descEuros.toFixed(2) : '0'; }
+  atualizarTotaisVR();
+}
 function portesGratisCC(gratis){
   const portesEl=document.getElementById('cc-portes');
   const custoEl=document.getElementById('cc-portes-custo');
@@ -2791,14 +2814,20 @@ function gerarDocVenda(cid, tipo, cOverride, opcoes){
     const pvpOrig=v.pvpBase||v.pvp||0;
     const qty=v.qty||1;
     const total=pvc*qty;
+    const totalOrig=pvpOrig*qty;
     totalReal+=total;
     const temDesc=(v.descCliente||0)>0&&pvc<pvpOrig;
     prodRows+='<tr>'
       +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;font-size:13px;line-height:1.5">'+v.nome+(qty>1?' <span style="color:#aaa;font-size:11px">×'+qty+'</span>':'')+(temDesc?'<br><span style="color:#8b6f4e;font-size:11px;font-style:italic">'+v.descCliente+'% desconto</span>':'')+'</td>'
-      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px">'+(temDesc?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span><br><span style="font-size:11px;color:#888">'+f2(pvc)+'</span>':f2(pvc))+'</td>'
-      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px;font-weight:600">'+f2(total)+'</td></tr>';
+      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px">'+(temDesc?'<s class="riscado">'+f2(pvpOrig)+'</s><br><span style="font-size:11px;color:#888">'+f2(pvc)+'</span>':f2(pvc))+'</td>'
+      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px;font-weight:600">'+(temDesc?'<s class="riscado" style="font-size:11px;font-weight:400">'+f2(totalOrig)+'</s><br>'+f2(total):f2(total))+'</td></tr>';
   });
   const subtotal=totalReal;
+  const subtotalOrig=c.vendas.reduce((s,v)=>{
+    const pvpOrig=v.pvpBase||v.pvp||0;
+    return s+(pvpOrig*(v.qty||1));
+  },0);
+  const temDescPorProduto=c.vendas.some(v=>(v.descCliente||0)>0&&(v.pvpCobrado||v.pvp||0)<(v.pvpBase||v.pvp||0));
   const portesDocVal = c.portes||0;
   if(portesDocVal>0){
     totalReal+=portesDocVal;
@@ -2816,6 +2845,8 @@ function gerarDocVenda(cid, tipo, cOverride, opcoes){
     +'*{margin:0;padding:0;box-sizing:border-box}'
     +'body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:48px;max-width:680px;margin:0 auto}'
     +'@media print{body{padding:24px}@page{margin:1.5cm;size:A4}@page{-webkit-margin-before:0;-webkit-margin-after:0}}'
+    +'s,del,.riscado{text-decoration:line-through!important;-webkit-text-decoration:line-through!important;text-decoration-color:#bbb!important;color:#bbb!important}'
+    +'@media print{s,del,.riscado{text-decoration:line-through!important;-webkit-text-decoration:line-through!important;color:#bbb!important}}'
     +'.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:28px;margin-bottom:36px;border-bottom:1.5px solid #ded8d0}'
     +'.hdr img{height:90px;max-width:220px;object-fit:contain}'
     +'.hdr-right{text-align:right}.hdr-right h1{font-size:26px;font-weight:300;letter-spacing:4px;text-transform:uppercase;color:'+corDoc+';margin-bottom:6px}'
@@ -2833,12 +2864,18 @@ function gerarDocVenda(cid, tipo, cOverride, opcoes){
     +'<table><thead><tr><th style="text-align:left;width:56%">Descrição</th><th style="width:22%">PVP unit.</th><th style="width:22%">Total</th></tr></thead><tbody>'+prodRows+'</tbody><tfoot>'
     +(totalCustom!=null
       ? '<tr><td style="padding:16px 0 4px;font-size:13px;color:#8b6f4e">Subtotal</td><td></td><td style="text-align:right;padding:16px 0 4px;font-size:13px;color:#8b6f4e">'+f2(subtotal)+'</td></tr>'
-        +'<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">Total</td><td style="text-align:right"><span style="text-decoration:line-through;color:#bbb;font-size:14px">'+f2(subtotal)+'</span></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalFinal)+'</td></tr>'
+        +'<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">Total</td><td style="text-align:right"><s class="riscado" style="font-size:14px">'+f2(subtotal)+'</s></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalFinal)+'</td></tr>'
       : (inclDesc&&descFinalVal>0)
-        ? '<tr><td style="padding:16px 0 4px;font-size:13px;color:#8b6f4e">Subtotal</td><td></td><td style="text-align:right;padding:16px 0 4px;font-size:13px;color:#8b6f4e">'+f2(subtotal)+'</td></tr>'
+        ? '<tr><td style="padding:16px 0 4px;font-size:13px;color:#8b6f4e">Subtotal</td>'
+            +(temDescPorProduto?'<td style="text-align:right;padding:16px 0 4px"><s class="riscado" style="font-size:12px">'+f2(subtotalOrig)+'</s></td>':'<td></td>')
+            +'<td style="text-align:right;padding:16px 0 4px;font-size:13px;color:#8b6f4e">'+f2(subtotal)+'</td></tr>'
           +'<tr><td style="padding:4px 0;font-size:13px;color:#c0392b;font-style:italic">Desconto</td><td></td><td style="text-align:right;padding:4px 0;font-size:13px;color:#c0392b;font-style:italic">- '+f2(descFinalVal)+'</td></tr>'
           +'<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">'+(isRecibo?'Total pago':'Total')+'</td><td></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalFinal)+'</td></tr>'
-        : '<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">'+(isRecibo?'Total pago':'Total')+'</td><td></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalFinal)+'</td></tr>'
+        : temDescPorProduto
+          ? '<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">'+(isRecibo?'Total pago':'Total')+'</td>'
+              +'<td style="text-align:right"><s class="riscado" style="font-size:14px">'+f2(subtotalOrig)+'</s></td>'
+              +'<td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalFinal)+'</td></tr>'
+          : '<tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corDoc+'">'+(isRecibo?'Total pago':'Total')+'</td><td></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corDoc+'">'+f2(totalFinal)+'</td></tr>'
     )+'</tfoot></table>'
     +(isRecibo?'<div class="pag">Forma de pagamento: '+metodoLabel+'</div>':'')
     +'<div class="rodape">Documento não fiscal · DAILYcare by IM</div>'
@@ -2917,7 +2954,10 @@ function renderVendas(){
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:12px;color:#c05050;white-space:nowrap">Desc. final (€):</label>
           <input id="vr-desc-final" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-            oninput="atualizarTotaisVR()" style="width:80px;font-size:13px;border-color:#d4a0a0;background:#fff8f8"/>
+            oninput="atualizarTotaisVR()" style="width:75px;font-size:13px;border-color:#d4a0a0;background:#fff8f8"/>
+          <label style="font-size:12px;color:#c05050;white-space:nowrap">ou (%):</label>
+          <input id="vr-desc-pct" type="number" placeholder="0" step="1" min="0" max="100" value=""
+            oninput="aplicarDescPctVR(this.value)" style="width:55px;font-size:13px;border-color:#d4a0a0;background:#fff8f8"/>
         </div>
       </div>
       <div id="vr-total-line" style="font-size:13px;font-weight:600;color:#8b6f4e;margin-bottom:10px;padding:8px;background:#f8f8f5;border-radius:6px"></div>
@@ -3794,9 +3834,9 @@ function abrirHistoricoProd(prodId){
         <div style="font-size:9px;color:#888">${totalComprado} comprado − ${totalVendido} vendido − ${consumoInterno} consumo</div>
       </div>
       ${Math.abs(stockDif)>0?`<div class="met" style="border:1px solid #f5c6cb;background:#fff5f5">
-        <div class="lb">⚠ Diferença</div>
+        <div class="lb">⚠ Diferença calculada</div>
         <div class="vl red">${stockDif>0?'+':''}${stockDif}</div>
-        <button class="btn sm" onclick="corrigirStock('${prodId}',${stockCalculado})" style="font-size:10px;margin-top:4px;background:#fff0f0;border-color:#f5c6cb">Corrigir para ${stockCalculado}</button>
+        <div style="font-size:10px;color:#888;margin-top:2px">Stock sistema: ${p.stock} · Calculado: ${stockCalculado}</div>
       </div>`:''}
       <div class="met"><div class="lb">Total comprado</div><div class="vl">${totalComprado} un.</div></div>
       <div class="met"><div class="lb">Total vendido</div><div class="vl">${totalVendido} un.</div></div>
