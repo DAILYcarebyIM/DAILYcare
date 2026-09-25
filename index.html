@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260923160219 -->
+  <!-- v20260925130210 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -3112,6 +3112,7 @@ function renderVendasPagina(){
           <button class="btn sm" onclick="verVenda('${c.id}')" style="font-size:10px" title="Ver detalhes">👁</button>
           <button class="btn sm" onclick="startEditVenda('${c.id}')" style="font-size:10px;margin-left:3px" title="Editar">✏</button>
           <button class="btn sm" onclick="gerarDocVenda('${c.id}','recibo')" style="font-size:10px;margin-left:3px;background:#f0fff4;border-color:#c3e6cb;color:#1a6b1a" title="Recibo">🧾</button>
+          <button class="btn dan sm" onclick="delConsulta('${c.id}')" style="font-size:10px;margin-left:3px" title="Apagar">🗑</button>
         </td>
       </tr>
       <tr id="vd-${c.id}" style="display:none;background:#fafaf7"><td colspan="9"></td></tr>`;
@@ -3339,12 +3340,16 @@ function startEditVenda(id){
 function cancelEditVenda(){ editingVendaId=null; renderVendasPagina(); }
 function remVendaItem(cId, vi){
   const c=DB.consultas.find(x=>x.id===cId); if(!c) return;
+  if(c.vendas.length<=1){ alert('A venda tem de ter pelo menos um produto. Para apagar a venda inteira usa o botão 🗑.'); return; }
   const v=c.vendas[vi];
   const p=DB.produtos.find(x=>x.id===v.prodId);
   if(p) p.stock+=v.qty; // repor stock
   c.vendas.splice(vi,1);
   recalcTotaisC(c);
-  save(); renderVendasPagina();
+  save();
+  // manter formulário aberto
+  editingVendaId=cId;
+  renderVendasPagina();
 }
 function recalcLucroEV(cId, vi){
   const c=DB.consultas.find(x=>x.id===cId); if(!c) return;
