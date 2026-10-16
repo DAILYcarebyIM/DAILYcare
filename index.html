@@ -892,7 +892,7 @@ function renderDash(){
 
   // ── alertas stock ─────────────────────────────────────────────────────────
   const ativos  = DB.produtos.filter(p=>p.ativo!==false);
-  const stockBaixo = ativos.filter(p=>parseInt(p.stockMin||0)>0 && p.stock<=parseInt(p.stockMin||0));
+  const stockBaixo = ativos.filter(p=>parseInt(p.stockMin||0)>0 && p.stock<parseInt(p.stockMin||0));
 
   // ── cedências por pagar ───────────────────────────────────────────────────
   const cedPendentes = (DB.cedencias||[]).filter(c=>c.estadoPag!=='Pago');
@@ -6046,7 +6046,7 @@ let encFiltroMarca='', encFiltroForn='', encOrdem='nome', encGraficoId=null;
 function renderEncomendas(){
   if(!DB.encomendados) DB.encomendados=[];
   const ativos = DB.produtos.filter(p=>p.ativo!==false);
-  const baixo  = ativos.filter(p=>parseInt(p.stockMin||0)>0 && p.stock<=parseInt(p.stockMin||0));
+  const baixo  = ativos.filter(p=>parseInt(p.stockMin||0)>0 && p.stock<parseInt(p.stockMin||0));
   DB.encomendados = DB.encomendados.filter(id=>baixo.find(p=>p.id===id));
 
   // média mensal desde que o produto entrou em stock (primeira entrada)
