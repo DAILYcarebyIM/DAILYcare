@@ -5079,91 +5079,143 @@ function renderConsign(){
     })
   );
 
-  // itens de consumo interno em consignação
+  // itens de consumo pessoal em consignação
   const itemsConsInt = DB.consumo.filter(ci=>{
     const p=DB.produtos.find(x=>x.id===ci.prodId);
     return p&&p.consig;
   }).map(ci=>{
     const p=DB.produtos.find(x=>x.id===ci.prodId);
-    const cid=`ci-${ci.id}`;
+    const cid='ci-'+ci.id;
+    const pvpUnit=p?.pvp||ci.pvp||0;
+    const descExtra=ci.descExtra||0; // % extra além dos 20% base
+    const descTotal=20+descExtra;
+    const precoPessoal=+(pvpUnit*(1-descTotal/100)).toFixed(2);
+    const pago=pagas.has(cid);
     return {
-      cid, tipo:'Consumo interno',
+      cid, tipo:'Consumo pessoal', _pessoal:true,
       prodId:ci.prodId, nome:ci.prodNome, qty:ci.qty, data:ci.data,
-      cliente:'— (uso interno)', cnp:p?.cnp||'',
-      pvp:0, pvpTotal:0,
-      custoOriginal:p?.custo||0, custo:p?.custo||0, descExtra:0,
-      motivo:ci.motivo||''
+      cnp:p?.cnp||'', pvp:pvpUnit, descExtra:descExtra,
+      descTotal:descTotal, precoPessoal:precoPessoal,
+      totalPessoal:+(precoPessoal*(ci.qty||1)).toFixed(2),
+      motivo:ci.motivo||'', pago:pago
     };
   });
 
-  const allItems = [...itemsVenda, ...itemsConsInt]
-    .sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,'')));
+  const itemsVendaPend = itemsVenda.filter(v=>!pagas.has(v.cid));
+  const tCustoEmpresa  = itemsVendaPend.reduce((s,v)=>s+calcCustoFarm(v)*(v.qty||1),0);
+  const tLucro         = itemsVendaPend.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*(v.qty||1),0);
+  const tPessoalPend   = itemsConsInt.filter(v=>!v.pago).reduce((s,v)=>s+v.totalPessoal,0);
 
-  const pendentes = allItems.filter(v=>!pagas.has(v.cid));
-  const tCusto    = pendentes.reduce((s,v)=>s+calcCustoFarm(v)*(v.qty||1),0);
-  const tLucro    = allItems.filter(v=>!pagas.has(v.cid)&&v.tipo==='Venda')
-                    .reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*(v.qty||1),0);
+  // helper para renderizar linha de venda
+  function rowVenda(v){
+    const qty=v.qty||1;
+    const pago=pagas.has(v.cid);
+    const pvc=calcPvpCobrado(v);
+    const cEf=calcCustoFarm(v);
+    const lucro=(pvc-cEf)*qty;
+    return '<tr style="'+(pago?'opacity:0.4;text-decoration:line-through':'')+'">'
+      +'<td style="white-space:nowrap">'+v.data+'</td>'
+      +'<td><span class="badge bg-b" style="font-size:9px">Venda</span></td>'
+      +'<td style="font-family:monospace;font-size:11px;color:#8b6f4e">'+(v.cnp||'—')+'</td>'
+      +'<td>'+v.nome+'</td>'
+      +'<td style="font-size:11px;color:#888">'+v.cliente+'</td>'
+      +'<td>'+qty+'</td>'
+      +'<td>'+fmt(v.pvp)+'</td>'
+      +'<td style="white-space:nowrap">'+(v.descCliente>0?'<span style="color:#c05050;font-weight:600">'+fmt(pvc)+'</span><div style="font-size:10px;color:#c05050">(-'+v.descCliente+'%)</div>':fmt(pvc))+'</td>'
+      +'<td>'+(v.descForn>0?'<span class="badge bg-g" title="10% habitual + '+v.descForn+'% extra = '+(10+(v.descForn||0))+'% total">+'+v.descForn+'%</span>':'—')+'</td>'
+      +'<td class="amber"><strong>'+fmt(cEf*qty)+'</strong></td>'
+      +'<td class="green">'+fmt(lucro)+'</td>'
+      +'<td>'+(pago?'<span class="badge bg-g">Pago</span>':'<button class="btn suc sm" onclick="pagarC(\''+v.cid+'\')">Marcar pago</button>')+'</td>'
+      +'</tr>';
+  }
 
-  document.getElementById('pg-consignacao').innerHTML=`
-    <h2>Consignação — Farmácia Fonte da Moura</h2>
-    <div class="cbanner">
-      <div>
-        <div style="font-weight:600;color:#856404">Total a pagar à farmácia (por liquidar)</div>
-        <div style="font-size:11px;color:#999">Inclui vendas e consumo interno de produtos em consignação.</div>
-      </div>
-      <div style="font-size:24px;font-weight:700;color:#856404">${fmt(tCusto)}</div>
-    </div>
-    <div class="metrics">
-      <div class="met"><div class="lb">Total vendido (PVP)</div><div class="vl">${fmt(allItems.filter(v=>v.tipo==='Venda').reduce((s,v)=>s+v.pvpTotal,0))}</div></div>
-      <div class="met"><div class="lb">A pagar (pendente)</div><div class="vl amber">${fmt(tCusto)}</div></div>
-      <div class="met"><div class="lb">Lucro meu</div><div class="vl green">${fmt(tLucro)}</div></div>
-      <div class="met"><div class="lb">Consumo interno</div><div class="vl">${itemsConsInt.length} linha${itemsConsInt.length!==1?'s':''}</div></div>
-      <div class="met"><div class="lb">Unidades</div><div class="vl">${allItems.reduce((s,v)=>s+(v.qty||1),0)}</div></div>
-    </div>
+  // helper para renderizar linha de consumo pessoal
+  function rowPessoal(v){
+    return '<tr style="background:#fff8ec;'+(v.pago?'opacity:0.45;text-decoration:line-through':'')+'">'
+      +'<td style="white-space:nowrap">'+v.data+'</td>'
+      +'<td><span class="badge bg-a" style="font-size:9px">Pessoal</span></td>'
+      +'<td style="font-family:monospace;font-size:11px;color:#8b6f4e">'+(v.cnp||'—')+'</td>'
+      +'<td>'+v.nome+(v.motivo?'<div style="font-size:10px;color:#999">'+v.motivo+'</div>':'')+'</td>'
+      +'<td style="font-size:11px;color:#888">— (uso pessoal)</td>'
+      +'<td>'+v.qty+'</td>'
+      +'<td>'+fmt(v.pvp)+'</td>'
+      +'<td style="white-space:nowrap">'
+        +'<span style="color:#c05050;font-weight:600">'+fmt(v.precoPessoal)+'</span>'
+        +'<div style="font-size:10px;color:#c05050">(-'+v.descTotal+'%)</div>'
+      +'</td>'
+      +'<td style="white-space:nowrap">'
+        +'<span style="font-size:11px;color:#856404">20% base</span>'
+        +(v.descExtra>0?'<br><span style="font-size:10px;color:#666">+'+v.descExtra+'% extra</span>':'')
+        +'<br><button class="btn sm" style="font-size:10px;padding:1px 6px;margin-top:2px" onclick="editarDescExtraCI(\''+v.cid+'\','+v.descExtra+')">Editar</button>'
+      +'</td>'
+      +'<td class="amber"><strong>'+fmt(v.totalPessoal)+'</strong></td>'
+      +'<td style="color:#bbb">—</td>'
+      +'<td>'+(v.pago?'<span class="badge bg-g">Pago</span>':'<button class="btn suc sm" onclick="pagarC(\''+v.cid+'\')">Marcar pago</button>')+'</td>'
+      +'</tr>';
+  }
 
-    <div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center">
-      <button class="btn" onclick="exportParaNumbers()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32;font-weight:600">
-        ↓ Exportar para Numbers
-      </button>
-      <button class="btn" onclick="exportConsignPendente()" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600">
-        ↓ Exportar lista pendente
-      </button>
-      <button class="btn" onclick="exportConsignCompleto()" style="background:#f0f0ec">
-        ↓ Exportar histórico completo
-      </button>
+  const htmlVendas = itemsVenda.length
+    ? itemsVenda.sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(rowVenda).join('')
+    : '<tr><td colspan="12" style="text-align:center;padding:1.5rem;color:#999">Sem vendas em consignação</td></tr>';
 
-    </div>
+  const htmlPessoal = itemsConsInt.length
+    ? itemsConsInt.sort((a,b)=>(b.data||'').localeCompare(a.data||'')).map(rowPessoal).join('')
+    : '<tr><td colspan="12" style="text-align:center;padding:1rem;color:#bbb;font-size:13px">Sem consumo pessoal registado</td></tr>';
 
-    <div class="card" style="padding:0;overflow:hidden">
-      <table>
-        <thead><tr><th>Data</th><th>Tipo</th><th>CNP</th><th>Produto</th><th>Cliente / Motivo</th><th>Qty</th><th>PVP unit.</th><th>PVP cobrado</th><th>Desc. forn.</th><th>A pagar farm.</th><th>Lucro</th><th></th></tr></thead>
-        <tbody>
-          ${allItems.length ? allItems.map(v=>{
-            const qty=v.qty||1;
-            const pago=pagas.has(v.cid);
-            const isCI=v.tipo==='Consumo interno';
-            // calcular com funções correctas — pvpCobrado e custo podem estar desactualizados
-            const pvc  = isCI ? 0 : calcPvpCobrado(v);   // pvp cobrado ao cliente
-            const cEf  = calcCustoFarm(v);                 // o que pago à farmácia
-            const lucro = (pvc - cEf) * qty;
-            return `<tr style="${pago?'opacity:0.4;text-decoration:line-through':''}${isCI?';background:#fafaf7':''}">
-              <td style="white-space:nowrap">${v.data}</td>
-              <td><span class="badge ${isCI?'bg-gray':'bg-b'}" style="font-size:9px">${v.tipo}</span></td>
-              <td style="font-family:monospace;font-size:11px;color:#8b6f4e">${v.cnp||'—'}</td>
-              <td>${v.nome}${v.motivo?`<div style="font-size:10px;color:#999">${v.motivo}</div>`:''}</td>
-              <td style="font-size:11px;color:#888">${v.cliente}</td>
-              <td>${qty}</td>
-              <td>${isCI?'<span style="color:#bbb">—</span>':fmt(v.pvp)}</td>
-              <td style="white-space:nowrap">${isCI?'<span style="color:#bbb">—</span>':(v.descCliente>0?`<span style="color:#c05050;font-weight:600">${fmt(pvc)}</span><div style="font-size:10px;color:#c05050">(-${v.descCliente}%)</div>`:fmt(pvc))}</td>
-              <td>${v.descForn>0?`<span class="badge bg-g" title="10% habitual + ${v.descForn}% extra = ${10+(v.descForn||0)}% total">+${v.descForn}%</span>`:'—'}</td>
-              <td class="amber"><strong>${fmt(cEf*qty)}</strong></td>
-              <td class="${isCI?'':'green'}">${isCI?'<span style="color:#bbb">0,00€</span>':fmt(lucro)}</td>
-              <td>${pago?'<span class="badge bg-g">Pago</span>':`<button class="btn suc sm" onclick="pagarC('${v.cid}')">Marcar pago</button>`}</td>
-            </tr>`;
-          }).join('') : '<tr><td colspan="12" style="text-align:center;padding:2rem;color:#999">Sem itens de consignação</td></tr>'}
-        </tbody>
-      </table>
-    </div>`;
+  document.getElementById('pg-consignacao').innerHTML=
+    '<h2>Consignação — Farmácia Fonte da Moura</h2>'
+
+    // banner empresa
+    +'<div class="cbanner">'
+      +'<div>'
+        +'<div style="font-weight:600;color:#856404">DAILYcare — A pagar à farmácia (por liquidar)</div>'
+        +'<div style="font-size:11px;color:#999">Vendas de produtos em consignação, por liquidar.</div>'
+      +'</div>'
+      +'<div style="font-size:24px;font-weight:700;color:#856404">'+fmt(tCustoEmpresa)+'</div>'
+    +'</div>'
+
+    // banner pessoal
+    +(itemsConsInt.length
+      ? '<div class="cbanner" style="background:#fff3cd;border-color:#ffc107;margin-top:8px">'
+          +'<div>'
+            +'<div style="font-weight:600;color:#a67700">Consumo pessoal Inês — A pagar (por liquidar)</div>'
+            +'<div style="font-size:11px;color:#999">Produtos usados pessoalmente, com 20% de desconto base.</div>'
+          +'</div>'
+          +'<div style="font-size:24px;font-weight:700;color:#a67700">'+fmt(tPessoalPend)+'</div>'
+        +'</div>'
+      : '')
+
+    +'<div class="metrics">'
+      +'<div class="met"><div class="lb">Total vendido (PVP)</div><div class="vl">'+fmt(itemsVenda.reduce((s,v)=>s+v.pvpTotal,0))+'</div></div>'
+      +'<div class="met"><div class="lb">Empresa — a pagar</div><div class="vl amber">'+fmt(tCustoEmpresa)+'</div></div>'
+      +'<div class="met"><div class="lb">Lucro meu (vendas)</div><div class="vl green">'+fmt(tLucro)+'</div></div>'
+      +'<div class="met"><div class="lb">Pessoal — a pagar</div><div class="vl" style="color:#a67700">'+fmt(tPessoalPend)+'</div></div>'
+      +'<div class="met"><div class="lb">Unidades vendidas</div><div class="vl">'+itemsVenda.reduce((s,v)=>s+(v.qty||1),0)+'</div></div>'
+    +'</div>'
+
+    +'<div style="display:flex;gap:8px;margin-bottom:1rem;flex-wrap:wrap;align-items:center">'
+      +'<button class="btn" onclick="exportParaNumbers()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32;font-weight:600">↓ Exportar para Numbers</button>'
+      +'<button class="btn" onclick="exportConsignPendente()" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600">↓ Exportar lista pendente</button>'
+      +'<button class="btn" onclick="exportConsignCompleto()" style="background:#f0f0ec">↓ Exportar histórico completo</button>'
+    +'</div>'
+
+    // tabela vendas DAILYcare
+    +'<div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#856404">📦 Vendas DAILYcare</div>'
+    +'<div class="card" style="padding:0;overflow:hidden;margin-bottom:1.5rem">'
+      +'<table>'
+        +'<thead><tr><th>Data</th><th>Tipo</th><th>CNP</th><th>Produto</th><th>Cliente</th><th>Qty</th><th>PVP unit.</th><th>PVP cobrado</th><th>Desc. forn.</th><th>A pagar farm.</th><th>Lucro</th><th></th></tr></thead>'
+        +'<tbody>'+htmlVendas+'</tbody>'
+      +'</table>'
+    +'</div>'
+
+    // tabela consumo pessoal
+    +'<div style="font-weight:600;font-size:13px;margin-bottom:6px;color:#a67700">🧴 Consumo pessoal Inês</div>'
+    +'<div class="card" style="padding:0;overflow:hidden">'
+      +'<table>'
+        +'<thead><tr><th>Data</th><th>Tipo</th><th>CNP</th><th>Produto</th><th>Motivo</th><th>Qty</th><th>PVP unit.</th><th>Preço pessoal</th><th>Desconto</th><th>A pagar</th><th>Lucro</th><th></th></tr></thead>'
+        +'<tbody>'+htmlPessoal+'</tbody>'
+      +'</table>'
+    +'</div>';
 }
 
 
@@ -5173,14 +5225,27 @@ function pagarC(cid){
   save(); renderConsign();
 }
 
+function editarDescExtraCI(cid, descAtual){
+  // cid = 'ci-<id>'
+  const ciId=cid.replace(/^ci-/,'');
+  const ci=DB.consumo.find(x=>x.id===ciId);
+  if(!ci){alert('Registo não encontrado.');return;}
+  const novo=prompt('Desconto extra do fornecedor (além dos 20% base):\nActual: '+descAtual+'%\nNovo valor (número, ex: 5):',descAtual);
+  if(novo===null) return;
+  const val=parseFloat(novo);
+  if(isNaN(val)||val<0||val>80){alert('Valor inválido. Use um número entre 0 e 80.');return;}
+  ci.descExtra=val;
+  save(); renderConsign();
+}
+
 function _consignRows(apenasItens){
   const pagas = new Set(DB.consignacoesPagas||[]);
   const itemsVenda = DB.consultas.flatMap(c=>
     c.vendas.filter(v=>v.consig).map(v=>{
       const prod=DB.produtos.find(p=>p.id===v.prodId);
-      const cid=`v-${c.id}-${v.prodId}`;
-      return {...v, data:c.data, cliente:cNome(c.clienteId),
-        cnp:prod?.cnp||'', cid, tipo:'Venda', pago:pagas.has(cid)};
+      const cid='v-'+c.id+'-'+v.prodId;
+      return Object.assign({},v,{data:c.data, cliente:cNome(c.clienteId),
+        cnp:prod?.cnp||'', cid, tipo:'Venda', pago:pagas.has(cid)});
     })
   );
   const itemsCI = DB.consumo.filter(ci=>{
@@ -5188,11 +5253,16 @@ function _consignRows(apenasItens){
     return p&&p.consig;
   }).map(ci=>{
     const p=DB.produtos.find(x=>x.id===ci.prodId);
-    const cid=`ci-${ci.id}`;
-    return {cid, tipo:'Consumo interno', prodId:ci.prodId, nome:ci.prodNome,
-      qty:ci.qty, data:ci.data, cliente:'— (uso interno)', cnp:p?.cnp||'',
-      pvp:0, custoOriginal:p?.custo||0, custo:p?.custo||0, descExtra:0,
-      pago:pagas.has(cid)};
+    const cid='ci-'+ci.id;
+    const pvpUnit=p?.pvp||ci.pvp||0;
+    const descExtra=ci.descExtra||0;
+    const descTotal=20+descExtra;
+    const precoPessoal=+(pvpUnit*(1-descTotal/100)).toFixed(2);
+    return {cid, tipo:'Consumo pessoal', _pessoal:true, prodId:ci.prodId, nome:ci.prodNome,
+      qty:ci.qty, data:ci.data, cliente:'— (uso pessoal)', cnp:p?.cnp||'',
+      pvp:pvpUnit, descExtra:descExtra, descTotal:descTotal,
+      precoPessoal:precoPessoal, totalPessoal:+(precoPessoal*(ci.qty||1)).toFixed(2),
+      motivo:ci.motivo||'', pago:pagas.has(cid)};
   });
   const all=[...itemsVenda,...itemsCI];
   return apenasItens ? all.filter(v=>!v.pago) : all;
