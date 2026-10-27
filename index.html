@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DAILYcare — Sistema de Gestão</title><!-- v20261027145100 -->
+<title>DAILYcare — Sistema de Gestão</title><!-- v20261027164500 -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#1a1a1a;background:#f5f5f0;min-height:100vh}
@@ -2486,6 +2486,7 @@ function renderVendasPagina(){
             <button class="btn sm" id="btn-vd-${c.id}" onclick="toggleVendaDetalhe('${c.id}')" style="font-size:10px;background:#f5f2ee;border-color:#ccc">📦 Produtos</button>
             <button class="btn sm" onclick="gerarReciboVenda('${c.id}')" style="font-size:10px;background:#f0fff4;border-color:#c3e6cb;color:#1a6b1a;font-weight:600">🧾 Recibo</button>
             <button class="btn sm" onclick="gerarOrcamentoVenda('${c.id}')" style="font-size:10px;background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600">📄 Orçamento</button>
+            <button class="btn dan sm" onclick="eliminarVenda('${c.id}')" style="font-size:10px">🗑 Eliminar</button>
           </div>
         </td>
       </tr>
@@ -2756,6 +2757,19 @@ function addProdEV(cId, pid){
 }
 function startEditVenda(id){ editingVendaId=id; withScroll(renderVendasPagina); }
 function cancelEditVenda(){ editingVendaId=null; renderVendasPagina(); }
+function eliminarVenda(cId){
+  const c=DB.consultas.find(x=>x.id===cId); if(!c) return;
+  const cli=cNome(c.clienteId)||'Cliente';
+  const nProd=c.vendas?c.vendas.length:0;
+  if(!confirm('Eliminar a venda de '+cli+' ('+c.data+', '+nProd+' produto'+(nProd!==1?'s':'')+')?\n\nEsta ação não pode ser desfeita.')) return;
+  // repor stock dos produtos vendidos
+  (c.vendas||[]).forEach(v=>{
+    const p=DB.produtos.find(x=>x.id===v.prodId);
+    if(p) p.stock=(p.stock||0)+(v.qty||1);
+  });
+  DB.consultas=DB.consultas.filter(x=>x.id!==cId);
+  save(); renderVendasPagina();
+}
 function toggleVendaDetalhe(cId){
   const tr=document.getElementById('vd-'+cId);
   const btn=document.getElementById('btn-vd-'+cId);
@@ -2881,21 +2895,6 @@ function confirmarVendaPag(){
   c.estado=divida<=0.01?'Pago':'Pendente';
   fecharVendaPagModal();
   save(); renderVendasPagina();
-}
-
-function toggleVendaProds(cId, btn){
-  const row=document.getElementById('vd-'+cId);
-  if(!row) return;
-  const open=row.style.display==='none';
-  row.style.display=open?'table-row':'none';
-  btn.textContent=open?'📦 Fechar':'📦 Ver';
-}
-function toggleVendaDetalhe(cId, btn){
-  const row = document.getElementById('vd-'+cId);
-  if(!row) return;
-  const open = row.style.display==='none';
-  row.style.display = open ? 'table-row' : 'none';
-  btn.textContent = open ? '▲ Fechar' : '▼ Detalhes';
 }
 
 // ─── CLIENTES ────────────────────────────────────────────────────────────────
@@ -4680,22 +4679,33 @@ function addE(){
 let editingConsumoId = null;
 function renderConsumo(){
   const rowHtml = c => {
-    if(editingConsumoId===c.id) return `<tr style="background:#fffbf5">
-      <td><input id="eci-d" type="date" value="${c.data}" style="width:130px"/></td>
-      <td><strong>${c.prodNome}</strong>${DB.produtos.find(p=>p.id===c.prodId)?.consig?'<br><span class="badge bg-a" style="font-size:9px">consig.</span>':''}</td>
-      <td><input id="eci-q" type="number" value="${c.qty}" min="1" style="width:70px"/></td>
-      <td><input id="eci-m" value="${(c.motivo||'').replace(/"/g,'&quot;')}" style="min-width:160px"/></td>
-      <td><input id="eci-v" type="number" step="0.01" min="0" value="${(c.valorRecebido||0).toFixed(2)}" style="width:90px" placeholder="0.00"/></td>
-      <td style="white-space:nowrap">
-        <button class="btn pri sm" onclick="saveEditCI('${c.id}')">Guardar</button>
-        <button class="btn sm" onclick="cancelEditCI()" style="margin-top:2px">Cancelar</button>
-      </td>
-    </tr>`;
+    if(editingConsumoId===c.id){
+      const prodE=DB.produtos.find(p=>p.id===c.prodId);
+      const pvpE=prodE?.pvp||0; const custoE=prodE?.custo||0;
+      return '<tr style="background:#fffbf5">'
+        +'<td><input id="eci-d" type="date" value="'+c.data+'" style="width:130px"/></td>'
+        +'<td><strong>'+c.prodNome+'</strong>'+(prodE?.consig?'<br><span class="badge bg-a" style="font-size:9px">consig.</span>':'')+'</td>'
+        +'<td><input id="eci-q" type="number" value="'+c.qty+'" min="1" style="width:70px"/></td>'
+        +'<td style="text-align:right;font-size:12px;color:#666">'+(pvpE>0?fmt(pvpE):'—')+'</td>'
+        +'<td style="text-align:right;font-size:12px;color:#8b6f4e">'+(custoE>0?fmt(custoE):'—')+'</td>'
+        +'<td><input id="eci-m" value="'+(c.motivo||'').replace(/"/g,'&quot;')+'" style="min-width:160px"/></td>'
+        +'<td><input id="eci-v" type="number" step="0.01" min="0" value="'+(c.valorRecebido||0).toFixed(2)+'" style="width:90px" placeholder="0.00"/></td>'
+        +'<td style="white-space:nowrap">'
+          +'<button class="btn pri sm" onclick="saveEditCI(\''+c.id+'\')">Guardar</button>'
+          +'<button class="btn sm" onclick="cancelEditCI()" style="margin-top:2px">Cancelar</button>'
+        +'</td>'
+      +'</tr>';
+    }
     const isConsig = DB.produtos.find(p=>p.id===c.prodId)?.consig;
+    const prodCI = DB.produtos.find(p=>p.id===c.prodId);
+    const pvpCI = prodCI?.pvp||0;
+    const custoCI = prodCI?.custo||0;
     return `<tr>
       <td>${c.data}</td>
       <td><strong>${c.prodNome}</strong>${isConsig?'<br><span class="badge bg-a" style="font-size:9px">consig.</span>':''}</td>
       <td>${c.qty}</td>
+      <td style="text-align:right;font-size:12px">${pvpCI>0?fmt(pvpCI):'<span style="color:#bbb">—</span>'}</td>
+      <td style="text-align:right;font-size:12px;color:#8b6f4e">${custoCI>0?fmt(custoCI):'<span style="color:#bbb">—</span>'}</td>
       <td style="color:#888;font-size:11px">${c.motivo||'—'}</td>
       <td style="text-align:right">${(c.valorRecebido||0)>0?`<span style="font-weight:600;color:#1a6b1a">${fmt(c.valorRecebido)}</span>`:'<span style="color:#bbb;font-size:11px">—</span>'}</td>
       <td style="white-space:nowrap">
@@ -4728,10 +4738,10 @@ function renderConsumo(){
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Motivo</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th style="text-align:right">PVP</th><th style="text-align:right">Custo</th><th>Motivo</th><th style="text-align:right">Recebido</th><th>Ações</th></tr></thead>
         <tbody>${[...DB.consumo].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).length
           ? [...DB.consumo].sort((a,b)=>(b.data||'').localeCompare(a.data||'')||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))||parseInt((b.id||'0').replace(/\D/g,''))-parseInt((a.id||'0').replace(/\D/g,''))).map(c=>rowHtml(c)).join('')
-          : '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#999">Sem consumo interno registado</td></tr>'}
+          : '<tr><td colspan="8" style="text-align:center;padding:2rem;color:#999">Sem consumo interno registado</td></tr>'}
         </tbody>
       </table>
     </div>`;
@@ -6511,6 +6521,11 @@ function renderRelatorio(){
   const tGasto = rGastos.reduce((s,g)=>s+g.valor,0);
   const rCeds  = relMes ? (DB.cedencias||[]).filter(c=>c.data?.startsWith(relMes)) : (DB.cedencias||[]);
   const tCedencias = rCeds.reduce((s,c)=>s+(c.valorRecebido||0),0);
+  // consumo próprio (excl. consignação): custo do produto × qty
+  const rConsumo = relMes ? (DB.consumo||[]).filter(c=>c.data?.startsWith(relMes)) : (DB.consumo||[]);
+  const tConsumoProprioVal = rConsumo
+    .filter(c=>{ const p=DB.produtos.find(x=>x.id===c.prodId); return !p?.consig; })
+    .reduce((s,c)=>{ const p=DB.produtos.find(x=>x.id===c.prodId); return s+(p?.custo||0)*(c.qty||1); },0);
   const tFat   = rCs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)
                + rPacks.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0)
                + rWorks.filter(w=>w.faturado).reduce((s,w)=>s+w.participantes.filter(p=>p.estado==='Pago'||p.estado==='Pago Dinheiro').reduce((s,p)=>s+(p.valor??w.preco),0),0)
@@ -6519,7 +6534,7 @@ function renderRelatorio(){
   const lucProdRel = rCs.reduce((s,c)=>s+calcLucroCRel(c),0);
   const receitaTotal = tServ+tProd+tPacks+tWork+tFo;
   const tCedRel = (DB.cedencias||[]).filter(c=>!relMes||c.data?.startsWith(relMes)).reduce((s,c)=>s+(c.valorRecebido||0),0);
-  const lucroReal    = tServ+lucProdRel+tPacks+tWork+tFo-tGasto;
+  const lucroReal    = tServ+lucProdRel+tPacks+tWork+tFo-tGasto-tConsumoProprioVal;
   // SS ENI — só sobre receitas FATURADAS
   const tFatServRel = rCs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
   const tFatProdRel = rCs.filter(c=>c.faturado).reduce((s,c)=>s+c.totalProd,0);
@@ -6570,7 +6585,9 @@ function renderRelatorio(){
     const fatFo  = fs.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
     const ssM = ((fatServ+fatPk+fatWk+fatFo)*0.70 + fatProd*0.20)*0.252;
     const nVendas=cs.filter(c=>c.tipo==='Venda direta').length;
-    return {m, serv, prod, lucP, pk, wk, fo, gasto, total, fat, custos, ssM, nCons:csReais.length, nVendas};
+    const consM = (DB.consumo||[]).filter(c=>c.data?.startsWith(m)&&!DB.produtos.find(x=>x.id===c.prodId)?.consig)
+      .reduce((s,c)=>{ const p=DB.produtos.find(x=>x.id===c.prodId); return s+(p?.custo||0)*(c.qty||1); },0);
+    return {m, serv, prod, lucP, pk, wk, fo, gasto, total, fat, custos, ssM, nCons:csReais.length, nVendas, consM};
   });
 
   document.getElementById('pg-relatorio').innerHTML=`
@@ -6615,6 +6632,7 @@ function renderRelatorio(){
           <tr><td>Receita total</td><td style="text-align:right">${fmt(receitaTotal)}</td></tr>
           <tr><td>Lucro produtos vendidos</td><td style="text-align:right" class="green">+ ${fmt(lucProdRel)}</td></tr>
           <tr><td>Outros gastos</td><td style="text-align:right" class="red">− ${fmt(tGasto)}</td></tr>
+          ${tConsumoProprioVal>0?'<tr><td>Consumo próprio (custo s/ consig.)</td><td style="text-align:right" class="red">− '+fmt(tConsumoProprioVal)+'</td></tr>':''}
           <tr style="border-top:1px solid #eee"><td><strong>Lucro real estimado</strong></td><td style="text-align:right;font-weight:700;font-size:15px" class="green">${fmt(lucroReal)}</td></tr>
           <tr><td style="color:#888;font-size:11px">↳ Receita em dinheiro</td><td style="text-align:right;font-size:11px">💵 ${fmt(recDinheiro)}</td></tr>
           <tr><td style="color:#888;font-size:11px;padding-left:24px">↳ Lucro em dinheiro</td><td style="text-align:right;font-size:11px;color:#1a6b1a">${fmt(lucroDinheiro)}</td></tr>
@@ -6637,7 +6655,7 @@ function renderRelatorio(){
       <table>
         <thead>
           <tr>
-            <th>Mês</th><th>Consultas</th><th>Vendas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th style="background:#f0fff4;color:#155724">💶 Líquido</th><th>SS est.</th>
+            <th>Mês</th><th>Consultas</th><th>Vendas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Consumo</th><th>Lucro prod.</th><th style="background:#f0fff4;color:#155724">💶 Líquido</th><th>SS est.</th>
           </tr>
         </thead>
         <tbody>
@@ -6653,8 +6671,9 @@ function renderRelatorio(){
             <td><strong>${fmt(r.total)}</strong></td>
             <td class="blue">${fmt(r.fat)}</td>
             <td class="red">${r.gasto>0?fmt(r.gasto):'—'}</td>
+            <td class="red" style="font-size:11px">${r.consM>0?fmt(r.consM):'—'}</td>
             <td class="green">${fmt(r.lucP)}</td>
-            <td style="font-weight:700;color:${(r.serv+r.lucP+r.pk+r.wk+r.fo-r.gasto)>=0?'#155724':'#721c24'};background:${(r.serv+r.lucP+r.pk+r.wk+r.fo-r.gasto)>=0?'#f0fff4':'#fff5f5'}">${fmt(r.serv+r.lucP+r.pk+r.wk+r.fo-r.gasto)}</td>
+            <td style="font-weight:700;color:${(r.serv+r.lucP+r.pk+r.wk+r.fo-r.gasto-r.consM)>=0?'#155724':'#721c24'};background:${(r.serv+r.lucP+r.pk+r.wk+r.fo-r.gasto-r.consM)>=0?'#f0fff4':'#fff5f5'}">${fmt(r.serv+r.lucP+r.pk+r.wk+r.fo-r.gasto-r.consM)}</td>
             <td class="amber" style="font-size:11px">${fmt(r.ssM)}</td>
           </tr>`).join('')}
           <tr style="border-top:2px solid #eee;font-weight:600;background:#fafaf7">
@@ -6662,8 +6681,8 @@ function renderRelatorio(){
             <td style="text-align:center">${DB.consultas.filter(c=>c.tipo==='Venda direta').length||'—'}</td>
             <td>${fmt(tServ)}</td><td>${fmt(tProd)}</td><td>${fmt(tPacks)}</td><td>${fmt(tWork)}</td><td>${fmt(tFo)}</td>
             <td><strong>${fmt(receitaTotal)}</strong></td><td class="blue">${fmt(tFat)}</td>
-            <td class="red">${fmt(tGasto)}</td><td class="green">${fmt(tLucro)}</td>
-            <td style="font-weight:700;color:${(tServ+tLucro+tPacks+tWork+tFo-tGasto)>=0?'#155724':'#721c24'}">${fmt(tServ+tLucro+tPacks+tWork+tFo-tGasto)}</td>
+            <td class="red">${fmt(tGasto)}</td><td class="red" style="font-size:11px">${tConsumoProprioVal>0?fmt(tConsumoProprioVal):'—'}</td><td class="green">${fmt(tLucro)}</td>
+            <td style="font-weight:700;color:${(tServ+tLucro+tPacks+tWork+tFo-tGasto-tConsumoProprioVal)>=0?'#155724':'#721c24'}">${fmt(tServ+tLucro+tPacks+tWork+tFo-tGasto-tConsumoProprioVal)}</td>
             <td class="amber">${fmt(ss)}</td>
           </tr>
         </tbody>
