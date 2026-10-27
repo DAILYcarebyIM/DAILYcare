@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DAILYcare — Sistema de Gestão</title>
+<title>DAILYcare — Sistema de Gestão</title><!-- v20261027120000 -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#1a1a1a;background:#f5f5f0;min-height:100vh}
@@ -1585,9 +1585,14 @@ function gerarRecibo(){
       const pvc=calcPvpCobrado(v),pvpOrig=v.pvpBase||v.pvp||0,qty=v.qty||1,total=pvc*qty;
       totalReal+=total;
       const temDesc=(v.descCliente||0)>0&&pvc<pvpOrig;
+      const descEuro=temDesc?+(pvpOrig-pvc).toFixed(2):0;
+      const pvpCol=temDesc
+        ?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span><br><span style="font-size:12px;font-weight:600">'+f2(pvc)+'</span>'
+        :f2(pvc);
+      const descSub=temDesc?'<br><span style="color:#8b6f4e;font-size:11px;font-style:italic">'+v.descCliente+'% desconto (-'+f2(descEuro)+')</span>':'';
       prodRows+='<tr>'
-        +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;font-size:13px;line-height:1.5">'+v.nome+(qty>1?' <span style="color:#aaa;font-size:11px">×'+qty+'</span>':'')+(temDesc?'<br><span style="color:#8b6f4e;font-size:11px;font-style:italic">'+v.descCliente+'% desconto</span>':'')+'</td>'
-        +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px">'+(temDesc?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span>':f2(pvc))+'</td>'
+        +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;font-size:13px;line-height:1.5">'+v.nome+(qty>1?' <span style="color:#aaa;font-size:11px">\xd7'+qty+'</span>':'')+descSub+'</td>'
+        +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px;white-space:nowrap">'+pvpCol+'</td>'
         +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px;font-weight:600">'+f2(total)+'</td></tr>';
     });
   }
@@ -1652,15 +1657,17 @@ function gerarOrcamento(){
       const total=pvc*qty,pvpTot=pvpOrig*qty;
       totalPVP+=pvpTot;totalReal+=total;
       const temDesc=(v.descCliente||0)>0&&pvc<pvpOrig;
+      const descEuro=temDesc?+(pvpOrig-pvc).toFixed(2):0;
+      const pvpCol=temDesc
+        ?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span><br><span style="font-size:12px;font-weight:600">'+f2(pvc)+'</span>'
+        :f2(pvc);
+      const descSub=temDesc?'<br><span style="color:#8b6f4e;font-size:11px;font-style:italic">'+v.descCliente+'% desconto (-'+f2(descEuro)+')</span>':'';
       prodRows+='<tr>'
         +'<td style="padding:12px 0;border-bottom:1px solid #ede8e3;font-size:13px;line-height:1.5">'
-          +v.nome+(qty>1?' <span style="color:#aaa;font-size:11px">×'+qty+'</span>':'')
-          +(temDesc?'<br><span style="color:#8b6f4e;font-size:11px;font-style:italic">'+v.descCliente+'% desconto</span>':'')
+          +v.nome+(qty>1?' <span style="color:#aaa;font-size:11px">\xd7'+qty+'</span>':'')+descSub
         +'</td>'
         +'<td style="padding:12px 0;border-bottom:1px solid #ede8e3;text-align:right;white-space:nowrap;vertical-align:top;font-size:13px">'
-          +(temDesc
-            ?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span><br><span style="font-size:11px;color:#888">'+f2(pvc)+'</span>'
-            :f2(pvc))
+          +pvpCol
         +'</td>'
         +'<td style="padding:12px 0;border-bottom:1px solid #ede8e3;text-align:right;white-space:nowrap;vertical-align:top;font-size:13px;font-weight:600">'
           +f2(total)
@@ -2531,9 +2538,14 @@ function _pdfVenda(cId, tipo){
     const total=pvc*qty;
     totalReal+=total;
     const temDesc=(v.descCliente||0)>0&&pvc<pvpOrig;
+    const descEuro=temDesc?+(pvpOrig-pvc).toFixed(2):0;
+    const pvpCol=temDesc
+      ?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span><br><span style="font-size:12px;font-weight:600">'+f2(pvc)+'</span>'
+      :f2(pvc);
+    const descSub=temDesc?'<br><span style="color:#8b6f4e;font-size:11px;font-style:italic">'+v.descCliente+'% desconto (-'+f2(descEuro)+')</span>':'';
     prodRows+='<tr>'
-      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;font-size:13px;line-height:1.5">'+v.nome+(qty>1?' <span style="color:#aaa;font-size:11px">\xd7'+qty+'</span>':'')+(temDesc?'<br><span style="color:#8b6f4e;font-size:11px;font-style:italic">'+v.descCliente+'% desconto</span>':'')+'</td>'
-      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px">'+(temDesc?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span>':f2(pvc))+'</td>'
+      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;font-size:13px;line-height:1.5">'+v.nome+(qty>1?' <span style="color:#aaa;font-size:11px">\xd7'+qty+'</span>':'')+descSub+'</td>'
+      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px;white-space:nowrap">'+pvpCol+'</td>'
       +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px;font-weight:600">'+f2(total)+'</td></tr>';
   });
   if((c.valorConsulta||0)>0){
