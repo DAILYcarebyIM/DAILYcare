@@ -2506,9 +2506,80 @@ function renderVendasPagina(){
         +'<td>'+(v.consig?'<span class="badge bg-a">Sim</span>':'—')+'</td></tr>';
     }).join('')+'<tr style="background:#f0f0ec;font-weight:600"><td colspan="4" style="padding:5px 10px;text-align:right;color:#888">Total:</td><td>'+fmt(tp2)+'</td><td class="green">'+fmt(tl2)+'</td><td></td></tr>';
     td.setAttribute('colspan','9');
-    td.innerHTML='<div style="overflow-x:auto"><table style="width:100%;font-size:11px"><thead><tr style="background:#f0f0ec"><th style="padding:5px 10px">Produto</th><th>CNP</th><th>Qty</th><th>PVP unit.</th><th>Total</th><th>Lucro</th><th>Consig.</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+    td.innerHTML='<div style="overflow-x:auto"><table style="width:100%;font-size:11px"><thead><tr style="background:#f0f0ec"><th style="padding:5px 10px">Produto</th><th>CNP</th><th>Qty</th><th>PVP unit.</th><th>Total</th><th>Lucro</th><th>Consig.</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+      +'<div style="display:flex;gap:6px;padding:10px 10px 6px">'
+        +'<button class="btn sm" onclick="gerarReciboVenda(\''+c.id+'\')" style="background:#f0fff4;border-color:#c3e6cb;color:#1a6b1a;font-weight:600">🧾 Recibo</button>'
+        +'<button class="btn sm" onclick="gerarOrcamentoVenda(\''+c.id+'\')" style="background:#fffbf5;border-color:#d4a97a;color:#7a4f28;font-weight:600">📄 Orçamento</button>'
+      +'</div>';
   });
 }
+
+function _pdfVenda(cId, tipo){
+  const c=DB.consultas.find(x=>x.id===cId); if(!c) return;
+  const cliNomeVal=cNome(c.clienteId)||'Cliente';
+  const dataVal=c.data||'';
+  const horaVal=c.hora||'';
+  const metodo=c.metodoPag||c.metodo||'MBWay';
+  const f2=n=>(Math.round((n||0)*100)/100).toFixed(2).replace('.',',')+'€';
+  const fD=d=>d?d.split('-').reverse().join('/'):'';
+  const metodoLabel=metodo==='Dinheiro'?'💵 Dinheiro':metodo==='Transferência'?'🏦 Transferência':'💳 '+metodo;
+  let prodRows='', totalReal=0;
+  (c.vendas||[]).forEach(v=>{
+    const pvc=v.pvpCobrado!=null?v.pvpCobrado:v.pvp;
+    const pvpOrig=v.pvp||0;
+    const qty=v.qty||1;
+    const total=pvc*qty;
+    totalReal+=total;
+    const temDesc=(v.descCliente||0)>0&&pvc<pvpOrig;
+    prodRows+='<tr>'
+      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;font-size:13px;line-height:1.5">'+v.nome+(qty>1?' <span style="color:#aaa;font-size:11px">\xd7'+qty+'</span>':'')+(temDesc?'<br><span style="color:#8b6f4e;font-size:11px;font-style:italic">'+v.descCliente+'% desconto</span>':'')+'</td>'
+      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px">'+(temDesc?'<span style="text-decoration:line-through;color:#bbb">'+f2(pvpOrig)+'</span>':f2(pvc))+'</td>'
+      +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px;font-weight:600">'+f2(total)+'</td></tr>';
+  });
+  if((c.valorConsulta||0)>0){
+    totalReal+=c.valorConsulta;
+    prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Sessão de aconselhamento</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(c.valorConsulta)+'</td></tr>';
+  }
+  if((c.portes||0)>0){
+    totalReal+=c.portes;
+    prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(c.portes)+'</td></tr>';
+  }
+  const isRecibo=tipo==='recibo';
+  const corPrinc=isRecibo?'#1a6b1a':'#7a4f28';
+  const corFundo=isRecibo?'#f0fff4':'#fffbf5';
+  const corBorda=isRecibo?'#c3e6cb':'#d4a97a';
+  const titulo=isRecibo?'Recibo':'Orçamento';
+  const LOGO='data:image/png;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABjAAAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBCWFlaIAAAAAAAAG+iAAA49QAAA5BYWVogAAAAAAAAYpkAALeFAAAY2lhZWiAAAAAAAAAlkAAAD4QAALbPWFlaIAAAAAAAAPbWAAEAAAAA0y1wYXJhAAAAAAAEAAAAAmZmAADyqQAADVkAABPQAAAKWwAAAAAAAAAAAAAAbWx1YwAAAAAAAAABAAAADGVuVVMAAAAgAAAAHABHAG8AbwBnAGwAZQAgAEkAbgBjAC4AIAAyADAAMQA22wBDAQ==';
+  const html='<!DOCTYPE html><html lang="pt"><head><meta charset="utf-8"><title>'+titulo+' DAILYcare</title><style>'
+    +'*{margin:0;padding:0;box-sizing:border-box}'
+    +'body{font-family:-apple-system,BlinkMacSystemFont,Helvetica,Arial,sans-serif;color:#1a1a1a;background:#fff;padding:48px;max-width:680px;margin:0 auto}'
+    +'@media print{body{padding:24px}@page{margin:1.5cm}}'
+    +'.hdr{display:flex;justify-content:space-between;align-items:center;padding-bottom:28px;margin-bottom:36px;border-bottom:1.5px solid #ded8d0}'
+    +'.hdr img{height:90px;max-width:220px;object-fit:contain}'
+    +'.hdr-right{text-align:right}.hdr-right h1{font-size:26px;font-weight:300;letter-spacing:4px;text-transform:uppercase;color:'+corPrinc+';margin-bottom:6px}'
+    +'.hdr-right .data{font-size:12px;color:#aaa;letter-spacing:1px}'
+    +'.cliente{font-size:15px;font-weight:600;margin-bottom:32px;padding-bottom:20px;border-bottom:1.5px solid #ded8d0}'
+    +'table{width:100%;border-collapse:collapse}'
+    +'thead th{font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:#aaa;padding:0 0 12px;border-bottom:1.5px solid '+corPrinc+';font-weight:500}'
+    +'thead th:not(:first-child){text-align:right}'
+    +'.tfoot td{padding:20px 0 0}'
+    +'.pag{margin-top:24px;padding:14px 18px;background:'+corFundo+';border-left:3px solid '+corBorda+';font-size:13px;color:'+corPrinc+';font-weight:600;border-radius:0 8px 8px 0}'
+    +'.rodape{margin-top:48px;padding-top:16px;border-top:1px solid #ede8e3;font-size:11px;color:#bbb;text-align:center}'
+    +'</style></head><body>'
+    +'<div class="hdr"><div style="width:80px"></div><div class="hdr-right"><h1>'+titulo+'</h1><div class="data">'+fD(dataVal)+(horaVal?' \xb7 '+horaVal:'')+'</div></div></div>'
+    +'<div class="cliente">'+cliNomeVal+'</div>'
+    +(prodRows?'<table><thead><tr><th style="text-align:left;width:56%">Descrição</th><th style="width:22%">PVP unit.</th><th style="width:22%">Total</th></tr></thead><tbody>'+prodRows+'</tbody><tfoot><tr class="tfoot"><td style="font-size:16px;font-weight:700;color:'+corPrinc+'">'+(isRecibo?'Total pago':'Total')+'</td><td></td><td style="text-align:right;font-size:20px;font-weight:700;color:'+corPrinc+'">'+f2(totalReal)+'</td></tr></tfoot></table>':'')
+    +(isRecibo?'<div class="pag">Forma de pagamento: '+metodoLabel+'</div>':'')
+    +(c.notas?'<div style="margin-top:20px;padding:14px 18px;background:#fffbf5;border-left:3px solid #d4a97a;font-size:12px;color:#555;line-height:1.6"><strong>Notas:</strong> '+c.notas+'</div>':'')
+    +'<div class="rodape">DAILYcare by Inês Mota · dailycarebyim@gmail.com</div>'
+    +'</body></html>';
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>w.print(),600);
+}
+function gerarReciboVenda(cId){ _pdfVenda(cId,'recibo'); }
+function gerarOrcamentoVenda(cId){ _pdfVenda(cId,'orcamento'); }
 
 function verRelatorioVendas(){
   // recolher dados com filtros activos
