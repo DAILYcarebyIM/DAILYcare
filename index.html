@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>DAILYcare — Sistema de Gestão</title><!-- v20261106151300 -->
+<title>DAILYcare — Sistema de Gestão</title><!-- v20261106163500 -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;color:#1a1a1a;background:#f5f5f0;min-height:100vh}
@@ -6766,7 +6766,7 @@ function renderRelatorio(){
           <tr><td>Formação</td><td style="text-align:right">${fmt(tFo)}</td></tr>
           <tr><td>Produtos (PVP total)</td><td style="text-align:right">${fmt(tProd)}</td></tr>
           ${tCedencias>0?'<tr><td>Cedências (montante recebido)</td><td style="text-align:right" class="green">'+fmt(tCedencias)+'</td></tr>':''}
-          ${tComissoes>0?'<tr><td>Comissões</td><td style="text-align:right" class="green">'+fmt(tComissoes)+'</td></tr>':''}
+          <tr><td>Comissões</td><td style="text-align:right" class="green">${fmt(tComissoes)}</td></tr>
           <tr style="border-top:1px solid #eee"><td><strong>Total receita</strong></td><td style="text-align:right"><strong>${fmt(receitaTotal)}</strong></td></tr>
         </table>
       </div>
@@ -6789,7 +6789,7 @@ function renderRelatorio(){
         <table>
           <tr><td>Receita total</td><td style="text-align:right">${fmt(receitaTotal)}</td></tr>
           <tr><td>Lucro produtos vendidos</td><td style="text-align:right" class="green">+ ${fmt(lucProdRel)}</td></tr>
-          ${tComissoes>0?'<tr><td>Comissões</td><td style="text-align:right" class="green">+ '+fmt(tComissoes)+'</td></tr>':''}
+          <tr><td>Comissões</td><td style="text-align:right" class="green">+ ${fmt(tComissoes)}</td></tr>
           <tr><td>Outros gastos</td><td style="text-align:right" class="red">− ${fmt(tGasto)}</td></tr>
           ${tConsumoProprioVal>0?'<tr><td>Consumo próprio (custo s/ consig.)</td><td style="text-align:right" class="red">− '+fmt(tConsumoProprioVal)+'</td></tr>':''}
           <tr style="border-top:1px solid #eee"><td><strong>Lucro real estimado</strong></td><td style="text-align:right;font-weight:700;font-size:15px" class="green">${fmt(lucroReal)}</td></tr>
