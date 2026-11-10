@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20261110164000 -->
+  <!-- v20261110170000 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -1862,15 +1862,17 @@ function gravarConsulta(){
   const tipo = document.getElementById('cc-tipo').value;
   const valor = parseFloat(document.getElementById('cc-val').value)||0;
   const estado = document.getElementById('cc-est').value;
-  const totalGeral = valor + Math.max(0, cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (parseFloat(document.getElementById('cc-desc-final')?.value)||0)) + (parseFloat(document.getElementById('cc-portes')?.value)||0);
+  const portesGratisCh = document.getElementById('cc-portes-gratis')?.checked||false;
+  const portesRawGravar = parseFloat(document.getElementById('cc-portes')?.value)||0;
+  const portes = portesGratisCh ? 0 : portesRawGravar;
+  const portesCusto = portesGratisCh ? (parseFloat(document.getElementById('cc-portes-custo')?.value)||portesRawGravar) : 0;
+  const totalGeral = valor + Math.max(0, cvs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (parseFloat(document.getElementById('cc-desc-final')?.value)||0)) + portes;
   const pagInfo = getPagamentosParaGravar('cc', totalGeral);
   const metodoPagamento = pagInfo.metodoPagamento;
   const fatVal = document.getElementById('cc-fat').value;
   const faturado = fatVal==='ambos'||fatVal==='consulta'; // faturado=true se serviço faturado
   const fatProd  = fatVal==='ambos'||fatVal==='produtos';  // produtos faturados
   const notas = document.getElementById('cc-notas').value;
-  const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
-  const portesCusto = parseFloat(document.getElementById('cc-portes-custo')?.value)||0;
   const descFinal = parseFloat(document.getElementById('cc-desc-final')?.value)||0;
   // garantir que descCliente e pvpCobrado estão actualizados antes de gravar
   syncInputs();
@@ -2723,9 +2725,11 @@ function guardarVendaRapida(){
   const faturado = false; // venda directa não tem serviço
   const fatProd  = vrFatVal==='produtos';
   const estado   = document.getElementById('vr-estado').value;
-  const portesVR = parseFloat(document.getElementById('vr-portes')?.value)||0;
+  const vrPortesGratisGravar = document.getElementById('vr-portes-gratis')?.checked||false;
+  const portesVRRawGravar = parseFloat(document.getElementById('vr-portes')?.value)||0;
+  const portesVR = vrPortesGratisGravar ? 0 : portesVRRawGravar;
+  const portesVRCusto = vrPortesGratisGravar ? (parseFloat(document.getElementById('vr-portes-custo')?.value)||portesVRRawGravar) : 0;
   const vrDescFinalVal = parseFloat(document.getElementById('vr-desc-final')?.value)||0;
-  const portesVRCusto = parseFloat(document.getElementById('vr-portes-custo')?.value)||0;
   const tp = Math.max(0, vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (vrDescFinalVal||0));
   const tpComPortes = tp + portesVR;
   const pagInfoVR = getPagamentosParaGravar('vr', tpComPortes);
@@ -2821,7 +2825,10 @@ function gerarDocVendaRapida(tipo, opcoes){
   const cliId = document.getElementById('vr-cli-id').value;
   const cliNomeVal = document.getElementById('vr-cli').value || 'Cliente';
   const data = document.getElementById('vr-data').value;
-  const portesVR = parseFloat(document.getElementById('vr-portes')?.value)||0;
+  const vrPortesGratisDoc = document.getElementById('vr-portes-gratis')?.checked||false;
+  const portesVRRaw = parseFloat(document.getElementById('vr-portes')?.value)||0;
+  const portesVR = vrPortesGratisDoc ? 0 : portesVRRaw;
+  const portesCustoVR = vrPortesGratisDoc ? (parseFloat(document.getElementById('vr-portes-custo')?.value)||portesVRRaw) : 0;
   const descFinalVal = parseFloat(document.getElementById('vr-desc-final')?.value)||0;
   const tpPreview = Math.max(0, vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0) - (descFinalVal||0));
   const pagInfoPreview = getPagamentosParaGravar('vr', tpPreview+portesVR);
@@ -2841,6 +2848,7 @@ function gerarDocVendaRapida(tipo, opcoes){
     metodoPagamento: metodo,
     pagamentos: pagInfoPreview.pagamentos,
     portes: portesVR,
+    portesCusto: portesCustoVR,
     descFinal: descFinalVal,
     vendas: vendas
   };
@@ -3423,8 +3431,10 @@ function saveEditVenda(id){
   c.data    = document.getElementById('ev-data')?.value||c.data;
   c.estado  = document.getElementById('ev-estado')?.value||c.estado;
   // portes e desconto final
-  const evPortes = parseFloat(document.getElementById('ev-portes')?.value)||0;
-  const evPortesCusto = parseFloat(document.getElementById('ev-portes-custo')?.value)||0;
+  const evPortesGratisCh = document.getElementById('ev-portes-gratis')?.checked||false;
+  const evPortesRaw = parseFloat(document.getElementById('ev-portes')?.value)||0;
+  const evPortes = evPortesGratisCh ? 0 : evPortesRaw;
+  const evPortesCusto = evPortesGratisCh ? (parseFloat(document.getElementById('ev-portes-custo')?.value)||evPortesRaw) : 0;
   const evDescFinal = parseFloat(document.getElementById('ev-desc-final')?.value)||0;
   c.portes = evPortes;
   c.portesCusto = evPortesCusto;
