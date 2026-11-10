@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20260923090817 -->
+  <!-- v20261110164000 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -180,6 +180,7 @@ tr:hover td{background:#fafaf7}
     <button class="nb" onclick="nav('fornecedores',this)">Fornecedores, Marcas e Tipos</button>
     <button class="nb" onclick="nav('definicoes',this)">⚙ Definições</button>
     <button class="nb" onclick="nav('vouchers',this)">Vouchers</button>
+    <button class="nb" onclick="nav('comissoes',this)">Comissões</button>
     <button class="nb" onclick="exportarExcel()" style="background:#e8f5e9;border-color:#81c784;color:#2e7d32">↓ Excel</button>
   </nav>
   <button class="menu-btn" onclick="toggleMenuDrawer()" aria-label="Menu">☰</button>
@@ -495,6 +496,7 @@ tr:hover td{background:#fafaf7}
   <div id="pg-definicoes" class="pg"></div>
   <div id="pg-fiscal" class="pg"></div>
   <div id="pg-vouchers" class="pg"></div>
+  <div id="pg-comissoes" class="pg"></div>
 </div>
 
 <script>
@@ -560,7 +562,8 @@ const DEFAULT = {
   ],
   marcas:[],
   tiposConsulta:['Primeira consulta','Acompanhamento','Pack','Voucher','Familiar','Parceria','Clínica do Alto'],
-  ids:{cl:7,c:7,pk:3,w:2,g:3,p:13,e:1,ci:1,f:4,fo:1,v:1,dev:1},
+  comissoes:[],
+  ids:{cl:7,c:7,pk:3,w:2,g:3,p:13,e:1,ci:1,f:4,fo:1,v:1,dev:1,com:1},
   vouchers:[],
 };
 
@@ -750,6 +753,8 @@ function migrarCampos(){
   if(!DB.tiposConsulta) DB.tiposConsulta = ['Primeira consulta','Acompanhamento','Pack','Voucher','Familiar','Parceria'];
   if(!DB.devolucoes) DB.devolucoes = [];
   if(!DB.ids.dev) DB.ids.dev = 1;
+  if(!DB.comissoes) DB.comissoes = [];
+  if(!DB.ids.com) DB.ids.com = 1;
   // limpar valorPendente em consultas/vendas com estado Pago
   (DB.consultas||[]).forEach(c=>{ if(c.estado==='Pago') c.valorPendente=0; });
   // recalcular totalProd e lucroProd via função central
@@ -969,7 +974,7 @@ function nav(page, btn){
     consultas:renderConsultas, vendas:renderVendas,
     clientes:renderClientes, packs:renderPacks,
     produtos:renderProdutos, entradas:renderEntradas, devolucoes:renderDevolucoes,
-    consumo:renderConsumo, cedencias:renderCedencias, consignacao:renderConsign,
+    consumo:renderConsumo, cedencias:renderCedencias, consignacao:renderConsign, comissoes:renderComissoes,
     workshops:renderWorkshops, formacao:renderFormacao,
     gastos:renderGastos, encomendas:renderEncomendas,
     relatorio:renderRelatorio, fornecedores:renderFornecedores,
@@ -1165,7 +1170,7 @@ function renderConsultaAtual(){
           <div style="display:flex;align-items:center;gap:6px">
             <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
             <input id="cc-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-              oninput="atualizarTotais();document.getElementById('cc-portes-gratis').checked=false;if(!document.getElementById('cc-portes-gratis').checked)document.getElementById('cc-portes-custo').value='0'" style="width:80px;font-size:13px"/>
+              oninput="document.getElementById('cc-portes-gratis').checked=false;document.getElementById('cc-portes-custo').value='0';this.style.textDecoration='';this.style.color='';this.readOnly=false;atualizarTotais()" style="width:80px;font-size:13px"/>
             <input type="hidden" id="cc-portes-custo" value="0"/>
             <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:#1a6b1a">
               <input type="checkbox" id="cc-portes-gratis" onchange="portesGratisCC(this.checked)"/>
@@ -1631,7 +1636,10 @@ function calcTotais(){
   const tDesc = cvs.reduce((s,v)=>s+(v.custoOriginal-calcCustoFarm(v))*v.qty, 0);
   const tl  = cvs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty, 0);
   const sv  = parseFloat(document.getElementById('cc-val')?.value)||0;
-  const portes = parseFloat(document.getElementById('cc-portes')?.value)||0;
+  // quando grátis está ativo, portes não são cobrados ao cliente (mas o custo é guardado em cc-portes-custo)
+  const portesGratis = document.getElementById('cc-portes-gratis')?.checked||false;
+  const portesRaw = parseFloat(document.getElementById('cc-portes')?.value)||0;
+  const portes = portesGratis ? 0 : portesRaw;
   const descFinal2=parseFloat(document.getElementById('cc-desc-final')?.value)||0;
   return {tp, tDesc, tl:tl-descFinal2, sv, portes, descFinal:descFinal2, total:tp+sv, totalComPortes:Math.max(0,tp+sv+portes-descFinal2)};
 }
@@ -1738,41 +1746,56 @@ function aplicarDescPctVR(pct){
   if(el){ el.value = descEuros > 0 ? descEuros.toFixed(2) : '0'; }
   atualizarTotaisVR();
 }
+function _applyPortesGratisStyle(portesEl, gratis){
+  if(!portesEl) return;
+  if(gratis){
+    portesEl.style.textDecoration='line-through';
+    portesEl.style.color='#aaa';
+    portesEl.readOnly=true;
+  } else {
+    portesEl.style.textDecoration='';
+    portesEl.style.color='';
+    portesEl.readOnly=false;
+  }
+}
 function portesGratisCC(gratis){
   const portesEl=document.getElementById('cc-portes');
   const custoEl=document.getElementById('cc-portes-custo');
   if(gratis){
-    // guardar o custo real e cobrar zero ao cliente
-    if(custoEl&&portesEl) custoEl.value=portesEl.value;
-    if(portesEl) portesEl.value='0';
+    // guardar o custo real; manter visível (riscado) para referência visual
+    const val=parseFloat(portesEl?.value)||0;
+    if(custoEl&&val>0) custoEl.value=val.toFixed(2);
   } else {
     // repor o valor original no campo cobrado
-    if(custoEl&&portesEl) portesEl.value=custoEl.value;
+    if(custoEl&&portesEl){ const v=parseFloat(custoEl.value)||0; if(v) portesEl.value=v.toFixed(2); }
     if(custoEl) custoEl.value='0';
   }
+  _applyPortesGratisStyle(portesEl, gratis);
   atualizarTotais();
 }
 function portesGratisEV(gratis){
   const portesEl=document.getElementById('ev-portes');
   const custoEl=document.getElementById('ev-portes-custo');
   if(gratis){
-    if(custoEl&&portesEl&&(parseFloat(custoEl.value)||0)===0) custoEl.value=portesEl.value;
-    if(portesEl) portesEl.value='0';
+    const val=parseFloat(portesEl?.value)||0;
+    if(custoEl&&val>0&&(parseFloat(custoEl.value)||0)===0) custoEl.value=val.toFixed(2);
   } else {
-    if(custoEl&&portesEl) portesEl.value=custoEl.value;
+    if(custoEl&&portesEl){ const v=parseFloat(custoEl.value)||0; if(v) portesEl.value=v.toFixed(2); }
     if(custoEl) custoEl.value='0';
   }
+  _applyPortesGratisStyle(portesEl, gratis);
 }
 function portesGratisVR(gratis){
   const portesEl=document.getElementById('vr-portes');
   const custoEl=document.getElementById('vr-portes-custo');
   if(gratis){
-    if(custoEl&&portesEl) custoEl.value=portesEl.value;
-    if(portesEl) portesEl.value='0';
+    const val=parseFloat(portesEl?.value)||0;
+    if(custoEl&&val>0) custoEl.value=val.toFixed(2);
   } else {
-    if(custoEl&&portesEl) portesEl.value=custoEl.value;
+    if(custoEl&&portesEl){ const v=parseFloat(custoEl.value)||0; if(v) portesEl.value=v.toFixed(2); }
     if(custoEl) custoEl.value='0';
   }
+  _applyPortesGratisStyle(portesEl, gratis);
   atualizarTotaisVR();
 }
 function atualizarTotais(){
@@ -1929,7 +1952,13 @@ function gerarRecibo(){
   const dataVal=document.getElementById('cc-data').value;
   const horaVal=document.getElementById('cc-hora')?.value||'';
   const valorCons=parseFloat(document.getElementById('cc-val').value)||0;
-  const portesVal=parseFloat(document.getElementById('cc-portes').value)||0;
+  const portesGratisChecked=document.getElementById('cc-portes-gratis')?.checked||false;
+  const portesRawVal=parseFloat(document.getElementById('cc-portes').value)||0;
+  const portesCustoVal=parseFloat(document.getElementById('cc-portes-custo')?.value)||0;
+  // valor cobrado ao cliente: 0 se grátis, caso contrário o valor do campo
+  const portesVal=portesGratisChecked ? 0 : portesRawVal;
+  // valor visual para mostrar riscado quando grátis
+  const portesVisualVal=portesGratisChecked ? (portesCustoVal||portesRawVal) : portesRawVal;
   const descFinalVal=parseFloat(document.getElementById('cc-desc-final')?.value)||0;
   const notasVal=document.getElementById('cc-notas').value;
   const _pagAtual = _pagamentosState['cc']||[];
@@ -1949,7 +1978,15 @@ function gerarRecibo(){
         +'<td style="padding:10px 0;border-bottom:1px solid #ede8e3;text-align:right;vertical-align:top;font-size:13px;font-weight:600">'+f2(total)+'</td></tr>';
     });
   }
-  if(inclPortes&&portesVal>0){totalReal+=portesVal;prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(portesVal)+'</td></tr>';}
+  if(inclPortes&&portesVisualVal>0){
+    if(portesGratisChecked){
+      // portes grátis: mostrar riscado + label "Portes grátis", não adicionar ao total
+      prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio <span style="color:#1a6b1a;font-size:11px;font-style:italic">✓ Portes grátis</span></td><td></td><td style="padding:10px 0;text-align:right;font-size:13px"><span style="text-decoration:line-through;color:#bbb">'+f2(portesVisualVal)+'</span> <span style="color:#1a6b1a;font-size:11px">0,00€</span></td></tr>';
+    } else {
+      totalReal+=portesVal;
+      prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(portesVal)+'</td></tr>';
+    }
+  }
   if(inclConsulta&&valorCons>0){totalReal+=valorCons;prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Consulta</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(valorCons)+'</td></tr>';}
   const subtotalAntesDesc=totalReal;
   if(descFinalVal>0) totalReal=Math.max(0,totalReal-descFinalVal);
@@ -2034,7 +2071,11 @@ function gerarOrcamento(){
   const cliNomeVal=document.getElementById('cc-cli').value||'Cliente';
   const dataVal=document.getElementById('cc-data').value;
   const valorCons=parseFloat(document.getElementById('cc-val').value)||0;
-  const portesVal=parseFloat(document.getElementById('cc-portes').value)||0;
+  const portesGratisCheckedOrc=document.getElementById('cc-portes-gratis')?.checked||false;
+  const portesRawValOrc=parseFloat(document.getElementById('cc-portes').value)||0;
+  const portesCustoValOrc=parseFloat(document.getElementById('cc-portes-custo')?.value)||0;
+  const portesVal=portesGratisCheckedOrc ? 0 : portesRawValOrc;
+  const portesVisualValOrc=portesGratisCheckedOrc ? (portesCustoValOrc||portesRawValOrc) : portesRawValOrc;
   const notasVal=document.getElementById('cc-notas').value;
   const f2=n=>(Math.round((n||0)*100)/100).toFixed(2).replace('.',',')+'€';
   const fD=d=>d?d.split('-').reverse().join('/'):'';
@@ -2060,11 +2101,19 @@ function gerarOrcamento(){
         +'</td></tr>';
     });
   }
-  if(inclPortes&&portesVal>0){totalReal+=portesVal;totalPVP+=portesVal;
-    prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(portesVal)+'</td></tr>';}
+  if(inclPortes&&portesVisualValOrc>0){
+    if(portesGratisCheckedOrc){
+      // grátis: linha riscada, não soma ao total
+      totalPVP+=portesVisualValOrc;
+      prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio <span style="color:#1a6b1a;font-size:11px;font-style:italic">✓ Portes grátis</span></td><td></td><td style="padding:10px 0;text-align:right;font-size:13px"><span style="text-decoration:line-through;color:#bbb">'+f2(portesVisualValOrc)+'</span> <span style="color:#1a6b1a;font-size:11px">0,00€</span></td></tr>';
+    } else {
+      totalReal+=portesVal;totalPVP+=portesVal;
+      prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(portesVal)+'</td></tr>';
+    }
+  }
   if(inclConsulta&&valorCons>0){totalReal+=valorCons;totalPVP+=valorCons;
     prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Consulta</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(valorCons)+'</td></tr>';}
-  const subtotalCalculado = totalReal + (inclPortes?portesVal:0) + (inclConsulta?valorCons:0);
+  const subtotalCalculado = totalReal;
   const totalExibido = totalCustom!=null ? totalCustom : (inclDesc&&descFinalVal>0 ? Math.max(0,subtotalCalculado-descFinalVal) : subtotalCalculado);
   const temDescG = totalReal<totalPVP || (inclDesc&&descFinalVal>0);
   let totalRow;
@@ -2080,7 +2129,7 @@ function gerarOrcamento(){
     totalRow='SPLIT_SUBTOTAL';
   } else if(temDescG){
     totalRow='<td style="font-size:16px;font-weight:700;color:#7a4f28">Total</td>'
-      +'<td style="text-align:right"><span style="text-decoration:line-through;color:#bbb;font-size:14px">'+f2(totalPVP+(inclPortes?portesVal:0)+(inclConsulta?valorCons:0))+'</span></td>'
+      +'<td style="text-align:right"><span style="text-decoration:line-through;color:#bbb;font-size:14px">'+f2(totalPVP)+'</span></td>'
       +'<td style="text-align:right;font-size:16px;font-weight:700;color:#7a4f28">'+f2(totalExibido)+'</td>';
   } else {
     totalRow='<td style="font-size:16px;font-weight:700;color:#7a4f28">Total</td><td></td>'
@@ -2560,7 +2609,8 @@ function atualizarTotaisVR(){
   const tp=vrs.reduce((s,v)=>s+calcPvpCobrado(v)*v.qty,0);
   const tlBruto=vrs.reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*v.qty,0);
   const tot=document.getElementById('vr-total-line');
-  const portes=parseFloat(document.getElementById('vr-portes')?.value)||0;
+  const vrPortesGratis=document.getElementById('vr-portes-gratis')?.checked||false;
+  const portes=vrPortesGratis ? 0 : (parseFloat(document.getElementById('vr-portes')?.value)||0);
   const dfVR=parseFloat(document.getElementById('vr-desc-final')?.value)||0;
   const tl=tlBruto-dfVR;
   const totalFinal=Math.max(0,tp+portes-dfVR);
@@ -2829,9 +2879,17 @@ function gerarDocVenda(cid, tipo, cOverride, opcoes){
   },0);
   const temDescPorProduto=c.vendas.some(v=>(v.descCliente||0)>0&&(v.pvpCobrado||v.pvp||0)<(v.pvpBase||v.pvp||0));
   const portesDocVal = c.portes||0;
-  if(portesDocVal>0){
-    totalReal+=portesDocVal;
-    prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(portesDocVal)+'</td></tr>';
+  const portesCustoDoc = c.portesCusto||0;
+  const portesDocGratis = portesCustoDoc>0 && portesDocVal===0;
+  const portesDocVisual = portesDocGratis ? portesCustoDoc : portesDocVal;
+  if(portesDocVisual>0){
+    if(portesDocGratis){
+      // grátis: linha riscada, não adiciona ao total
+      prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio <span style="color:#1a6b1a;font-size:11px;font-style:italic">✓ Portes grátis</span></td><td></td><td style="padding:10px 0;text-align:right;font-size:13px"><span style="text-decoration:line-through;color:#bbb">'+f2(portesDocVisual)+'</span> <span style="color:#1a6b1a;font-size:11px">0,00€</span></td></tr>';
+    } else {
+      totalReal+=portesDocVal;
+      prodRows+='<tr><td style="padding:10px 0;border-bottom:1px solid #ede8e3;color:#888;font-size:13px">Portes de envio</td><td></td><td style="padding:10px 0;text-align:right;font-size:13px">'+f2(portesDocVal)+'</td></tr>';
+    }
   }
   if(descFinalVal>0) totalReal=Math.max(0,totalReal-descFinalVal);
   // aplicar opções vindas do modal de orçamento, se existirem
@@ -2942,7 +3000,7 @@ function renderVendas(){
         <div style="display:flex;align-items:center;gap:6px">
           <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
           <input id="vr-portes" type="number" placeholder="0.00" step="0.01" min="0" value="0"
-            oninput="atualizarTotaisVR();document.getElementById('vr-portes-gratis').checked=false;if(!document.getElementById('vr-portes-gratis').checked)document.getElementById('vr-portes-custo').value='0'" style="width:80px;font-size:13px"/>
+            oninput="document.getElementById('vr-portes-gratis').checked=false;document.getElementById('vr-portes-custo').value='0';this.style.textDecoration='';this.style.color='';this.readOnly=false;atualizarTotaisVR()" style="width:80px;font-size:13px"/>
           <input type="hidden" id="vr-portes-custo" value="0"/>
           <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:#1a6b1a">
             <input type="checkbox" id="vr-portes-gratis" onchange="portesGratisVR(this.checked)"/>
@@ -3054,8 +3112,8 @@ function renderVendasPagina(){
           <div style="display:flex;gap:16px;align-items:center;margin-bottom:10px;flex-wrap:wrap;padding:8px 10px;background:#fafaf7;border-radius:8px;border:1px solid #eee">
             <div style="display:flex;align-items:center;gap:6px">
               <label style="font-size:12px;color:#888;white-space:nowrap">Portes (€):</label>
-              <input id="ev-portes" type="number" step="0.01" min="0" value="${(c.portes||0).toFixed(2)}" style="width:80px;font-size:13px"
-                oninput="document.getElementById('ev-portes-gratis').checked=false;document.getElementById('ev-portes-custo').value='0'"/>
+              <input id="ev-portes" type="number" step="0.01" min="0" value="${(c.portesCusto||0)>0&&(c.portes||0)===0?(c.portesCusto||0).toFixed(2):(c.portes||0).toFixed(2)}" style="width:80px;font-size:13px${(c.portesCusto||0)>0&&(c.portes||0)===0?';text-decoration:line-through;color:#aaa':''}"
+                oninput="document.getElementById('ev-portes-gratis').checked=false;document.getElementById('ev-portes-custo').value='0';this.style.textDecoration='';this.style.color='';this.readOnly=false"/>
               <input type="hidden" id="ev-portes-custo" value="${(c.portesCusto||0).toFixed(2)}"/>
               <label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;white-space:nowrap;color:#1a6b1a">
                 <input type="checkbox" id="ev-portes-gratis" ${(c.portesCusto||0)>0&&(c.portes||0)===0?'checked':''} onchange="portesGratisEV(this.checked)"/>
@@ -5705,12 +5763,17 @@ function renderConsumo(){
       </td>
     </tr>`;
     const isConsig = DB.produtos.find(p=>p.id===c.prodId)?.consig;
+    const pvpC = c.pvp||DB.produtos.find(p=>p.id===c.prodId)?.pvp||0;
+    const descFornC = c.descForn!=null?c.descForn:0;
+    const descTotalC = 20+descFornC;
+    const custoEfC = isConsig ? +(pvpC*(1-descTotalC/100)).toFixed(2) : 0;
     return `<tr>
       <td>${c.data}</td>
       <td><strong>${c.prodNome}</strong>${isConsig?'<br><span class="badge bg-a" style="font-size:9px">consig.</span>':''}</td>
       <td>${c.qty}</td>
       <td style="color:#888;font-size:11px">${c.motivo||'—'}</td>
-      <td style="text-align:right">${(c.valorRecebido||0)>0?`<span style="font-weight:600;color:#1a6b1a">${fmt(c.valorRecebido)}</span>`:'<span style="color:#bbb;font-size:11px">—</span>'}</td>
+      <td style="text-align:right">${isConsig?`<span style="font-weight:600">${fmt(pvpC)}</span>`:'<span style="color:#bbb;font-size:11px">—</span>'}</td>
+      <td style="text-align:right">${isConsig?`<span style="font-weight:600;color:#856404">${fmt(custoEfC)}</span><div style="font-size:9px;color:#aaa">20%${descFornC>0?'+'+descFornC+'%':''} = ${descTotalC}%</div>`:'<span style="color:#bbb;font-size:11px">—</span>'}</td>
       <td style="white-space:nowrap">
         <button class="btn sm" onclick="startEditCI('${c.id}')">Editar</button>
         <button class="btn dan sm" onclick="delConsumo('${c.id}')" style="margin-top:2px">Apagar</button>
@@ -5749,10 +5812,10 @@ function renderConsumo(){
     </div>
     <div class="card" style="padding:0;overflow:hidden">
       <table>
-        <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Motivo</th><th></th></tr></thead>
+        <thead><tr><th>Data</th><th>Produto</th><th>Qty</th><th>Motivo</th><th style="text-align:right">PVP unit.</th><th style="text-align:right">Custo efetivo</th><th></th></tr></thead>
         <tbody>${[...DB.consumo].sort((a,b)=>sortRecente(a,b)).length
           ? [...DB.consumo].sort((a,b)=>sortRecente(a,b)).map(c=>rowHtml(c)).join('')
-          : '<tr><td colspan="5" style="text-align:center;padding:2rem;color:#999">Sem consumo interno registado</td></tr>'}
+          : '<tr><td colspan="7" style="text-align:center;padding:2rem;color:#999">Sem consumo interno registado</td></tr>'}
         </tbody>
       </table>
     </div>`;
@@ -5815,6 +5878,11 @@ function removeLinhaCI(i){
   _ciLinhas.splice(i,1);
   renderLinhasCI();
 }
+function setCIDescForn(i, val){
+  if(!_ciLinhas[i]) return;
+  _ciLinhas[i].descForn = val;
+  renderLinhasCI();
+}
 function renderLinhasCI(){
   const el=document.getElementById('ci-linhas');
   if(!el)return;
@@ -5825,19 +5893,36 @@ function renderLinhasCI(){
   el.innerHTML='<table style="width:100%;font-size:13px;margin-bottom:4px"><thead><tr>'
     +'<th style="text-align:left;padding:4px 6px;font-size:11px;color:#888">Produto</th>'
     +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:60px">Qty</th>'
-    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:200px">Nota</th>'
+    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:80px">PVP unit.</th>'
+    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:120px">Desc. forn. extra</th>'
+    +'<th style="text-align:center;padding:4px 6px;font-size:11px;color:#888;width:100px">Custo estimado</th>'
     +'<th style="width:36px"></th></tr></thead><tbody>'
     +_ciLinhas.map(function(l,i){
-      const p=DB.produtos.find(function(x){return x.id===l.prodId;});
-      const descTotal=10+(l.descForn||0);
+      const descTotal=20+(l.descForn||0);
       const valorUnit=l.consig?+(l.pvp*(1-descTotal/100)).toFixed(2):0;
       const valorTotal=+(valorUnit*l.qty).toFixed(2);
       return '<tr>'
         +'<td style="padding:5px 6px"><strong>'+l.prodNome+'</strong>'+(l.consig?'<span class="badge bg-a" style="font-size:9px;margin-left:4px">consig.</span>':'')+'</td>'
         +'<td style="text-align:center;padding:5px 6px">'+l.qty+'</td>'
         +(l.consig
-          ?'<td colspan="2" style="text-align:center;padding:5px 6px;font-size:11px;color:#856404">Consignação — pago pessoalmente à farmácia</td>'
-          :'<td style="text-align:center;color:#bbb;font-size:11px">—</td><td style="text-align:center;color:#bbb;font-size:11px">—</td>')
+          ?'<td style="text-align:center;padding:5px 6px;font-weight:600">'+fmt(l.pvp)+'</td>'
+           +'<td style="text-align:center;padding:5px 6px">'
+             +'<div style="display:flex;align-items:center;justify-content:center;gap:3px">'
+             +'<span style="font-size:10px;color:#888">20%+</span>'
+             +'<input type="number" min="0" max="80" step="1" value="'+(l.descForn||0)+'" '
+             +'style="width:44px;font-size:12px;text-align:center;border:1px solid #d4a97a;border-radius:4px" '
+             +'onchange="setCIDescForn('+i+',parseFloat(this.value)||0)" />'
+             +'<span style="font-size:10px;color:#888">%</span>'
+             +'</div>'
+             +'<div style="font-size:9px;color:#8b6f4e;margin-top:2px">='+descTotal+'% total</div>'
+           +'</td>'
+           +'<td style="text-align:center;padding:5px 6px">'
+             +'<strong id="ci-custo-'+i+'" style="color:#856404">'+fmt(valorUnit)+'</strong>'
+             +(l.qty>1?'<div style="font-size:9px;color:#aaa">total: '+fmt(valorTotal)+'</div>':'')
+           +'</td>'
+          :'<td style="text-align:center;color:#bbb;font-size:11px">—</td>'
+           +'<td style="text-align:center;color:#bbb;font-size:11px">—</td>'
+           +'<td style="text-align:center;color:#bbb;font-size:11px">—</td>')
         +'<td style="padding:5px 4px"><button class="btn dan sm" onclick="removeLinhaCI('+i+')" style="padding:2px 7px;font-size:11px">×</button></td>'
         +'</tr>';
     }).join('')
@@ -6304,13 +6389,19 @@ function renderConsign(){
   }).map(ci=>{
     const p=DB.produtos.find(x=>x.id===ci.prodId);
     const cid=`ci-${ci.id}`;
+    const pvpVal=ci.pvp||p?.pvp||0;
+    const descFornVal=ci.descForn!=null?ci.descForn:0;
+    const descTotalVal=20+descFornVal;
+    const custoCalc=+(pvpVal*(1-descTotalVal/100)).toFixed(2);
     return {
-      cid, tipo:'Consumo interno',
+      cid, tipo:'Consumo pessoal',
       prodId:ci.prodId, nome:ci.prodNome, qty:ci.qty, data:ci.data,
-      cliente:'— (uso interno)', cnp:p?.cnp||'',
-      pvp:0, pvpTotal:0,
-      custoOriginal:p?.custo||0, custo:p?.custo||0, descExtra:0,
-      motivo:ci.motivo||''
+      cliente:'— (uso pessoal)', cnp:p?.cnp||'',
+      pvp:pvpVal, pvpBase:pvpVal, pvpTotal:0,
+      custoOriginal:custoCalc, custo:custoCalc,
+      descForn:descFornVal, descExtra:0, descCliente:0,
+      motivo:ci.motivo||'',
+      _pessoal:true
     };
   });
 
@@ -6320,7 +6411,7 @@ function renderConsign(){
   const pendentes = allItems.filter(v=>!pagas.has(v.cid));
   const pendentesEmpresa = pendentes.filter(v=>!v._pessoal&&!v.cid?.startsWith('ci-'));
   const tCusto    = pendentesEmpresa.reduce((s,v)=>s+calcCustoFarm(v)*(v.qty||1),0);
-  const tCustoPessoal = pendentes.filter(v=>v._pessoal||v.cid?.startsWith('ci-')).reduce((s,v)=>s+v.custo*(v.qty||1),0);
+  const tCustoPessoal = pendentes.filter(v=>v._pessoal||v.cid?.startsWith('ci-')).reduce((s,v)=>s+Math.max(0,(v.pvp||0)*(1-(20+(v.descForn||0))/100))*(v.qty||1),0);
   const tLucro    = allItems.filter(v=>!pagas.has(v.cid)&&v.tipo==='Venda'&&!v._pessoal&&!v.cid?.startsWith('ci-'))
                     .reduce((s,v)=>s+(calcPvpCobrado(v)-calcCustoFarm(v))*(v.qty||1),0);
 
@@ -6369,7 +6460,8 @@ function renderConsign(){
             const pago=pagas.has(v.cid);
             const isCI=v._pessoal===true || v.cid?.startsWith('ci-');
             const pvc  = isCI ? 0 : calcPvpCobrado(v);
-            const cEf  = isCI ? v.custo : calcCustoFarm(v);
+            // consumo pessoal: 20% base + descForn extra (calcCustoFarm usa 10% fixo de farmácia, não aplicável aqui)
+            const cEf  = isCI ? Math.max(0,(v.pvp||0)*(1-(20+(v.descForn||0))/100)) : calcCustoFarm(v);
             const lucro = (pvc - cEf) * qty;
             return `<tr style="${pago?'opacity:0.4;text-decoration:line-through':''}${isCI?';background:#fffbf5;border-left:3px solid #d4a97a':''}">
               <td style="white-space:nowrap">${v.data}</td>
@@ -7083,6 +7175,139 @@ function delFormacao(id){
 // ─── GASTOS ──────────────────────────────────────────────────────────────────
 let editingGastoId = null;
 
+// ─── COMISSÕES ────────────────────────────────────────────────────────────────
+const MARCAS_COM = ['Mary Kay','Aurifoods','Outra'];
+const FORMAS_REC = [
+  {v:'desconto_encomenda', l:'Desconto em encomenda'},
+  {v:'recibo', l:'Recibo emitido'},
+  {v:'encomenda_produtos', l:'Encomenda de produtos'},
+  {v:'outro', l:'Outro'},
+];
+
+function renderComissoes(){
+  const pg = document.getElementById('pg-comissoes');
+  if(!pg) return;
+  const coms = DB.comissoes||[];
+  const total = coms.reduce((s,c)=>s+c.valor,0);
+  // sumário por marca
+  const porMarca = {};
+  coms.forEach(c=>{ if(!porMarca[c.marca]) porMarca[c.marca]=0; porMarca[c.marca]+=c.valor; });
+  const marcaRows = Object.entries(porMarca).sort((a,b)=>b[1]-a[1]).map(([m,v])=>'<tr><td>'+m+'</td><td style="text-align:right;font-weight:600;color:#1a6b1a">'+fmt(v)+'</td></tr>').join('');
+
+  pg.innerHTML = '<div class="card">'
+    +'<h2 style="margin-bottom:14px">Comissões</h2>'
+    +'<p style="font-size:12px;color:#888;margin-bottom:14px">Regista aqui as comissões recebidas de marcas parceiras. A encomenda é apenas a forma de pagamento; o valor real é a comissão.</p>'
+    +'<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">'
+    +'<div class="met"><div class="lb">Total comissões</div><div class="vl green">'+fmt(total)+'</div></div>'
+    +(Object.keys(porMarca).length>1?'<div class="card" style="flex:1;min-width:140px;padding:10px"><h4 style="margin-bottom:8px;font-size:12px">Por marca</h4><table style="width:100%">'+marcaRows+'</table></div>':'')
+    +'</div>'
+    +'<div id="com-form-bloco">'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-bottom:12px">'
+    +'<div><label class="lb">Data</label><input type="date" id="com-data" value="'+new Date().toISOString().slice(0,10)+'" style="width:100%"/></div>'
+    +'<div><label class="lb">Marca</label><select id="com-marca" style="width:100%">'
+    +MARCAS_COM.map(m=>'<option value="'+m+'">'+m+'</option>').join('')
+    +'</select></div>'
+    +'<div><label class="lb">Valor (€)</label><input type="number" id="com-valor" placeholder="0.00" step="0.01" min="0" style="width:100%"/></div>'
+    +'<div><label class="lb">Forma de recebimento</label><select id="com-forma" style="width:100%">'
+    +FORMAS_REC.map(f=>'<option value="'+f.v+'">'+f.l+'</option>').join('')
+    +'</select></div>'
+    +'</div>'
+    +'<div style="margin-bottom:10px"><label class="lb">Notas (opcional)</label><input type="text" id="com-notas" placeholder="ex: campanha trimestral" style="width:100%"/></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:16px">'
+    +'<button class="btn pri" id="com-btn-guardar" onclick="guardarComissao()">Guardar comissão</button>'
+    +'<button class="btn" id="com-btn-cancelar" style="display:none" onclick="cancelarEditComissao()">Cancelar</button>'
+    +'</div></div>'
+    +'<div id="com-alert" style="display:none;margin-bottom:10px"></div>'
+    +'<div id="com-lista">'+(coms.length===0?'<p style="color:#999;font-size:13px">Sem comissões registadas.</p>':renderComissoesLista(coms))+'</div>'
+    +'</div>';
+}
+
+function renderComissoesLista(coms){
+  const sorted=[...coms].sort((a,b)=>b.data.localeCompare(a.data));
+  return '<table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr>'
+    +'<th style="text-align:left;padding:6px 4px;font-size:11px;color:#888;font-weight:500;border-bottom:1px solid #eee">Data</th>'
+    +'<th style="text-align:left;padding:6px 4px;font-size:11px;color:#888;font-weight:500;border-bottom:1px solid #eee">Marca</th>'
+    +'<th style="text-align:right;padding:6px 4px;font-size:11px;color:#888;font-weight:500;border-bottom:1px solid #eee">Valor</th>'
+    +'<th style="text-align:left;padding:6px 4px;font-size:11px;color:#888;font-weight:500;border-bottom:1px solid #eee">Forma</th>'
+    +'<th style="text-align:left;padding:6px 4px;font-size:11px;color:#888;font-weight:500;border-bottom:1px solid #eee">Notas</th>'
+    +'<th style="padding:6px 4px;border-bottom:1px solid #eee"></th>'
+    +'</tr></thead><tbody>'
+    +sorted.map(c=>{
+      const formaLabel=(FORMAS_REC.find(f=>f.v===c.forma)||{l:c.forma||'—'}).l;
+      return '<tr>'
+        +'<td style="padding:7px 4px;font-size:12px;white-space:nowrap">'+fmtData(c.data)+'</td>'
+        +'<td style="padding:7px 4px;font-size:12px;font-weight:600">'+c.marca+'</td>'
+        +'<td style="padding:7px 4px;font-size:13px;font-weight:700;text-align:right;color:#1a6b1a">'+fmt(c.valor)+'</td>'
+        +'<td style="padding:7px 4px;font-size:11px;color:#888">'+formaLabel+'</td>'
+        +'<td style="padding:7px 4px;font-size:11px;color:#888">'+((c.notas||'').length>40?c.notas.slice(0,40)+'...':c.notas||'—')+'</td>'
+        +'<td style="padding:7px 4px;white-space:nowrap">'
+        +'<button class="btn sm" onclick="editarComissao(\''+c.id+'\')">✏</button> '
+        +'<button class="btn sm" style="color:#c0392b" onclick="apagarComissao(\''+c.id+'\')">🗑</button>'
+        +'</td></tr>';
+    }).join('')
+    +'</tbody></table>';
+}
+
+function guardarComissao(){
+  const data=document.getElementById('com-data')?.value||'';
+  const marca=document.getElementById('com-marca')?.value||'';
+  const valor=parseFloat(document.getElementById('com-valor')?.value)||0;
+  const forma=document.getElementById('com-forma')?.value||'';
+  const notas=document.getElementById('com-notas')?.value||'';
+  if(!data||!marca||valor<=0){ comAlerta('Preenche data, marca e valor.','al-err'); return; }
+  const btn=document.getElementById('com-btn-guardar');
+  const editId=btn?.dataset?.editId||null;
+  if(editId){
+    const idx=(DB.comissoes||[]).findIndex(c=>c.id===editId);
+    if(idx>=0) DB.comissoes[idx]={...DB.comissoes[idx],data,marca,valor,forma,notas};
+    btn.textContent='Guardar comissão'; btn.dataset.editId='';
+    document.getElementById('com-btn-cancelar').style.display='none';
+  } else {
+    if(!DB.comissoes) DB.comissoes=[];
+    DB.comissoes.push({id:'com'+DB.ids.com++,data,marca,valor,forma,notas});
+  }
+  save();
+  document.getElementById('com-valor').value='';
+  document.getElementById('com-notas').value='';
+  comAlerta('✓ Comissão guardada.','al-suc');
+  document.getElementById('com-lista').innerHTML=renderComissoesLista(DB.comissoes);
+}
+
+function editarComissao(id){
+  const c=(DB.comissoes||[]).find(x=>x.id===id); if(!c) return;
+  document.getElementById('com-data').value=c.data;
+  document.getElementById('com-marca').value=c.marca;
+  document.getElementById('com-valor').value=c.valor.toFixed(2);
+  document.getElementById('com-forma').value=c.forma||'desconto_encomenda';
+  document.getElementById('com-notas').value=c.notas||'';
+  const btn=document.getElementById('com-btn-guardar');
+  btn.textContent='Guardar alterações'; btn.dataset.editId=id;
+  document.getElementById('com-btn-cancelar').style.display='';
+}
+
+function cancelarEditComissao(){
+  document.getElementById('com-valor').value='';
+  document.getElementById('com-notas').value='';
+  const btn=document.getElementById('com-btn-guardar');
+  btn.textContent='Guardar comissão'; btn.dataset.editId='';
+  document.getElementById('com-btn-cancelar').style.display='none';
+}
+
+function apagarComissao(id){
+  if(!confirm('Apagar esta comissão?')) return;
+  DB.comissoes=(DB.comissoes||[]).filter(c=>c.id!==id);
+  save();
+  document.getElementById('com-lista').innerHTML=(DB.comissoes.length===0?'<p style="color:#999;font-size:13px">Sem comissões registadas.</p>':renderComissoesLista(DB.comissoes));
+}
+
+function comAlerta(msg,cls){
+  const al=document.getElementById('com-alert');
+  if(!al) return;
+  al.className='alert '+cls; al.style.display='block'; al.textContent=msg;
+  setTimeout(()=>{ al.style.display='none'; },4000);
+}
+
 function renderGastos(){
   const total=DB.gastos.reduce((s,g)=>s+g.valor,0);
   const porCat={};
@@ -7615,10 +7840,12 @@ function renderRelatorio(){
   const tNFat  = (tServ+tPacks+tWork+tFo)-tFat;
   const lucProdRel = rCs.reduce((s,c)=>s+calcLucroCRel(c),0);
   const tPortesGratis = rCs.reduce((s,c)=>s+(c.portesCusto||0),0);
-  const receitaTotal = tServ+tProd+tPacks+tWork+tFo;
+  const rComs = relMes ? (DB.comissoes||[]).filter(c=>c.data?.startsWith(relMes)) : (DB.comissoes||[]);
+  const tComissoes = rComs.reduce((s,c)=>s+c.valor,0);
+  const receitaTotal = tServ+tProd+tPacks+tWork+tFo+tComissoes;
   const tCedRel = (DB.cedencias||[]).filter(c=>!relMes||c.data?.startsWith(relMes)).reduce((s,c)=>s+(c.valorRecebido||0),0);
   const lucCedRel = (DB.cedencias||[]).filter(c=>!relMes||c.data?.startsWith(relMes)).reduce((s,c)=>s+(c.valorRecebido||0)-(c.custoUnit||0)*(c.qty||1),0);
-  const lucroReal    = tServ+lucProdRel+tPacks+tWork+tFo+lucCedRel-tGasto;
+  const lucroReal    = tServ+lucProdRel+tPacks+tWork+tFo+tComissoes+lucCedRel-tGasto;
   // SS ENI — só sobre receitas FATURADAS
   const tFatServRel = rCs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
   const tFatProdRel = rCs.filter(c=>c.faturado).reduce((s,c)=>s+c.totalProd,0);
@@ -7661,7 +7888,8 @@ function renderRelatorio(){
     const gasto= gs.reduce((s,g)=>s+g.valor,0);
     const ceds  = (DB.cedencias||[]).filter(c=>c.data?.startsWith(m));
     const lucCed= ceds.reduce((s,c)=>s+(c.valorRecebido||0)-(c.custoUnit||0)*(c.qty||1),0);
-    const total= serv+prod+pk+wk+fo;
+    const comM = (DB.comissoes||[]).filter(c=>c.data?.startsWith(m)).reduce((s,c)=>s+c.valor,0);
+    const total= serv+prod+pk+wk+fo+comM;
     const fat  = cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0)+pks.filter(p=>p.faturado).reduce((s,p)=>s+p.valor,0);
     const custos = cs.flatMap(c=>c.vendas).reduce((s,v)=>s+v.custo*(v.qty||1),0);
     const fatServ= cs.filter(c=>c.faturado).reduce((s,c)=>s+c.valor,0);
@@ -7671,7 +7899,7 @@ function renderRelatorio(){
     const fatFo  = fs.filter(f=>f.faturado).reduce((s,f)=>s+calcFoTotal(f),0);
     const ssM = ((fatServ+fatPk+fatWk+fatFo)*0.70 + fatProd*0.20)*0.252;
     const nVendas=cs.filter(c=>c.tipo==='Venda direta').length;
-    return {m, serv, prod, lucP, pk, wk, fo, lucCed, gasto, total, fat, custos, ssM, nCons:csReais.length, nVendas};
+    return {m, serv, prod, lucP, pk, wk, fo, lucCed, comM, gasto, total, fat, custos, ssM, nCons:csReais.length, nVendas};
   });
 
   document.getElementById('pg-relatorio').innerHTML=`
@@ -7693,6 +7921,7 @@ function renderRelatorio(){
           <tr><td>Formação</td><td style="text-align:right">${fmt(tFo)}</td></tr>
           <tr><td>Produtos (PVP total)</td><td style="text-align:right">${fmt(tProd)}</td></tr>
           ${tCedencias>0?`<tr><td>Cedências (montante recebido)</td><td style="text-align:right" class="green">${fmt(tCedencias)}</td></tr>`:''}
+          ${tComissoes>0?`<tr><td>Comissões de marcas</td><td style="text-align:right" class="green">${fmt(tComissoes)}</td></tr>`:''}
           <tr style="border-top:1px solid #eee"><td><strong>Total receita</strong></td><td style="text-align:right"><strong>${fmt(receitaTotal)}</strong></td></tr>
         </table>
       </div>
@@ -7720,9 +7949,10 @@ function renderRelatorio(){
           ${tWork>0?`<tr><td style="color:#888;font-size:12px">Workshops</td><td style="text-align:right">+ ${fmt(tWork)}</td></tr>`:''}
           ${tFo>0?`<tr><td style="color:#888;font-size:12px">Formação</td><td style="text-align:right">+ ${fmt(tFo)}</td></tr>`:''}
           ${lucCedRel!==0?`<tr><td style="color:#888;font-size:12px">Cedências a colegas</td><td style="text-align:right">${lucCedRel>=0?'+ ':''} ${fmt(lucCedRel)}</td></tr>`:''}
+          ${tComissoes>0?`<tr><td style="color:#888;font-size:12px">Comissões de marcas</td><td style="text-align:right">+ ${fmt(tComissoes)}</td></tr>`:''}
           <tr style="border-top:2px solid #d4a97a">
             <td><strong>Total lucros (antes de gastos)</strong></td>
-            <td style="text-align:right;font-weight:700;font-size:15px" class="green"><strong>${fmt(tServ+lucProdRel+tPacks+tWork+tFo+lucCedRel)}</strong></td>
+            <td style="text-align:right;font-weight:700;font-size:15px" class="green"><strong>${fmt(tServ+lucProdRel+tPacks+tWork+tFo+tComissoes+lucCedRel)}</strong></td>
           </tr>
           <tr><td style="color:#c0392b;font-size:12px;padding-top:8px">Gastos do negócio</td><td style="text-align:right;padding-top:8px" class="red">− ${fmt(tGasto)}</td></tr>
           <tr style="border-top:1px solid #eee">
@@ -7755,7 +7985,7 @@ function renderRelatorio(){
       <table>
         <thead>
           <tr>
-            <th>Mês</th><th>Consultas</th><th>Vendas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th class="green">Lucro bruto</th><th style="background:#f0fff4;color:#155724">💶 Líquido</th><th>% Lucro</th><th>SS est.</th>
+            <th>Mês</th><th>Consultas</th><th>Vendas</th><th>Serviços</th><th>Produtos</th><th>Packs</th><th>Workshops</th><th>Formação</th><th>Comissões</th><th>Total receita</th><th>Faturado</th><th>Gastos</th><th>Lucro prod.</th><th class="green">Lucro bruto</th><th style="background:#f0fff4;color:#155724">💶 Líquido</th><th>% Lucro</th><th>SS est.</th>
           </tr>
         </thead>
         <tbody>
@@ -7768,24 +7998,26 @@ function renderRelatorio(){
             <td>${r.pk>0?fmt(r.pk):'—'}</td>
             <td>${r.wk>0?fmt(r.wk):'—'}</td>
             <td>${r.fo>0?fmt(r.fo):'—'}</td>
+            <td>${r.comM>0?fmt(r.comM):'—'}</td>
             <td><strong>${fmt(r.total)}</strong></td>
             <td class="blue">${fmt(r.fat)}</td>
             <td class="red">${r.gasto>0?fmt(r.gasto):'—'}</td>
             <td class="green">${fmt(r.lucP)}</td>
-            <td style="font-weight:700;color:#1a6b1a"><strong>${fmt(r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed)}</strong></td>
-            <td style="font-weight:700;color:${(r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed-r.gasto)>=0?'#155724':'#721c24'};background:${(r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed-r.gasto)>=0?'#f0fff4':'#fff5f5'}">${fmt(r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed-r.gasto)}</td>
-            <td style="text-align:center;font-size:12px;color:#555">${r.total>0?Math.round((r.serv+r.lucP+r.pk+r.wk+r.fo+r.lucCed-r.gasto)/r.total*100)+'%':'—'}</td>
+            <td style="font-weight:700;color:#1a6b1a"><strong>${fmt(r.serv+r.lucP+r.pk+r.wk+r.fo+r.comM+r.lucCed)}</strong></td>
+            <td style="font-weight:700;color:${(r.serv+r.lucP+r.pk+r.wk+r.fo+r.comM+r.lucCed-r.gasto)>=0?'#155724':'#721c24'};background:${(r.serv+r.lucP+r.pk+r.wk+r.fo+r.comM+r.lucCed-r.gasto)>=0?'#f0fff4':'#fff5f5'}">${fmt(r.serv+r.lucP+r.pk+r.wk+r.fo+r.comM+r.lucCed-r.gasto)}</td>
+            <td style="text-align:center;font-size:12px;color:#555">${r.total>0?Math.round((r.serv+r.lucP+r.pk+r.wk+r.fo+r.comM+r.lucCed-r.gasto)/r.total*100)+'%':'—'}</td>
             <td class="amber" style="font-size:11px">${fmt(r.ssM)}</td>
           </tr>`).join('')}
           <tr style="border-top:2px solid #eee;font-weight:600;background:#fafaf7">
             <td>TOTAL</td><td style="text-align:center">${DB.consultas.filter(c=>c.tipo!=='Venda direta').length}</td>
             <td style="text-align:center">${DB.consultas.filter(c=>c.tipo==='Venda direta').length||'—'}</td>
             <td>${fmt(tServ)}</td><td>${fmt(tProd)}</td><td>${fmt(tPacks)}</td><td>${fmt(tWork)}</td><td>${fmt(tFo)}</td>
+            <td>${tComissoes>0?fmt(tComissoes):'—'}</td>
             <td><strong>${fmt(receitaTotal)}</strong></td><td class="blue">${fmt(tFat)}</td>
             <td class="red">${fmt(tGasto)}</td><td class="green">${fmt(tLucro)}</td>
-            <td style="font-weight:700;color:#1a6b1a"><strong>${fmt(tServ+tLucro+tPacks+tWork+tFo+lucCedRel)}</strong></td>
-            <td style="font-weight:700;color:${(tServ+tLucro+tPacks+tWork+tFo+lucCedRel-tGasto)>=0?'#155724':'#721c24'}">${fmt(tServ+tLucro+tPacks+tWork+tFo+lucCedRel-tGasto)}</td>
-            <td style="text-align:center;font-size:12px;font-weight:700">${receitaTotal>0?Math.round((tServ+tLucro+tPacks+tWork+tFo+lucCedRel-tGasto)/receitaTotal*100)+'%':'—'}</td>
+            <td style="font-weight:700;color:#1a6b1a"><strong>${fmt(tServ+tLucro+tPacks+tWork+tFo+tComissoes+lucCedRel)}</strong></td>
+            <td style="font-weight:700;color:${(tServ+tLucro+tPacks+tWork+tFo+tComissoes+lucCedRel-tGasto)>=0?'#155724':'#721c24'}">${fmt(tServ+tLucro+tPacks+tWork+tFo+tComissoes+lucCedRel-tGasto)}</td>
+            <td style="text-align:center;font-size:12px;font-weight:700">${receitaTotal>0?Math.round((tServ+tLucro+tPacks+tWork+tFo+tComissoes+lucCedRel-tGasto)/receitaTotal*100)+'%':'—'}</td>
             <td class="amber">${fmt(ss)}</td>
           </tr>
         </tbody>
