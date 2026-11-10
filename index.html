@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20261110170000 -->
+  <!-- v20261110175500 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -7931,7 +7931,7 @@ function renderRelatorio(){
           <tr><td>Formação</td><td style="text-align:right">${fmt(tFo)}</td></tr>
           <tr><td>Produtos (PVP total)</td><td style="text-align:right">${fmt(tProd)}</td></tr>
           ${tCedencias>0?`<tr><td>Cedências (montante recebido)</td><td style="text-align:right" class="green">${fmt(tCedencias)}</td></tr>`:''}
-          ${tComissoes>0?`<tr><td>Comissões de marcas</td><td style="text-align:right" class="green">${fmt(tComissoes)}</td></tr>`:''}
+          <tr><td>Comissões de marcas</td><td style="text-align:right${tComissoes>0?' font-weight:600':';color:#bbb'}">${fmt(tComissoes)}</td></tr>
           <tr style="border-top:1px solid #eee"><td><strong>Total receita</strong></td><td style="text-align:right"><strong>${fmt(receitaTotal)}</strong></td></tr>
         </table>
       </div>
