@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20261110175500 -->
+  <!-- v20261113100000 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -3176,6 +3176,7 @@ function renderVendasPagina(){
           <button class="btn sm" onclick="verVenda('${c.id}')" style="font-size:10px" title="Ver detalhes">👁</button>
           <button class="btn sm" onclick="startEditVenda('${c.id}')" style="font-size:10px;margin-left:3px" title="Editar">✏</button>
           <button class="btn sm" onclick="gerarDocVenda('${c.id}','recibo')" style="font-size:10px;margin-left:3px;background:#f0fff4;border-color:#c3e6cb;color:#1a6b1a" title="Recibo">🧾</button>
+          <button class="btn dan sm" onclick="confirmarApagarVenda('${c.id}')" style="font-size:10px;margin-left:3px" title="Apagar venda">🗑</button>
         </td>
       </tr>
       <tr id="vd-${c.id}" style="display:none;background:#fafaf7"><td colspan="9"></td></tr>`;
@@ -3401,6 +3402,20 @@ function startEditVenda(id){
   if(c) setTimeout(()=>initPagamentos('ev', c.pagamentos, c.metodoPagamento), 60);
 }
 function cancelEditVenda(){ editingVendaId=null; renderVendasPagina(); }
+
+function confirmarApagarVenda(id){
+  const c = DB.consultas.find(x=>x.id===id); if(!c) return;
+  const cli = cNome(c.clienteId);
+  const nomes = (c.vendas||[]).map(v=>`${v.nome}${v.qty>1?' ×'+v.qty:''}`).join(', ');
+  const msg = `Apagar esta venda?\n\nCliente: ${cli}\nData: ${c.data}\nProdutos: ${nomes}\nTotal: ${fmt(c.totalProd)}\n\nEsta ação é irreversível e repõe o stock.`;
+  if(!confirm(msg)) return;
+  // repor stock
+  (c.vendas||[]).forEach(v=>{ const p=DB.produtos.find(x=>x.id===v.prodId); if(p) p.stock+=v.qty; });
+  DB.consultas = DB.consultas.filter(x=>x.id!==id);
+  save();
+  renderVendas();
+}
+
 function remVendaItem(cId, vi){
   const c=DB.consultas.find(x=>x.id===cId); if(!c) return;
   const v=c.vendas[vi];
