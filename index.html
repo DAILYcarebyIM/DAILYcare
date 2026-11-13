@@ -5,7 +5,7 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
   <meta http-equiv="Pragma" content="no-cache"/>
   <meta http-equiv="Expires" content="0"/>
-  <!-- v20261113153000 -->
+  <!-- v20261113165500 -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>DAILYcare — Sistema de Gestão</title>
 <style>
@@ -8710,10 +8710,15 @@ function loadTabSettings(){
     if(s){
       const p=JSON.parse(s);
       let order=p.order||tabOrder;
-      // garantir que tabs novas (ex: Cedências) aparecem mesmo que não estejam no localStorage
+      // garantir que tabs novas aparecem mesmo que não estejam no localStorage
       ALL_TABS.forEach(t=>{ if(!order.includes(t.id)) order.push(t.id); });
       tabOrder=order;
-      tabHidden=new Set(p.hidden||[]);
+      const hidden=new Set(p.hidden||[]);
+      // tabs novas (não estavam no localStorage quando foi guardado) nunca ficam escondidas
+      ALL_TABS.forEach(t=>{ if(!(p.order||[]).includes(t.id)) hidden.delete(t.id); });
+      // comissoes especificamente nunca deve ficar escondida por erro de localStorage antigo
+      hidden.delete('comissoes');
+      tabHidden=hidden;
     }
   }catch(e){}
   applyTabOrder();
